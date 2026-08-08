@@ -11,7 +11,7 @@
     calendar: ["Calendar", "Workout days, intensity and streaks"],
     progress: ["Progress", "Body measurements and trends"],
     analytics: ["Analytics", "Charts and year-over-year insights"],
-    data: ["Data", "Import, export and backup"],
+    data: ["Data", "Export, backup and restore your data"],
     tools: ["Tools", "BMI calculator & weight converter"],
     settings: ["Settings", "Preferences, units and about"]
   };
@@ -328,7 +328,25 @@
         case "export-excel": {
           const blob = Focus.Excel.exportExcel();
           downloadBlob(blob, "focus-export-" + S().todayISO() + ".xlsx");
-          Focus.UI.toast("Excel workbook downloaded");
+          Focus.App.setSetting("lastExcelExportAt", new Date().toISOString()).then(() => Focus.UI.renderData());
+          Focus.UI.toast("Excel workbook downloaded — open it in Excel or Google Sheets");
+          break;
+        }
+        case "export-pdf":
+          Focus.UI.showPdfModal();
+          break;
+        case "export-pdf-confirm": {
+          const year = Number(document.getElementById("pdfYear").value);
+          const cmp = document.getElementById("pdfCompare").value ? Number(document.getElementById("pdfCompare").value) : null;
+          Focus.UI.closeModal();
+          try {
+            const { blob, filename } = Focus.Pdf.exportPdf({ year, compareYear: cmp });
+            downloadBlob(blob, filename);
+            Focus.App.setSetting("lastPdfExportAt", new Date().toISOString()).then(() => Focus.UI.renderData());
+            Focus.UI.toast("PDF report downloaded — " + filename, "success", 4500);
+          } catch (e) {
+            Focus.UI.toast("PDF export failed: " + e.message, "error", 5000);
+          }
           break;
         }
         case "export-backup": {
@@ -339,9 +357,15 @@
           break;
         }
         case "export-csv": {
-          const blob = Focus.Excel.exportCsv();
+          const blob = Focus.Excel.exportCsv("workouts");
           downloadBlob(blob, "focus-workouts-" + S().todayISO() + ".csv");
-          Focus.UI.toast("CSV downloaded");
+          Focus.UI.toast("Workouts CSV downloaded");
+          break;
+        }
+        case "export-csv-meas": {
+          const blob = Focus.Excel.exportCsv("measurements");
+          downloadBlob(blob, "focus-measurements-" + S().todayISO() + ".csv");
+          Focus.UI.toast("Measurements CSV downloaded");
           break;
         }
         case "restore-seed":

@@ -38,7 +38,7 @@
       calories: data.calories == null || data.calories === "" ? null : Math.max(0, Number(data.calories)),
       notes: data.notes || "",
       createdAt: data.createdAt || t,
-      updatedAt: t
+      updatedAt: data.updatedAt || t
     };
   }
 
@@ -52,7 +52,7 @@
       unit: (data.unit || "").trim(),
       notes: data.notes || "",
       createdAt: data.createdAt || t,
-      updatedAt: t
+      updatedAt: data.updatedAt || t
     };
   }
 
@@ -266,6 +266,7 @@
 
       const wById = new Map(state.workouts.map((w) => [w.id, w]));
       const wByKey = new Map(state.workouts.map((w) => [workoutKey(w), w]));
+      const wByPartial = partialIndex(state.workouts, workoutPartialKey);
       for (const r of workoutRows) {
         const norm = normalizeWorkoutRow(r);
         if (!norm) { plan.workouts.invalid++; continue; }
@@ -276,13 +277,29 @@
           continue;
         }
         if (wByKey.has(workoutKey(norm))) { plan.workouts.skipped++; continue; }
+        // No stable ID and no identical record: a human-edited row (e.g. the
+        // calories or notes column changed in Excel) still names the same
+        // workout via date+type+duration. Only when that identifies exactly
+        // one existing record do we treat it as an update; anything ambiguous
+        // is added as new so data is never silently overwritten.
+        const pk = workoutPartialKey(norm);
+        const candidates = pk == null ? [] : (wByPartial.get(pk) || []);
+        if (candidates.length === 1) {
+          const existing = candidates[0];
+          plan.workouts.updated.push({ existing, norm });
+          wByKey.delete(workoutKey(existing));
+          wByKey.set(workoutKey(norm), { exists: true });
+          continue;
+        }
         plan.workouts.added.push(norm);
         wById.set(norm.id || "new-" + plan.workouts.added.length, {});
         wByKey.set(workoutKey(norm), { exists: true });
+        if (pk != null) { if (!wByPartial.has(pk)) wByPartial.set(pk, []); wByPartial.get(pk).push(norm); }
       }
 
       const mById = new Map(state.measurements.map((m) => [m.id, m]));
       const mByKey = new Map(state.measurements.map((m) => [measKey(m), m]));
+      const mByPartial = partialIndex(state.measurements, measPartialKey);
       for (const r of measurementRows) {
         const norm = normalizeMeasurementRow(r);
         if (!norm) { plan.measurements.invalid++; continue; }
@@ -293,9 +310,19 @@
           continue;
         }
         if (mByKey.has(measKey(norm))) { plan.measurements.skipped++; continue; }
+        const pk = measPartialKey(norm);
+        const candidates = pk == null ? [] : (mByPartial.get(pk) || []);
+        if (candidates.length === 1) {
+          const existing = candidates[0];
+          plan.measurements.updated.push({ existing, norm });
+          mByKey.delete(measKey(existing));
+          mByKey.set(measKey(norm), { exists: true });
+          continue;
+        }
         plan.measurements.added.push(norm);
         mById.set(norm.id || "new-" + plan.measurements.added.length, {});
         mByKey.set(measKey(norm), { exists: true });
+        if (pk != null) { if (!mByPartial.has(pk)) mByPartial.set(pk, []); mByPartial.get(pk).push(norm); }
       }
 
       plan.totals = {
@@ -396,6 +423,27 @@
     return [m.date || "", m.type || "", Number(m.value), m.unit || ""].join("|");
   }
 
+  /** Identity keys that survive human edits: calories/notes and value/notes
+   *  are the columns people change, so they are excluded here. */
+  function workoutPartialKey(w) {
+    if (!w.date) return null;
+    return [w.date, w.type || "", w.duration == null ? "" : Number(w.duration)].join("|");
+  }
+  function measPartialKey(m) {
+    if (!m.date) return null;
+    return [m.date, m.type || "", m.unit || ""].join("|");
+  }
+  function partialIndex(records, keyFn) {
+    const idx = new Map();
+    for (const rec of records) {
+      const k = keyFn(rec);
+      if (k == null) continue;
+      if (!idx.has(k)) idx.set(k, []);
+      idx.get(k).push(rec);
+    }
+    return idx;
+  }
+
   function workoutDiffers(existing, norm) {
     return existing.date !== norm.date ||
       (existing.type || "") !== (norm.type || "") ||
@@ -434,13 +482,14 @@
       if (!isFinite(calories) || calories < 0) return null;
     }
     return {
-      id: typeof r.id === "string" && r.id ? r.id : undefined,
+      id: typeof r.id === "string" && r.id.trim() ? r.id.trim() : undefined,
       date,
       type,
       duration,
       calories,
       notes: r.notes != null ? String(r.notes) : "",
-      createdAt: r.createdAt || undefined
+      createdAt: r.createdAt || undefined,
+      updatedAt: r.updatedAt || undefined
     };
   }
 
@@ -448,17 +497,20 @@
     if (!r || typeof r !== "object") return null;
     const date = normalizeDate(r.date);
     if (!date) return null;
+    // A blank Value is invalid — never silently convert it to 0.
+    if (r.value == null || r.value === "") return null;
     const value = Number(r.value);
     if (!isFinite(value)) return null;
     const type = r.type != null && String(r.type).trim() !== "" ? String(r.type).trim() : "Weight";
     return {
-      id: typeof r.id === "string" && r.id ? r.id : undefined,
+      id: typeof r.id === "string" && r.id.trim() ? r.id.trim() : undefined,
       date,
       type,
       value,
       unit: r.unit != null ? String(r.unit).trim() : "",
       notes: r.notes != null ? String(r.notes) : "",
-      createdAt: r.createdAt || undefined
+      createdAt: r.createdAt || undefined,
+      updatedAt: r.updatedAt || undefined
     };
   }
 

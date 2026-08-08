@@ -1368,55 +1368,89 @@
   function renderData() {
     const all = Store().workouts;
     const meas = Store().measurements;
+    const days = new Set(all.map((w) => w.date)).size;
     const years = new Set(all.map((w) => w.date.slice(0, 4)));
     meas.forEach((m) => years.add(m.date.slice(0, 4)));
-    const lastBackup = Store().settings.lastBackupAt;
+    const set = Store().settings;
+    const sortedYears = [...years].sort();
+    const curYear = set.selectedYear && years.has(set.selectedYear)
+      ? set.selectedYear
+      : (sortedYears.length ? sortedYears[sortedYears.length - 1] : new Date().getFullYear());
+    const dataSize = Math.max(1, Math.round(JSON.stringify(Store().exportBackup()).length / 1024));
+    const lastAct = Math.max(0, ...all.concat(meas).map((r) => new Date(r.updatedAt || 0).getTime()));
+    const pretty = (iso) => (iso ? St().prettyDate(iso.slice(0, 10)) : "Never");
 
     document.getElementById("dataBody").innerHTML = `
-      <div class="data-stats">
-        <div class="s"><b>${St().fmtNum(all.length)}</b><span>Workouts</span></div>
-        <div class="s"><b>${St().fmtNum(meas.length)}</b><span>Measurements</span></div>
-        <div class="s"><b>${years.size}</b><span>Years with data</span></div>
-        <div class="s"><b style="font-size:15px">${lastBackup ? esc(lastBackup.slice(0, 10)) : "Never"}</b><span>Last backup</span></div>
-      </div>
+      <div class="data-grid">
+        <div class="card data-card">
+          <div class="data-card-head">${icon("activity")}<div><h3>Your Data</h3><p class="desc">Everything this app tracks, at a glance.</p></div></div>
+          <div class="data-stats">
+            <div class="s"><b>${St().fmtNum(all.length)}</b><span>Workouts</span></div>
+            <div class="s"><b>${St().fmtNum(days)}</b><span>Workout days</span></div>
+            <div class="s"><b>${St().fmtNum(meas.length)}</b><span>Measurements</span></div>
+            <div class="s"><b>${curYear}</b><span>${curYear === new Date().getFullYear() ? "Current year" : "Year in focus"}</span></div>
+          </div>
+          <p class="data-foot">Last updated <b>${lastAct ? St().prettyDate(new Date(lastAct).toISOString().slice(0, 10)) : "never"}</b></p>
+        </div>
 
-      <div class="card data-card">
-        <h3>⬇️ Export</h3>
-        <p class="desc">Download your data at any time. Excel is perfect for Google Sheets archiving; JSON backup restores everything, byte for byte.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-primary" data-action="export-excel">${ICONS.download} Export Excel (.xlsx)</button>
-          <button class="btn" data-action="export-backup">${ICONS.database} Export JSON backup</button>
-          <button class="btn" data-action="export-csv">${ICONS.download} Export CSV</button>
+        <div class="card data-card">
+          <div class="data-card-head">${icon("clock")}<div><h3>Backup Status</h3><p class="desc">When your data last moved in or out.</p></div></div>
+          <div class="data-status">
+            <div class="st"><b>${esc(pretty(set.lastExcelExportAt))}</b><span>Last Excel export</span></div>
+            <div class="st"><b>${esc(pretty(set.lastImportAt))}</b><span>Last import</span></div>
+            <div class="st"><b>${St().fmtNum(all.length + meas.length)}</b><span>Records stored</span></div>
+            <div class="st"><b>${dataSize} KB</b><span>Data size</span></div>
+          </div>
         </div>
       </div>
 
       <div class="card data-card">
-        <h3>⬆️ Import</h3>
-        <p class="desc">Import Excel (.xlsx) exported from this app or archived in Google Sheets, or restore a JSON backup. Imports never duplicate existing records.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="data-card-head">${icon("download")}<div><h3>Export</h3><p class="desc">Take your data with you — to Google Sheets, another computer, or just as a keepsake.</p></div></div>
+        <div class="export-btns">
+          <button class="btn btn-primary" data-action="export-excel">${ICONS.download} Excel Workbook</button>
+          <button class="btn" data-action="export-pdf">${ICONS.download} PDF Report</button>
+          <button class="btn" data-action="export-backup">${ICONS.database} JSON Backup</button>
+        </div>
+        <div class="export-sub">
+          <span>Simple data files</span>
+          <button class="btn btn-sm btn-ghost" data-action="export-csv">Workouts CSV</button>
+          <button class="btn btn-sm btn-ghost" data-action="export-csv-meas">Measurements CSV</button>
+        </div>
+      </div>
+
+      <div class="card data-card">
+        <div class="data-card-head">${icon("upload")}<div><h3>Import</h3><p class="desc">Bring data back in. Imports add and update records — your local data is never deleted.</p></div></div>
+        <div class="import-grid">
           <div class="import-drop" id="dropExcel" tabindex="0" role="button" aria-label="Import Excel file">
             ${ICONS.upload}
             <b>Import Excel (.xlsx)</b>
-            <span>Drop a file here or click to browse</span>
+            <span>Workbooks exported by this app, or edited copies</span>
           </div>
           <div class="import-drop" id="dropJson" tabindex="0" role="button" aria-label="Import JSON backup">
-            ${ICONS.upload}
-            <b>Import JSON backup</b>
-            <span>Drop a .json backup file here or click to browse</span>
+            ${ICONS.database}
+            <b>Restore JSON backup</b>
+            <span>A .json backup file saved from this app</span>
           </div>
         </div>
         <input type="file" id="fileExcel" accept=".xlsx,.xls" hidden>
         <input type="file" id="fileJson" accept=".json,application/json" hidden>
-        <p style="font-size:12.5px;color:var(--text-faint);margin:14px 0 0">
-          Need to start fresh? Use the built-in historical data instead — it's the same data that ships with the app:
-          <button class="btn btn-sm btn-ghost" data-action="restore-seed" style="margin-left:6px">Restore built-in historical data</button>
-        </p>
       </div>
 
-      <div class="card data-card" style="border-color:var(--danger-soft)">
-        <h3 style="color:var(--danger)">🗑️ Danger zone</h3>
-        <p class="desc">Delete <strong>everything</strong> stored in this browser for this app. This cannot be undone — export a backup first.</p>
-        <button class="btn btn-danger" data-action="reset-all">${ICONS.trash} Delete all local data</button>
+      <div class="card data-card safety">
+        <div class="data-card-head">${icon("check")}<div><h3>Data Safety</h3><p class="desc">Private by design — your data never leaves this device.</p></div></div>
+        <p class="desc">Your data is stored locally in this browser. Export a backup regularly if you want to move your data to another computer or protect it from browser data loss.</p>
+      </div>
+
+      <div class="card data-card advanced">
+        <div class="data-card-head">${icon("eye")}<div><h3>Advanced</h3><p class="desc">Tools most people won't need.</p></div></div>
+        <div class="adv-row">
+          <div><b>Restore built-in historical data</b><p class="desc">Re-import the records that shipped with the app. Identical records are skipped.</p></div>
+          <button class="btn btn-sm btn-ghost" data-action="restore-seed">Restore</button>
+        </div>
+        <div class="adv-row danger">
+          <div><b>Delete all local data</b><p class="desc">Permanently erases everything stored in this browser. Export a backup first.</p></div>
+          <button class="btn btn-sm btn-danger" data-action="reset-all">${ICONS.trash} Delete all</button>
+        </div>
       </div>`;
 
     wireDrop(document.getElementById("dropExcel"), document.getElementById("fileExcel"), (file) => {
@@ -1424,10 +1458,10 @@
         try {
           const parsed = Focus.Excel.parseWorkbook(buf);
           if (!parsed.workouts.length && !parsed.measurements.length) {
-            toast("No recognizable workout or measurement rows found in this file.", "error", 5000);
+            toast(parsed.errors.length ? "This file was recognized but every row was invalid: " + parsed.errors[0] : "No recognizable workout or measurement rows found in this file.", "error", 5500);
             return;
           }
-          showImportPreview(parsed.workouts, parsed.measurements, parsed.errors);
+          showImportPreview(parsed.workouts, parsed.measurements, parsed.errors, parsed);
         } catch (e) {
           toast(e.message || "Could not read this Excel file.", "error", 5000);
         }
@@ -1442,12 +1476,48 @@
             toast("This file is not a valid Focus backup.", "error", 5000);
             return;
           }
-          showImportPreview(obj.workouts, obj.measurements, []);
+          showImportPreview(obj.workouts, obj.measurements, [], { source: "json", meta: {} });
         } catch (e) {
           toast("Invalid JSON: " + e.message, "error", 5000);
         }
       };
       reader.readAsText(file, "utf-8");
+    });
+  }
+
+  /** Modal asking which year(s) to include in the PDF report. */
+  function showPdfModal() {
+    const years = St().availableYears(Store().workouts, Store().measurements).slice().sort().reverse();
+    if (!years.length) { toast("No data to report yet.", "warn"); return; }
+    const cur = Store().settings.selectedYear && years.includes(Store().settings.selectedYear) ? Store().settings.selectedYear : years[0];
+    const rebuildCompare = (m, chosen) => {
+      const others = years.filter((y) => y !== chosen);
+      const sel = m.querySelector("#pdfCompare");
+      const prev = Number(sel.value);
+      sel.innerHTML = `<option value="">No comparison</option>` + others.map((y) => `<option value="${y}" ${y === prev ? "selected" : ""}>${y}</option>`).join("");
+    };
+    openModal(`
+      <h2>Export PDF report</h2>
+      <p class="modal-sub">A clean, printable annual report — generated locally on this device.</p>
+      <div class="pdf-opts">
+        <label>Report year
+          <select id="pdfYear">${years.map((y) => `<option value="${y}" ${y === cur ? "selected" : ""}>${y}</option>`).join("")}</select>
+        </label>
+        <label>Compare with
+          <select id="pdfCompare">
+            <option value="">No comparison</option>
+            ${years.filter((y) => y !== cur).map((y) => `<option value="${y}">${y}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <p class="modal-sub" style="color:var(--text-faint)">The comparison section only appears when that year has data.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-close>Cancel</button>
+        <button class="btn btn-primary" data-action="export-pdf-confirm">${ICONS.download} Export PDF</button>
+      </div>`, {
+      onOpen: (m) => {
+        m.querySelector("#pdfYear").addEventListener("change", (e) => rebuildCompare(m, Number(e.target.value)));
+      }
     });
   }
 
@@ -1468,29 +1538,40 @@
    * Rows are run through Focus.Store.planImport so the preview matches
    * exactly what the import will do (added / updated / skipped / invalid).
    */
-  function showImportPreview(workoutRows, measurementRows, errors = []) {
+  function showImportPreview(workoutRows, measurementRows, errors = [], extra = {}) {
     const N = Focus.Store;
     const plan = N.planImport(workoutRows, measurementRows);
     const t = plan.totals;
     if (!t.added && !t.updated && !t.invalid) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
 
+    const pW = plan.workouts, pM = plan.measurements;
+    const srcLabel = extra.source === "appdata"
+      ? "Detected: Focus workbook export — records restore exactly from the internal _AppData sheet."
+      : extra.source === "json"
+        ? "Detected: Focus JSON backup — full-fidelity restore."
+        : "Detected: Workouts & Measurements sheets — records are matched by content (add, update, never delete).";
+
     const sample = [
-      ...plan.workouts.added.slice(0, 5).map((r) => ({ ...r, kind: "workout", state: "new" })),
-      ...plan.measurements.added.slice(0, 5).map((r) => ({ ...r, kind: "measurement", state: "new" })),
-      ...plan.workouts.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "workout", state: "update" })),
-      ...plan.measurements.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "measurement", state: "update" }))
+      ...pW.added.slice(0, 5).map((r) => ({ ...r, kind: "workout", state: "new" })),
+      ...pM.added.slice(0, 5).map((r) => ({ ...r, kind: "measurement", state: "new" })),
+      ...pW.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "workout", state: "update" })),
+      ...pM.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "measurement", state: "update" }))
     ].slice(0, 12);
 
     openModal(`
       <h2>Import preview</h2>
-      <p class="modal-sub">Review what will happen. Nothing is changed until you confirm.</p>
-      <div class="imp-report">
-        <div class="r added"><b>${t.added}</b><span>Will add</span></div>
-        <div class="r updated"><b>${t.updated}</b><span>Will update</span></div>
-        <div class="r skipped"><b>${t.skipped}</b><span>Unchanged</span></div>
-        <div class="r invalid"><b>${t.invalid}</b><span>Invalid</span></div>
+      <p class="modal-sub">${esc(srcLabel)}</p>
+      <p class="modal-sub" style="color:var(--text-faint);margin-top:2px">Nothing is changed until you confirm.</p>
+      <div class="imp-kind">
+        <div class="ik"><span>Workouts</span><b class="add">+${pW.added.length}</b><b class="upd">↻${pW.updated.length}</b><b class="same">=${pW.skipped}</b><b class="bad">⚠${pW.invalid}</b></div>
+        <div class="ik"><span>Measurements</span><b class="add">+${pM.added.length}</b><b class="upd">↻${pM.updated.length}</b><b class="same">=${pM.skipped}</b><b class="bad">⚠${pM.invalid}</b></div>
       </div>
-      ${errors.length ? `<p style="color:var(--warn);font-size:12.5px">${errors.slice(0, 5).map(esc).join("<br>")}</p>` : ""}
+      ${errors.length ? `
+        <div class="imp-errors">
+          <b>⚠ ${errors.length} row${errors.length === 1 ? "" : "s"} could not be imported</b>
+          <ul>${errors.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
+          ${errors.length > 6 ? `<span>+ ${errors.length - 6} more</span>` : ""}
+        </div>` : ""}
       ${sample.length ? `
         <div class="preview-scroll">
           <table class="data-table">
@@ -1514,8 +1595,13 @@
           closeModal();
           try {
             const res = await N.importRecords(workoutRows, measurementRows);
-            const bits = [`${res.added} added`, `${res.updated} updated`, `${res.skipped} unchanged`, `${res.invalid} invalid`];
-            toast("Import complete: " + bits.join(", "), "success", 5000);
+            await N.setSetting("lastImportAt", new Date().toISOString());
+            Focus.UI.renderData();
+            const bits = [];
+            if (res.added) bits.push(res.added + " added");
+            if (res.updated) bits.push(res.updated + " updated");
+            if (res.invalid) bits.push(res.invalid + " invalid");
+            toast("Import complete — " + (bits.join(", ") || "nothing to do") + ". Your dashboard has been updated.", "success", 5500);
           } catch (e) {
             toast("Import failed: " + e.message, "error", 5000);
           }
@@ -1533,6 +1619,6 @@
     openModal, closeModal, toast, confirmDialog,
     openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
     renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
-    yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, wireDrop, cssColor
+    yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor
   };
 })();

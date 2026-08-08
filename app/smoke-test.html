@@ -7,11 +7,13 @@
 <body style="font-family:monospace;font-size:12px">
 <pre id="out">running…</pre>
 <script src="xlsx.full.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
 <script src="seed-data.js"></script>
 <script src="store.js"></script>
 <script src="stats.js"></script>
 <script src="charts.js"></script>
 <script src="excel.js"></script>
+<script src="pdf.js"></script>
 <script src="ui.js"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
@@ -91,6 +93,8 @@ function dump() {
     ok("empty type defaults to Other", nw2 && nw2.type === "Other" && nw2.calories === 250);
     ok("dd/mm/yyyy parsed", Focus.Store.normalizeWorkoutRow({ date: "15/01/2026" }) && Focus.Store.normalizeWorkoutRow({ date: "15/01/2026" }).date === "2026-01-15");
     ok("excel serial date parsed", Focus.Store.normalizeWorkoutRow({ date: 45629 }) && Focus.Store.normalizeWorkoutRow({ date: 45629 }).date === "2024-12-03");
+    ok("blank measurement value rejected (not 0)", Focus.Store.normalizeMeasurementRow({ date: "2026-01-01", type: "Weight", value: "" }) === null);
+    ok("ids are trimmed on import", Focus.Store.normalizeWorkoutRow({ id: "  id-x  ", date: "2026-01-01" }).id === "id-x");
 
     // --- Excel export round-trip ---
     const blob = Focus.Excel.exportExcel();
@@ -99,6 +103,130 @@ function dump() {
     ok("excel round-trip: 92 workouts", parsed.workouts.length === 92, "got " + parsed.workouts.length);
     ok("excel round-trip: 58 measurements", parsed.measurements.length === 58, "got " + parsed.measurements.length);
     ok("excel round-trip: first date preserved", parsed.workouts[0] && parsed.workouts[0].date === "2026-01-07", JSON.stringify(parsed.workouts[0]));
+
+    // ---------- redesigned workbook structure ----------
+    const blobN = Focus.Excel.exportExcel();
+    const bufN = await blobN.arrayBuffer();
+    const wbN = XLSX.read(bufN, { type: "array", cellDates: true });
+    const expectSheets = ["Overview", "Workouts", "Measurements", "Monthly Summary", "Yearly Summary", "Analytics", "_AppData"];
+    ok("workbook has 7 sheets in order", JSON.stringify(wbN.SheetNames) === JSON.stringify(expectSheets), JSON.stringify(wbN.SheetNames));
+    ok("_AppData is the last sheet", wbN.SheetNames[wbN.SheetNames.length - 1] === "_AppData");
+    ok("_AppData declares a schema version", String(XLSX.utils.sheet_to_json(wbN.Sheets["_AppData"], { header: 1 })[2][0]).includes("Schema Version"), "meta row");
+
+    const anAoa = XLSX.utils.sheet_to_json(wbN.Sheets["Analytics"], { header: 1, defval: null });
+    const tbIdx = anAoa.findIndex((r) => r[0] && String(r[0]).includes("Workout type distribution"));
+    const otherRow = tbIdx >= 0 ? anAoa[tbIdx + 2] : null;
+    ok("analytics type distribution shows Other with count 92", otherRow && otherRow[0] === "Other" && otherRow[1] === 92, JSON.stringify(otherRow));
+
+    const wkRows = XLSX.utils.sheet_to_json(wbN.Sheets["Workouts"], { defval: null, raw: true });
+    const wkKeys = Object.keys(wkRows[0]).map((k) => String(k).toLowerCase());
+    ok("Workouts sheet has no ID column", !wkKeys.includes("id"), wkKeys.join(","));
+    ok("Workouts sheet has no Created At / Updated At", !wkKeys.some((k) => k.includes("created") || k.includes("updated")), wkKeys.join(","));
+    ok("Workouts sheet is exactly Date/Type/Duration/Calories/Notes", wkKeys.join(",") === "date,workout type,duration (min),calories,notes", wkKeys.join(","));
+
+    // ---------- full field-fidelity round trip via _AppData ----------
+    const snapshot = Focus.Store.exportBackup();
+    const parsedN = Focus.Excel.parseWorkbook(bufN);
+    ok("parse detects appdata source", parsedN.source === "appdata", parsedN.source);
+    ok("appdata parse: 92 workouts + 58 measurements", parsedN.workouts.length === 92 && parsedN.measurements.length === 58, parsedN.workouts.length + "/" + parsedN.measurements.length);
+    ok("appdata meta reports schema 1.0", parsedN.meta && parsedN.meta.schemaVersion === "1.0", JSON.stringify(parsedN.meta));
+
+    const deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const wFields = (w) => ({ id: w.id, date: w.date, type: w.type, duration: w.duration, calories: w.calories, notes: w.notes, createdAt: w.createdAt, updatedAt: w.updatedAt });
+    const mFields = (m) => ({ id: m.id, date: m.date, type: m.type, value: m.value, unit: m.unit, notes: m.notes, createdAt: m.createdAt, updatedAt: m.updatedAt });
+    const byId = (arr) => arr.slice().sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const snapW = byId(snapshot.workouts).map(wFields);
+    const parsedW = byId(parsedN.workouts).map(wFields);
+    const snapM = byId(snapshot.measurements).map(mFields);
+    const parsedM = byId(parsedN.measurements).map(mFields);
+    ok("every workout field survives export (id,date,type,dur,cal,notes,created,updated)", deepEq(snapW, parsedW), "workout mismatch");
+    ok("every measurement field survives export", deepEq(snapM, parsedM), "measurement mismatch");
+    const ids = parsedN.workouts.map((w) => w.id);
+    ok("no duplicate workout IDs in _AppData", new Set(ids).size === ids.length);
+
+    // restore round-trip: wipe + re-import parsed rows -> identical state
+    await Focus.Store.resetAll();
+    const rt = await Focus.Store.importRecords(parsedN.workouts, parsedN.measurements);
+    ok("round-trip restore adds all 150 records", rt.added === 150, "added=" + rt.added);
+    ok("restored workouts identical to original", deepEq(snapW, byId(Focus.Store.workouts).map(wFields)));
+    ok("restored measurements identical to original", deepEq(snapM, byId(Focus.Store.measurements).map(mFields)));
+    ok("createdAt/updatedAt preserved on restore", byId(Focus.Store.workouts).every((w) => snapshot.workouts.some((s) => s.id === w.id && s.createdAt === w.createdAt && s.updatedAt === w.updatedAt)));
+
+    // same file imported twice -> zero duplicates
+    const dup2 = await Focus.Store.importRecords(parsedN.workouts, parsedN.measurements);
+    ok("duplicate import creates 0 duplicates", dup2.added === 0 && dup2.updated === 0 && dup2.skipped === 150, "added=" + dup2.added);
+
+    // human edit (no ID): changing Calories in the Workouts sheet updates the right record
+    const hw = Focus.Excel.mapWorkoutRow(wkRows[0]);
+    const origCal = hw.calories;
+    const editedCal = origCal == null ? 100 : origCal + 50;
+    const planEdit = Focus.Store.planImport([{ ...hw, calories: editedCal }], []);
+    ok("human calories edit plans as a single update", planEdit.workouts.updated.length === 1 && planEdit.workouts.added.length === 0, JSON.stringify(planEdit.totals));
+    await Focus.Store.importRecords([{ ...hw, calories: editedCal }], []);
+    const found = Focus.Store.workouts.find((w) => w.date === hw.date && w.type === hw.type && w.duration === hw.duration);
+    ok("edited calories landed on the matching record", found && found.calories === editedCal, found && String(found.calories));
+    await Focus.Store.importRecords([{ ...hw, calories: origCal }], []);
+    ok("re-import of the original value restores it", (Focus.Store.workouts.find((w) => w.date === hw.date && w.type === hw.type && w.duration === hw.duration) || {}).calories === origCal);
+
+    // brand-new human row (no ID) -> created
+    const planNew = Focus.Store.planImport([{ date: "2026-09-01", type: "Run", duration: 30, calories: 320, notes: "brand new" }], []);
+    ok("new row without id plans as add", planNew.workouts.added.length === 1 && planNew.totals.added === 1, JSON.stringify(planNew.totals));
+    await Focus.Store.importRecords([{ date: "2026-09-01", type: "Run", duration: 30, calories: 320, notes: "brand new" }], []);
+    ok("new row actually created", Focus.Store.workouts.some((w) => w.notes === "brand new"));
+
+    // multiple workouts on the same day stay independent records
+    const fresh = "2026-09-05";
+    await Focus.Store.importRecords([
+      { date: fresh, type: "Strength", duration: 45, calories: 400 },
+      { date: fresh, type: "Walking", duration: 30, calories: 150 }
+    ], []);
+    const sameDay = Focus.Store.workouts.filter((w) => w.date === fresh);
+    ok("two same-day workouts are separate records", sameDay.length === 2 && sameDay[0].id !== sameDay[1].id, "n=" + sameDay.length);
+
+    // decimal measurement round-trip stays exact
+    const dm = await Focus.Store.addMeasurement({ date: "2026-06-15", type: "Weight", value: 158.5, unit: "lb" });
+    ok("decimal measurement stored exactly", Focus.Store.measurements.find((m) => m.id === dm.id).value === 158.5);
+    await Focus.Store.deleteMeasurement(dm.id);
+
+    // CSV exports
+    const csvW = await Focus.Excel.exportCsv("workouts").text();
+    ok("workouts CSV header", csvW.includes("Workout Type") && csvW.includes("Calories"));
+    const csvM = await Focus.Excel.exportCsv("measurements").text();
+    ok("measurements CSV header", csvM.includes("Measurement") && csvM.includes("Value"));
+
+    // PDF report builds locally (bundled jsPDF), with and without comparison
+    if (window.jspdf && window.jspdf.jsPDF) {
+      const pdf = Focus.Pdf.exportPdf({ year: 2026 });
+      ok("pdf report builds locally", pdf.blob && pdf.blob.size > 1000, "size=" + (pdf.blob && pdf.blob.size));
+      ok("pdf filename for single year", pdf.filename === "focus-report-2026.pdf", pdf.filename);
+      await Focus.Store.addWorkout({ date: "2025-03-15", type: "Other", calories: 500 });
+      const pdfC = Focus.Pdf.exportPdf({ year: 2026, compareYear: 2025 });
+      ok("pdf with comparison builds", pdfC.blob && pdfC.blob.size > 1000, "size=" + (pdfC.blob && pdfC.blob.size));
+      ok("pdf filename includes comparison year", pdfC.filename === "focus-report-2026-vs-2025.pdf", pdfC.filename);
+      const w25 = Focus.Store.workouts.find((x) => x.date === "2025-03-15");
+      if (w25) await Focus.Store.deleteWorkout(w25.id);
+    } else {
+      ok("jsPDF bundled locally", false, "jspdf missing");
+    }
+
+    // corrupt file -> friendly error or zero importable rows, never a crash
+    let threw = false;
+    try {
+      const pg = Focus.Excel.parseWorkbook(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]));
+      ok("corrupt file yields no importable rows", pg && pg.workouts.length === 0 && pg.measurements.length === 0,
+        "w=" + pg.workouts.length + " m=" + pg.measurements.length + " e=" + pg.errors.length);
+    } catch (e) {
+      threw = true;
+      ok("corrupt file rejected with friendly error", /Could not read|doesn't look like an Excel/.test(e.message), e.message);
+    }
+    ok("corrupt file handled without crashing", threw || true);
+
+    // restore the pristine seeded state for downstream tests
+    const extraRun = Focus.Store.workouts.find((w) => w.date === "2026-09-01" && w.type === "Run");
+    if (extraRun) await Focus.Store.deleteWorkout(extraRun.id);
+    const sep5 = Focus.Store.workouts.filter((w) => w.date === "2026-09-05");
+    for (const w of sep5) await Focus.Store.deleteWorkout(w.id);
+    ok("cleanup restores 92 workouts after round-trip suite", Focus.Store.workouts.length === 92, "n=" + Focus.Store.workouts.length);
 
     // --- backup round-trip ---
     const backup = Focus.Store.exportBackup();

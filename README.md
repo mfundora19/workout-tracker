@@ -17,7 +17,11 @@ Google Sheets archiving.
 - 📈 **Analytics** — 10+ compact charts: monthly bars, cumulative lines, type mix,
   consistency heatmap, and **year-over-year comparison** (defaults to current vs
   previous year; hidden until you have data in two years)
-- 💾 **Data** — Excel / JSON / CSV export, smart import, backup & restore
+- 💾 **Data & Backup** — human-friendly **Excel workbook** (Overview, Workouts,
+  Measurements, Monthly/Yearly Summary, Analytics + a hidden `_AppData` sheet
+  that makes re-import perfectly exact), **PDF annual report** (built locally),
+  full-fidelity **JSON backup**, and CSV exports — with a safe import preview
+  that adds & updates but never deletes
 - 🧰 **Tools** — BMI calculator and a kg/lb/g/oz weight converter
 - 🎯 **Goals** — set daily calorie / duration and weekly workout targets in
   Settings; watch them on the dashboard and calendar (gold ✓ on goal days)
