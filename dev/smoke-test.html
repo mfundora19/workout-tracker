@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pulse smoke test</title>
+</head>
+<body style="font-family:monospace;font-size:12px">
+<pre id="out">running…</pre>
+<script src="../assets/xlsx.full.min.js"></script>
+<script src="../js/seed-data.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/stats.js"></script>
+<script src="../js/charts.js"></script>
+<script src="../js/excel.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+// NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const lines = [];
+function ok(name, cond, extra) {
+  if (cond) { pass++; lines.push("PASS  " + name); }
+  else { fail++; lines.push("FAIL  " + name + (extra ? "  -> " + extra : "")); }
+}
+function dump() {
+  out.textContent = "PULSE-SMOKE-RESULT pass=" + pass + " fail=" + fail + "\n" + lines.join("\n");
+}
+
+(async function run() {
+  try {
+    const S = Pulse.Stats;
+    // --- store init + seed ---
+    await Pulse.Store.init();
+    const seeded = await Pulse.Store.seedIfNeeded();
+    ok("seed loads 92 workouts", Pulse.Store.workouts.length === 92, "got " + Pulse.Store.workouts.length);
+    ok("seed loads 58 measurements", Pulse.Store.measurements.length === 58, "got " + Pulse.Store.measurements.length);
+    const seeded2 = await Pulse.Store.seedIfNeeded();
+    ok("seed was not re-imported on 2nd call", seeded2.loaded === false && (seeded2.reason === "already-seeded" || seeded2.added === 0), JSON.stringify(seeded2));
+
+    // --- yearly totals vs spreadsheet summary ---
+    const ys = S.yearlyStats(Pulse.Store.workouts, 2026);
+    ok("yearly workouts = 92", ys.workouts === 92, "got " + ys.workouts);
+    ok("yearly calories = 61005", ys.calories === 61005, "got " + ys.calories);
+    ok("workout days = 92", ys.days === 92, "got " + ys.days);
+    ok("best month = April", ys.bestMonth && ys.bestMonth.label === "Apr", ys.bestMonth && ys.bestMonth.label);
+    const apr = S.monthlyStats(Pulse.Store.workouts, 2026)[3];
+    ok("April: 24 days / 16404 kcal", apr.days === 24 && apr.calories === 16404, JSON.stringify(apr));
+
+    // --- streaks ---
+    const st = S.streaks(Pulse.Store.workouts, "2026-08-07");
+    // 2026-08-02,03,04 then 07: streak from 07 backwards = 1 (07 only)
+    ok("current streak on Aug 7 = 1", st.current === 1, "got " + st.current);
+    const st2 = S.streaks(Pulse.Store.workouts, "2026-05-30");
+    // 2026-05-28,29,30 -> 3
+    ok("streak ending May 30 = 3", st2.current === 3, "got " + st2.current);
+    // April 3-15 had a long run: Apr 3,4,5,6,7,8,9,10,11,12,13,14,15 = 13
+    const aprDays = new Set(Pulse.Store.workouts.filter((w) => w.date.slice(0,7) === "2026-04").map((w) => w.date));
+    ok("longest streak in April = 13", S.longestStreakInSet(aprDays) === 13, "got " + S.longestStreakInSet(aprDays));
+
+    // --- compareYears ---
+    const cmp = S.compareYears(Pulse.Store.workouts, 2026, 2025);
+    ok("compare: 2026 workouts=92, 2025=0", cmp.totals.workouts.a === 92 && cmp.totals.workouts.b === 0, JSON.stringify(cmp.totals.workouts));
+
+    // --- measurement stats ---
+    const mstats = S.measurementStats(Pulse.Store.measurements);
+    const weight = mstats.find((m) => m.type === "Weight");
+    ok("weight count=29", weight.count === 29, "got " + weight.count);
+    ok("weight first=158.5 latest=149.2 change=-9.3", weight.first.value === 158.5 && weight.latest.value === 149.2 && Math.abs(weight.change - (-9.3)) < 0.001, JSON.stringify({f: weight.first.value, l: weight.latest.value, c: weight.change}));
+    ok("waist trend down", mstats.find((m) => m.type === "Waist").trend === "down");
+
+    // --- CRUD ---
+    const w = await Pulse.Store.addWorkout({ date: "2026-08-08", type: "Walking", duration: 30, calories: 150 });
+    ok("addWorkout returns id", !!w.id && Pulse.Store.workouts.length === 93);
+    await Pulse.Store.updateWorkout(w.id, { calories: 200 });
+    ok("updateWorkout persists calories", Pulse.Store.workouts.find((x) => x.id === w.id).calories === 200);
+    await Pulse.Store.deleteWorkout(w.id);
+    ok("deleteWorkout removes", Pulse.Store.workouts.length === 92);
+    const m = await Pulse.Store.addMeasurement({ date: "2026-08-08", type: "Chest", value: 101, unit: "cm" });
+    await Pulse.Store.deleteMeasurement(m.id);
+    ok("measurement add+delete", Pulse.Store.measurements.length === 58);
+
+    // --- dedup import (re-import seed) ---
+    const dup = await Pulse.Store.importRecords(PulseSeed.workouts, PulseSeed.measurements);
+    ok("re-import seed: 0 added", dup.added === 0, "added=" + dup.added + " skipped=" + dup.skipped);
+    ok("re-import seed: 150 skipped", dup.skipped === 150, "skipped=" + dup.skipped);
+
+    // --- normalization ---
+    const nw = Pulse.Store.normalizeWorkoutRow({ date: "8/7/2026", type: "Run", duration: -5 });
+    ok("invalid negative duration rejected", nw === null);
+    const nw2 = Pulse.Store.normalizeWorkoutRow({ date: "2026-12-31", type: "", calories: "250" });
+    ok("empty type defaults to Other", nw2 && nw2.type === "Other" && nw2.calories === 250);
+    ok("dd/mm/yyyy parsed", Pulse.Store.normalizeWorkoutRow({ date: "15/01/2026" }) && Pulse.Store.normalizeWorkoutRow({ date: "15/01/2026" }).date === "2026-01-15");
+    ok("excel serial date parsed", Pulse.Store.normalizeWorkoutRow({ date: 45629 }) && Pulse.Store.normalizeWorkoutRow({ date: 45629 }).date === "2024-12-03");
+
+    // --- Excel export round-trip ---
+    const blob = Pulse.Excel.exportExcel();
+    const buf = await blob.arrayBuffer();
+    const parsed = Pulse.Excel.parseWorkbook(buf);
+    ok("excel round-trip: 92 workouts", parsed.workouts.length === 92, "got " + parsed.workouts.length);
+    ok("excel round-trip: 58 measurements", parsed.measurements.length === 58, "got " + parsed.measurements.length);
+    ok("excel round-trip: first date preserved", parsed.workouts[0] && parsed.workouts[0].date === "2026-01-07", JSON.stringify(parsed.workouts[0]));
+
+    // --- backup round-trip ---
+    const backup = Pulse.Store.exportBackup();
+    const json = JSON.stringify(backup);
+    const restored = await Pulse.Store.importBackup(JSON.parse(json));
+    ok("backup re-import: 0 added (all dupes)", restored.added === 0, "added=" + restored.added);
+    ok("backup has settings + timestamps", !!backup.exportedAt && !!backup.settings);
+
+    // --- charts render without throwing ---
+    const ms = S.monthlyStats(Pulse.Store.workouts, 2026);
+    try {
+      const h1 = document.createElement("div"); document.body.appendChild(h1);
+      Pulse.Charts.barChart(h1, ms.map((m) => m.label), [{ name: "w", values: ms.map((m) => m.workouts) }], { height: 100 });
+      ok("barChart renders svg", h1.querySelectorAll("svg").length === 1);
+      const h2 = document.createElement("div"); document.body.appendChild(h2);
+      Pulse.Charts.lineChart(h2, ms.map((m) => m.label), [{ name: "c", values: ms.map((m) => m.calories) }], { height: 100 });
+      ok("lineChart renders svg", h2.querySelectorAll("svg").length === 1);
+      const h3 = document.createElement("div"); document.body.appendChild(h3);
+      Pulse.Charts.donut(h3, [{ label: "A", value: 3 }, { label: "B", value: 1 }], { size: 100 });
+      ok("donut renders svg", h3.querySelectorAll("svg").length === 1);
+      const h4 = document.createElement("div"); document.body.appendChild(h4);
+      Pulse.Charts.compareBars(h4, cmp.months, { a: "2026", b: "2025", colorA: "#6366f1", colorB: "#10b981" });
+      ok("compareBars renders rows", h4.querySelectorAll(".bars-compare .bars-row").length === 12);
+    } catch (e) {
+      ok("charts render without throwing", false, e.message);
+    }
+
+    // --- empty states ---
+    const ys25 = S.yearlyStats(Pulse.Store.workouts, 2025);
+    ok("empty year stats are zeros", ys25.workouts === 0 && ys25.days === 0);
+
+    // --- intensity levels ---
+    ok("intensity mapping", S.intensityForCalories(0) === 0 && S.intensityForCalories(200) === 1 && S.intensityForCalories(400) === 2 && S.intensityForCalories(700) === 3 && S.intensityForCalories(1000) === 4);
+
+    // --- multiple workouts per day aggregation ---
+    await Pulse.Store.addWorkout({ date: "2026-08-09", type: "Strength", duration: 45, calories: 420 });
+    await Pulse.Store.addWorkout({ date: "2026-08-09", type: "Walking", duration: 30, calories: 150 });
+    const agg = S.dayAggregates(Pulse.Store.workouts);
+    ok("two workouts same day -> count 2", agg.get("2026-08-09").count === 2, JSON.stringify(agg.get("2026-08-09")));
+    ok("daily totals 570 kcal / 75 min", agg.get("2026-08-09").calories === 570 && agg.get("2026-08-09").duration === 75);
+    await Pulse.Store.deleteWorkout(Pulse.Store.workouts.find((x) => x.date === "2026-08-09" && x.type === "Strength").id);
+    await Pulse.Store.deleteWorkout(Pulse.Store.workouts.find((x) => x.date === "2026-08-09" && x.type === "Walking").id);
+    ok("cleanup back to 92", Pulse.Store.workouts.length === 92);
+
+    // --- UI renders without throwing ---
+    Pulse.UI.state.anaA = 2026; Pulse.UI.state.anaB = 2025;
+    Pulse.UI.state.calMonth = 8; Pulse.UI.state.calMode = "year"; Pulse.UI.state.calDay = null;
+    Pulse.App = { year: () => 2026, setYear: async () => {} };
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="modalBackdrop" hidden><div id="modal"></div></div>
+      <div id="toastRegion"></div>
+      <div id="chartTooltip" hidden></div>
+      <div id="calModeSeg"><button class="seg-btn is-active" data-cal-mode="year">Year</button><button class="seg-btn" data-cal-mode="month">Month</button></div>
+      <div id="calLegend"></div>
+      <div id="calendarBody"></div>
+      <div id="workoutFilters"></div><div id="workoutList"></div>
+      <div id="progressHead"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
+      <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
+      <div id="dataBody"></div>
+      <div id="dashGreeting"></div><div id="dashGrid"></div>
+    `);
+    ["renderDashboard", "renderCalendar", "renderWorkouts", "renderProgress", "renderAnalytics", "renderData"].forEach((fn) => {
+      try {
+        Pulse.UI[fn]();
+        ok("UI " + fn + " renders", true);
+      } catch (e) {
+        ok("UI " + fn + " renders", false, e.message + " @ " + e.stack.split("\n")[1]);
+      }
+    });
+
+  } catch (e) {
+    fail++;
+    lines.push("FATAL " + e.message + "\n" + (e.stack || "").split("\n").slice(0, 4).join("\n"));
+  }
+  dump();
+})();
+</script>
+</body>
+</html>
