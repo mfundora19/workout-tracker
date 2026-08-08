@@ -147,7 +147,11 @@
     if (v <= 5) return 5;
     const p = Math.pow(10, Math.floor(Math.log10(v)));
     const f = v / p;
-    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+    // Finer steps (1,1.2,1.5,2,2.5,3,4,5,6,8,10) keep the axis close to the
+    // data so lines/bars fill the chart instead of hugging the bottom — e.g.
+    // 61,000 kcal caps at 80k, not 100k.
+    const steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    return (steps.find((s) => f <= s) || 10) * p;
   }
 
   /* ---------------- line / area chart ---------------- */
@@ -269,51 +273,6 @@
     return d;
   }
 
-  /* ---------------- donut ---------------- */
-
-  function donut(container, data, opts = {}) {
-    const total = data.reduce((s, d) => s + d.value, 0);
-    if (!total) { emptyChart(container, "No workouts recorded this year."); return; }
-    const size = opts.size || 180;
-    const stroke = opts.stroke || 17;
-    const r = (size - stroke) / 2 - 4;
-    const c = size / 2;
-    const accent = cssVar("--accent", "#6366f1");
-    const accent2 = cssVar("--accent-2", "#8b5cf6");
-    const success = cssVar("--success", "#10b981");
-    const warn = cssVar("--warn", "#f59e0b");
-    const info = cssVar("--info", "#0ea5e9");
-    const palette = [accent, success, warn, info, accent2, "#ec4899", "#14b8a6", "#f97316", "#64748b"];
-    const colors = data.map((d, i) => d.color || palette[i % palette.length]);
-
-    const svg = el("svg", { viewBox: `0 0 ${size} ${size}`, role: "img" });
-    svg.appendChild(el("circle", { cx: c, cy: c, r, fill: "none", stroke: cssVar("--surface-3", "#eef0f7"), "stroke-width": stroke }));
-    let offset = 0;
-    data.forEach((d, i) => {
-      const frac = d.value / total;
-      const arc = el("circle", {
-        cx: c, cy: c, r, fill: "none",
-        stroke: colors[i], "stroke-width": stroke,
-        "stroke-dasharray": `${frac * 2 * Math.PI * r} ${2 * Math.PI * r}`,
-        "stroke-dashoffset": -offset * 2 * Math.PI * r,
-        transform: `rotate(-90 ${c} ${c})`
-      });
-      bindTip(arc, `<b>${d.label}</b><div class="row"><span class="sw" style="background:${colors[i]}"></span><strong>${d.value}</strong> (${(frac * 100).toFixed(0)}%)</div>`);
-      svg.appendChild(arc);
-      offset += frac;
-    });
-    if (opts.centerLabel) {
-      const t1 = el("text", { x: c, y: c - 4, "text-anchor": "middle", "font-size": 22, "font-weight": 750, fill: cssVar("--text", "#171a26") });
-      t1.textContent = opts.centerValue != null ? compact(opts.centerValue) : String(total);
-      svg.appendChild(t1);
-      const t2 = el("text", { x: c, y: c + 15, "text-anchor": "middle", "font-size": 10, fill: cssVar("--text-faint", "#9499ab") });
-      t2.textContent = opts.centerLabel;
-      svg.appendChild(t2);
-    }
-    container.innerHTML = "";
-    container.appendChild(svg);
-  }
-
   /* ---------------- HTML comparison bars (year A vs B per month) ---------------- */
 
   /**
@@ -353,5 +312,5 @@
   }
 
   window.Focus = window.Focus || {};
-  window.Focus.Charts = { barChart, lineChart, donut, compareBars, hideTip, compact };
+  window.Focus.Charts = { barChart, lineChart, compareBars, hideTip, compact };
 })();

@@ -654,9 +654,12 @@
         const today = year === St().yearOf(St().todayISO()) && d === St().dayOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
         cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""}" ${info ? `data-day="${year}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
+      // Only interactive grids (the real calendar) highlight the current month;
+      // the analytics heatmap reuses this renderer but shouldn't.
+      const isCur = interactive && year === St().yearOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
       return `
-        <div class="card month-card" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
-          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}${goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""}</span></div>
+        <div class="card month-card ${isCur ? "is-current" : ""}" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
+          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}${goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""}${isCur ? `<span class="cur-chip">This month</span>` : ""}</span></div>
           <div class="heat">${cells.join("")}</div>
         </div>`;
     });
@@ -1226,6 +1229,8 @@
     const curYearNow = year === curYear;
     const hl = curYearNow ? ms.map((m, i) => i).filter((i) => i >= new Date().getMonth() + 1) : null;
     const hasCmp = a !== b && cmp.totals.workouts.a > 0 && cmp.totals.workouts.b > 0;
+    const tb = St().typeBreakdown(all, year);
+    const tbTotal = tb.reduce((s, t) => s + t.count, 0);
 
     wrap.innerHTML = `
       <div class="grid-2">
@@ -1245,16 +1250,6 @@
           <div class="card-title"><h3>Average calories / workout · ${year}</h3><span class="sub">intensity trend</span></div>
           <div class="chart-wrap" id="acAvgCal"></div>
         </div>
-      </div>
-
-      <div class="grid-2" style="margin-top:16px">
-        <div class="card">
-          <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">mix</span></div>
-          <div style="display:grid;grid-template-columns:150px 1fr;gap:6px;align-items:center">
-            <div class="chart-wrap" id="acTypes" style="max-width:170px"></div>
-            <div id="acTypeLegend"></div>
-          </div>
-        </div>
         <div class="card">
           <div class="card-title"><h3>Cumulative workouts · ${year}</h3><span class="sub">progress</span></div>
           <div class="chart-wrap" id="acCumWk"></div>
@@ -1262,6 +1257,13 @@
         <div class="card">
           <div class="card-title"><h3>Cumulative calories · ${year}</h3><span class="sub">YTD kcal</span></div>
           <div class="chart-wrap" id="acCumCal"></div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:16px">
+        <div class="card">
+          <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">${tbTotal} workouts</span></div>
+          <div id="acTypeBars"></div>
         </div>
         <div class="card">
           <div class="card-title"><h3>Consistency heatmap · ${year}</h3><span class="sub">workout days</span></div>
@@ -1296,15 +1298,16 @@
     C().barChart(document.getElementById("acDuration"), labels, [{ name: "min", values: ms.map((m) => m.duration), color: "var(--info)" }], { height: 180, valueFmt: (v) => St().fmtDuration(v) });
     C().lineChart(document.getElementById("acAvgCal"), labels, [{ name: "kcal / workout", values: ms.map((m) => (m.avgCal ? Math.round(m.avgCal) : null)), color: "var(--warn)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal" });
 
-    // types donut
-    const tb = St().typeBreakdown(all, year);
-    C().donut(document.getElementById("acTypes"), tb.map((t) => ({ label: t.type, value: t.count, color: typeStyle(t.type).color })), {
-      size: 150, stroke: 18, centerLabel: "workouts", centerValue: tb.reduce((s, t) => s + t.count, 0)
-    });
-    document.getElementById("acTypeLegend").innerHTML = tb.map((t) => {
-      const st = typeStyle(t.type);
-      return `<div class="row" style="margin-bottom:7px"><span class="sw" style="background:${st.color}"></span><span style="flex:1;font-size:13px">${st.emoji} ${esc(t.type)}</span><b style="font-variant-numeric:tabular-nums">${t.count}</b><span style="width:40px;text-align:right;color:var(--text-faint);font-size:12px;font-weight:700">${t.pct.toFixed(0)}%</span></div>`;
-    }).join("") || `<div class="chart-empty">No workouts in ${year}.</div>`;
+    // workout types — clean horizontal bars instead of the donut
+    document.getElementById("acTypeBars").innerHTML = tb.length
+      ? tb.map((t) => {
+        const st = typeStyle(t.type);
+        return `<div class="type-bar-row">
+          <div class="tbr-head"><span>${st.emoji} ${esc(t.type)}</span><b>${t.count} <em>· ${t.pct.toFixed(0)}%</em></b></div>
+          <div class="tbr-track"><span style="width:${Math.max(t.pct, 2.5)}%;background:${st.color}"></span></div>
+        </div>`;
+      }).join("")
+      : `<div class="chart-empty">No workouts in ${year}.</div>`;
 
     // cumulative
     const cumWk = ms.map((m, i) => ms.slice(0, i + 1).reduce((s, x) => s + x.workouts, 0));

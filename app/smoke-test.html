@@ -134,9 +134,6 @@ function dump() {
       const h2 = document.createElement("div"); document.body.appendChild(h2);
       Focus.Charts.lineChart(h2, ms.map((m) => m.label), [{ name: "c", values: ms.map((m) => m.calories) }], { height: 100 });
       ok("lineChart renders svg", h2.querySelectorAll("svg").length === 1);
-      const h3 = document.createElement("div"); document.body.appendChild(h3);
-      Focus.Charts.donut(h3, [{ label: "A", value: 3 }, { label: "B", value: 1 }], { size: 100 });
-      ok("donut renders svg", h3.querySelectorAll("svg").length === 1);
       const h4 = document.createElement("div"); document.body.appendChild(h4);
       Focus.Charts.compareBars(h4, cmp.months.map((m) => ({ label: m.label, a: m.a.workouts, b: m.b.workouts })), { a: "2026", b: "2025", colorA: "#6366f1", colorB: "#10b981", valueFmt: (v) => v + " workouts" });
       ok("compareBars renders rows", h4.querySelectorAll(".bars-compare .bars-row").length === 12);
@@ -197,6 +194,10 @@ function dump() {
     // seed has no workouts in the previous year -> comparison is hidden, not "vs empty"
     ok("comparison hidden when a year has no data", !!document.querySelector(".cmp-hidden"), "cmp block present: " + !!document.querySelector("#acCompareWk"));
     ok("month-by-month has no [object Object]", !document.getElementById("analyticsCharts").textContent.includes("[object Object]"));
+    const gridA = document.querySelectorAll("#analyticsCharts .grid-2")[0];
+    ok("analytics grid A has 6 cards", gridA && gridA.querySelectorAll(".card").length === 6, "cards=" + (gridA ? gridA.querySelectorAll(".card").length : 0));
+    ok("workout types render as horizontal bars", document.querySelectorAll("#acTypeBars .type-bar-row").length > 0, "rows=" + document.querySelectorAll("#acTypeBars .type-bar-row").length);
+    ok("cumulative calories is in grid A", gridA && gridA.textContent.includes("Cumulative calories"), "moved next to duration");
 
     // --- goals: settings card, dashboard card, calendar badges ---
     Focus.UI.renderSettings();
@@ -214,6 +215,7 @@ function dump() {
     Focus.UI.state.calDay = null; Focus.UI.state.calMode = "year";
     Focus.UI.renderCalendar();
     ok("year view shows goal chips", document.querySelectorAll(".month-card .goal-chip").length > 0, "chips=" + document.querySelectorAll(".month-card .goal-chip").length);
+    ok("year view highlights the current month", document.querySelectorAll("#calendarBody .month-card.is-current").length === 1 && document.querySelector("#calendarBody .month-card.is-current").dataset.month === String(new Date().getMonth() + 1), "cur=" + document.querySelectorAll("#calendarBody .month-card.is-current").length);
     await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
     // --- dashboard quick add: measurement mode ---

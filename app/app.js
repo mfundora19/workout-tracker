@@ -115,6 +115,9 @@
     document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + name));
     document.getElementById("pageTitle").textContent = VIEW_META[name][0];
     document.getElementById("pageSubtitle").textContent = VIEW_META[name][1];
+    // The year picker + Add Workout belong on data-driven views; hide them on
+    // Settings and Data where they'd just sit there doing nothing.
+    document.getElementById("topbarRight").hidden = name === "settings" || name === "data";
     if (location.hash !== "#/" + name) {
       try { history.replaceState(null, "", "#/" + name); } catch (e) { /* file:// safe */ }
     }
