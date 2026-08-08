@@ -383,6 +383,31 @@
           }
           break;
         }
+        case "save-profile": {
+          const hEl = document.getElementById("setHeight");
+          const huEl = document.getElementById("setHeightUnit");
+          const aEl = document.getElementById("setAge");
+          const hVal = hEl ? parseFloat(hEl.value) : NaN;
+          const hu = huEl && huEl.value === "in" ? "in" : "cm";
+          const ageVal = aEl && aEl.value !== "" ? parseFloat(aEl.value) : NaN;
+          if (!isFinite(hVal) || hVal <= 0 || hVal >= 300) {
+            Focus.UI.toast("Enter a realistic height (in " + hu + ")", "warn");
+            break;
+          }
+          if (isFinite(ageVal) && (ageVal < 10 || ageVal > 120)) {
+            Focus.UI.toast("Age should be between 10 and 120", "warn");
+            break;
+          }
+          Focus.Store.setSettings({
+            height: hVal,
+            heightUnit: hu,
+            age: isFinite(ageVal) ? ageVal : null
+          }).then(() => {
+            Focus.UI.toast("Profile saved — BMI & body-fat tools will use your height");
+            renderCurrent();
+          });
+          break;
+        }
         case "save-goals": {
           const num = (v) => (v === "" || v == null || !isFinite(Number(v)) ? null : Math.max(0, Number(v)));
           const goals = {

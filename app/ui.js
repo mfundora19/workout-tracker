@@ -917,7 +917,10 @@
     };
     const wRec = St().latestOfType(ms, "Weight");
     const wKg = wRec ? St().toKg(wRec.value, wRec.unit) : null;
-    const hCm = latestCm("Height");
+    // Height comes from the profile in Settings first (it rarely changes), then
+    // from a recorded Height measurement, then the example default.
+    const sH = Store().settings;
+    const hCm = sH.height != null ? St().toCm(sH.height, sH.heightUnit || "cm") : latestCm("Height");
     const nCm = latestCm("Neck");
     const wstCm = latestCm("Waist");
     const hipCm = latestCm("Hips");
@@ -1167,6 +1170,8 @@
     const wt = s.weightUnit || "lb";
     const sex = s.sex || "male";
     const g = s.goals || {};
+    const hCm = s.height != null ? St().toCm(s.height, s.heightUnit || "cm") : null;
+    const hVal = hCm != null ? Math.round(hCm * 10) / 10 : "";
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
@@ -1203,8 +1208,8 @@
         </div>
 
         <div class="card data-card">
-          <h3>Units</h3>
-          <p class="desc">Default unit for new weight entries in Quick add and the measurement form.</p>
+          <h3>Units & body</h3>
+          <p class="desc">Weight unit for new entries, plus your body profile — height is used by the BMI and body-fat estimates, so you only set it once.</p>
           <div class="setting-row">
             <div class="setting-label"><b>Weight unit</b><span>Only affects new records — existing ones keep their units.</span></div>
             <div class="seg" role="group" aria-label="Weight unit">
@@ -1218,6 +1223,24 @@
               <button class="seg-btn ${sex === "male" ? "is-active" : ""}" data-action="set-sex" data-set-sex="male">Male</button>
               <button class="seg-btn ${sex === "female" ? "is-active" : ""}" data-action="set-sex" data-set-sex="female">Female</button>
             </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Height</b><span>Your height barely changes — set it here and every estimate uses it.</span></div>
+            <div class="input-with-unit" style="width:200px">
+              <input class="input" id="setHeight" type="number" step="any" min="0" placeholder="175" value="${hVal}" aria-label="Height">
+              <select class="select" id="setHeightUnit" aria-label="Height unit">
+                <option value="cm" ${s.heightUnit !== "in" ? "selected" : ""}>cm</option>
+                <option value="in" ${s.heightUnit === "in" ? "selected" : ""}>in</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Age</b><span>Saved with your profile.</span></div>
+            <input class="input" id="setAge" type="number" min="10" max="120" step="1" placeholder="e.g. 30" value="${s.age ?? ""}" style="width:90px" aria-label="Age">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Save profile</b><span>Height and age are applied to the BMI & body-fat tools.</span></div>
+            <button class="btn btn-primary" data-action="save-profile">${ICONS.check} Save</button>
           </div>
         </div>
 
@@ -1274,6 +1297,18 @@
           </ul>
         </div>
       </div>`;
+    // Switching the height unit converts the typed value so the height stays
+    // physically the same (175 cm -> 68.9 in), not 175 inches.
+    const hInp = document.getElementById("setHeight");
+    const hSel = document.getElementById("setHeightUnit");
+    if (hInp && hSel) {
+      hSel.addEventListener("change", () => {
+        const v = parseFloat(hInp.value);
+        if (isFinite(v) && v > 0) {
+          hInp.value = hSel.value === "in" ? Math.round(v / 2.54 * 10) / 10 : Math.round(v * 2.54 * 10) / 10;
+        }
+      });
+    }
   }
 
   /* =====================================================================
@@ -1290,9 +1325,12 @@
     if (!el) return;
     const ms = Store().measurements;
     const sex = Store().settings.sex || "male";
+    const sH = Store().settings;
     const hRec = St().latestOfType(ms, "Height");
     const wRec = St().latestOfType(ms, "Weight");
-    const hCm = hRec ? St().toCm(hRec.value, hRec.unit) : null;
+    // Height from the Settings profile wins (it rarely changes); a recorded
+    // Height measurement is the fallback.
+    const hCm = sH.height != null ? St().toCm(sH.height, sH.heightUnit || "cm") : (hRec ? St().toCm(hRec.value, hRec.unit) : null);
     const wKg = wRec ? St().toKg(wRec.value, wRec.unit) : null;
     const bmi = St().calcBMI(hCm, wKg);
     const nCm = (() => { const r = St().latestOfType(ms, "Neck"); return r ? St().toCm(r.value, r.unit) : null; })();
@@ -1308,7 +1346,9 @@
           <div class="card-title"><h3>Body composition</h3><span class="sub">Current BMI & body-fat estimate</span></div>
           <div class="comp-empty">
             <div class="es-icon">${ICONS.scale}</div>
-            <p>Record a <b>Height</b> and a <b>Weight</b> measurement to see your current BMI${sex === "female" ? " — add Neck + Waist + Hips for an estimated body fat %." : " — add Neck + Waist for an estimated body fat %."}</p>
+            <p>${sH.height != null
+              ? "Record a <b>Weight</b> measurement — your height is saved in Settings — to see your current BMI"
+              : "Set your <b>Height</b> in Settings and record a <b>Weight</b> measurement to see your current BMI"}${sex === "female" ? " — add Neck + Waist + Hips for an estimated body fat %." : " — add Neck + Waist for an estimated body fat %."}</p>
           </div>
         </div>`;
       return;

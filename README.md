@@ -37,7 +37,8 @@ Google Sheets archiving.
 - ⚙️ **Settings** — theme (dark/light), **accent color** (violet, orange, green,
   red, blue — recolors buttons, charts and the calendar heat), a **Motion** toggle
   for the subtle animations, weight unit (kg/lb), **body profile** (male/female,
-  used by the body-fat estimate), goals, privacy & about
+  **height** and **age** — saved once and used by every BMI & body-fat estimate),
+  goals, privacy & about
 
 ---
 
@@ -167,7 +168,8 @@ Pick the report year and optional comparison year, then **Export PDF**.
 ## How BMI & body fat work
 
 - **BMI** = weight (kg) ÷ height (m)², categorised with the WHO bands. It needs
-  only a Height and a Weight.
+  only a Height and a Weight. **Height lives in Settings** (it barely changes) —
+  a recorded Height measurement is used only as a fallback.
 - **Estimated body fat** uses the **U.S. Navy / Hodgdon circumference method**
   (men: waist & neck; women: waist, hips & neck — all vs height). It appears
   only when every required measurement is present; until then the UI tells you

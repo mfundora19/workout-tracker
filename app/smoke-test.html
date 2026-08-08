@@ -556,6 +556,24 @@ function dump() {
     Focus.UI.renderSettings();
     ok("settings renders with unit segs", document.getElementById("settingsBody").querySelectorAll("[data-set-weightunit]").length === 2);
 
+    // --- settings: height + age body profile ---
+    Focus.Store.settings.height = null; Focus.Store.settings.age = null; Focus.Store.settings.heightUnit = "cm";
+    Focus.UI.renderSettings();
+    ok("settings has height + age profile fields", !!document.getElementById("setHeight") && !!document.getElementById("setAge") && !!document.getElementById("setHeightUnit") && !!document.querySelector('[data-action="save-profile"]'));
+    Focus.Store.settings.height = 170; Focus.Store.settings.heightUnit = "cm"; Focus.Store.settings.age = 34;
+    Focus.UI.renderSettings();
+    ok("settings prefills saved height + age", document.getElementById("setHeight").value === "170" && document.getElementById("setAge").value === "34" && document.getElementById("setHeightUnit").value === "cm", document.getElementById("setHeight").value + " / " + document.getElementById("setAge").value);
+    Focus.UI.renderTools();
+    ok("tools prefills height from settings profile", document.getElementById("bmiHeight").value === "170", document.getElementById("bmiHeight").value);
+    Focus.UI.renderProgress();
+    const compFromSettings = document.getElementById("progressCompCard").textContent;
+    ok("progress BMI uses profile height (no Height measurement needed)", compFromSettings.includes("Current BMI") && compFromSettings.includes("23.4"), compFromSettings.slice(0, 130));
+    Focus.Store.settings.height = null; Focus.Store.settings.age = null;
+    Focus.UI.renderTools();
+    ok("tools falls back to default height without profile", document.getElementById("bmiHeight").value === "175", document.getElementById("bmiHeight").value);
+    Focus.UI.renderProgress();
+    ok("progress returns to incomplete state without height source", document.getElementById("progressCompCard").textContent.includes("Height"));
+
   } catch (e) {
     fail++;
     lines.push("FATAL " + e.message + "\n" + (e.stack || "").split("\n").slice(0, 4).join("\n"));
