@@ -160,10 +160,10 @@
       e.preventDefault();
       const f = e.target;
       const date = f.date.value || S().todayISO();
-      const type = f.type.value === "__custom__" ? (f.customType.value || "").trim() : f.type.value;
+      const type = f.type.value;
       const duration = f.duration.value === "" ? null : Number(f.duration.value);
       const calories = f.calories.value === "" ? null : Number(f.calories.value);
-      if (!type) { Focus.UI.toast("Choose a workout type", "warn"); return; }
+      if (!type) { Focus.UI.toast("Choose at least one workout type", "warn"); return; }
       if ((duration != null && (!isFinite(duration) || duration < 0)) || (calories != null && (!isFinite(calories) || calories < 0))) {
         Focus.UI.toast("Numbers must be positive", "warn");
         return;
@@ -177,10 +177,6 @@
     });
 
     document.addEventListener("change", (e) => {
-      if (e.target.id === "qaType") {
-        const custom = document.getElementById("qaCustomType");
-        if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
-      }
       if (e.target.id === "qmType") {
         const custom = document.getElementById("qmCustomType");
         if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
@@ -239,6 +235,55 @@
         case "quick-add": {
           const date = target.dataset.date || S().todayISO();
           Focus.UI.openWorkoutForm({ date });
+          break;
+        }
+        case "toggle-type": {
+          // multi-select workout type chips: keep the joined value in the
+          // form's hidden input so submits read it like the old select did.
+          const picker = target.dataset.picker;
+          const t = target.dataset.type;
+          const hidden = document.getElementById(picker + "Type");
+          if (!hidden) break;
+          const cur = new Set((hidden.value || "").split(",").map((s) => s.trim()).filter(Boolean));
+          if (cur.has(t)) cur.delete(t); else cur.add(t);
+          hidden.value = Focus.Store.normalizeTypes(Array.from(cur).join(", "));
+          document.querySelectorAll(`.type-chip[data-picker="${picker}"]`).forEach((c) => {
+            c.classList.toggle("is-on", cur.has(c.dataset.type));
+          });
+          break;
+        }
+        case "add-type": {
+          const picker = target.dataset.picker;
+          const input = document.getElementById(picker + "CustomType");
+          const name = (input ? input.value : "").trim().replace(/[,;]+/g, " ");
+          if (!name) { if (input) input.focus(); break; }
+          const hidden = document.getElementById(picker + "Type");
+          const container = document.getElementById(picker + "Picker");
+          if (!hidden || !container) break;
+          const cur = new Set((hidden.value || "").split(",").map((s) => s.trim()).filter(Boolean));
+          let exists = false;
+          container.querySelectorAll(".type-chip").forEach((c) => { if (c.dataset.type === name) exists = true; });
+          if (exists) {
+            container.querySelectorAll(".type-chip").forEach((c) => { if (c.dataset.type === name) c.classList.add("is-on"); });
+          } else {
+            const st = Focus.UI.typeStyle(name);
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "type-chip is-on";
+            chip.dataset.action = "toggle-type";
+            chip.dataset.picker = picker;
+            chip.dataset.type = name;
+            chip.style.setProperty("--tc", st.color);
+            chip.title = name;
+            const dot = document.createElement("span");
+            dot.className = "tcdot";
+            chip.appendChild(dot);
+            chip.appendChild(document.createTextNode(" " + st.emoji + " " + name));
+            container.appendChild(chip);
+          }
+          cur.add(name);
+          hidden.value = Array.from(cur).join(", ");
+          if (input) input.value = "";
           break;
         }
         case "edit-workout": {

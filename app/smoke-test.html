@@ -96,6 +96,36 @@ function dump() {
     ok("blank measurement value rejected (not 0)", Focus.Store.normalizeMeasurementRow({ date: "2026-01-01", type: "Weight", value: "" }) === null);
     ok("ids are trimmed on import", Focus.Store.normalizeWorkoutRow({ id: "  id-x  ", date: "2026-01-01" }).id === "id-x");
 
+    // --- multi-type workouts ---
+    ok("normalizeTypes dedupes + trims", Focus.Store.normalizeTypes(" Back,Biceps , Back ") === "Back, Biceps", JSON.stringify(Focus.Store.normalizeTypes(" Back,Biceps , Back ")));
+    ok("normalizeTypes empty -> empty", Focus.Store.normalizeTypes("") === "" && Focus.Store.normalizeTypes(null) === "");
+    const mtw = await Focus.Store.addWorkout({ date: "2026-09-10", type: "Back, Biceps", duration: 50, calories: 400 });
+    ok("multi-type workout stored as 'Back, Biceps'", mtw.type === "Back, Biceps", JSON.stringify(mtw.type));
+    const tbMulti = S.typeBreakdown(Focus.Store.workouts, 2026);
+    const backRow = tbMulti.find((t) => t.type === "Back");
+    const bicepsRow = tbMulti.find((t) => t.type === "Biceps");
+    ok("typeBreakdown splits multi-type", backRow && backRow.count === 1 && bicepsRow && bicepsRow.count === 1, JSON.stringify(tbMulti.filter((t) => ["Back", "Biceps"].indexOf(t.type) >= 0)));
+    ok("normalizeWorkoutRow keeps multi-type", Focus.Store.normalizeWorkoutRow({ date: "2026-09-10", type: "Back, Biceps" }).type === "Back, Biceps");
+    const planMulti = Focus.Store.planImport([{ date: "2026-09-11", type: "Chest, Triceps", duration: 40, calories: 350 }], []);
+    ok("planImport: multi-type new row is added", planMulti.workouts.added.length === 1, JSON.stringify(planMulti));
+    await Focus.Store.importRecords([{ date: "2026-09-11", type: "Chest, Triceps", duration: 40, calories: 350 }], []);
+    const multiRec = Focus.Store.workouts.find((x) => x.date === "2026-09-11");
+    ok("import stores multi-type normalized", multiRec && multiRec.type === "Chest, Triceps", JSON.stringify(multiRec));
+    const dupMulti = await Focus.Store.importRecords([{ date: "2026-09-11", type: "Chest, Triceps", duration: 40, calories: 350 }], []);
+    ok("multi-type re-import is a clean skip (no duplicates)", dupMulti.added === 0 && dupMulti.skipped === 1, JSON.stringify(dupMulti));
+    // full Excel round-trip for a multi-type record: export -> parse -> re-plan
+    const blobMulti = Focus.Excel.exportExcel();
+    const bufMulti = await blobMulti.arrayBuffer();
+    const parsedMulti = Focus.Excel.parseWorkbook(bufMulti);
+    const multiRow = parsedMulti.workouts.find((r) => r.date === "2026-09-10");
+    ok("excel round-trip keeps multi-type type", multiRow && multiRow.type === "Back, Biceps", JSON.stringify(multiRow));
+    const planMultiRT = Focus.Store.planImport(parsedMulti.workouts, parsedMulti.measurements);
+    ok("multi-type export->reimport: 94 skipped, 0 added", planMultiRT.workouts.skipped === 94 && planMultiRT.workouts.added.length === 0 && planMultiRT.workouts.updated.length === 0, JSON.stringify(planMultiRT.workouts));
+    ok("normalizeTypes sorts (reordered edit matches)", Focus.Store.normalizeTypes("Biceps, Back") === "Back, Biceps", Focus.Store.normalizeTypes("Biceps, Back"));
+    await Focus.Store.deleteWorkout(mtw.id);
+    await Focus.Store.deleteWorkout(multiRec.id);
+    ok("multi-type cleanup back to 92", Focus.Store.workouts.length === 92);
+
     // --- Excel export round-trip ---
     const blob = Focus.Excel.exportExcel();
     const buf = await blob.arrayBuffer();

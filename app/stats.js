@@ -248,8 +248,14 @@
     const map = new Map();
     for (const w of workouts) {
       if (year != null && yearOf(w.date) !== year) continue;
-      const t = w.type || "Other";
-      map.set(t, (map.get(t) || 0) + 1);
+      // A workout can carry multiple comma-separated types ("Back, Biceps")
+      // — count each one so the distribution reflects every muscle group.
+      const parts = String(w.type || "Other").split(",");
+      for (const p of parts) {
+        const t = p.trim();
+        if (!t) continue;
+        map.set(t, (map.get(t) || 0) + 1);
+      }
     }
     const total = Array.from(map.values()).reduce((a, b) => a + b, 0);
     return Array.from(map.entries())

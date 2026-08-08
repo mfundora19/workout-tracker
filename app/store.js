@@ -33,7 +33,7 @@
     return {
       id: data.id || uid(),
       date: data.date,
-      type: (data.type || "Other").trim() || "Other",
+      type: normalizeTypes(data.type) || "Other",
       duration: data.duration == null || data.duration === "" ? null : Math.max(0, Number(data.duration)),
       calories: data.calories == null || data.calories === "" ? null : Math.max(0, Number(data.calories)),
       notes: data.notes || "",
@@ -182,7 +182,7 @@
       const w = state.workouts.find((x) => x.id === id);
       if (!w) return null;
       const updated = Object.assign({}, w, patch, { updatedAt: nowIso() });
-      if (patch.type) updated.type = String(patch.type).trim() || "Other";
+      if (patch.type) updated.type = normalizeTypes(patch.type) || "Other";
       if (patch.duration != null && patch.duration !== "") updated.duration = Math.max(0, Number(patch.duration));
       else if (patch.duration === null) updated.duration = null;
       if (patch.calories != null && patch.calories !== "") updated.calories = Math.max(0, Number(patch.calories));
@@ -465,12 +465,28 @@
     return { date: norm.date, type: norm.type, value: norm.value, unit: norm.unit, notes: norm.notes };
   }
 
+  /**
+   * Normalize a type string into a stable, idempotent form. Multiple types
+   * are comma-separated ("Back, Biceps"): split, trim, drop empties, dedupe,
+   * and sort so a human reordering types in Excel ("Biceps, Back") still
+   * matches the stored record instead of creating a duplicate.
+   * Round-trips are exact because this is applied on both save and import.
+   */
+  function normalizeTypes(v) {
+    const seen = [];
+    String(v == null ? "" : v).split(",").forEach((p) => {
+      const t = p.trim();
+      if (t && seen.indexOf(t) === -1) seen.push(t);
+    });
+    return seen.sort().join(", ");
+  }
+
   /** Validate + normalize a raw workout row (from import or seed). */
   function normalizeWorkoutRow(r) {
     if (!r || typeof r !== "object") return null;
     const date = normalizeDate(r.date);
     if (!date) return null;
-    const type = r.type != null && String(r.type).trim() !== "" ? String(r.type).trim() : "Other";
+    const type = normalizeTypes(r.type) || "Other";
     let duration = null;
     let calories = null;
     if (r.duration != null && r.duration !== "") {
@@ -570,6 +586,7 @@
 
   Store.normalizeWorkoutRow = normalizeWorkoutRow;
   Store.normalizeMeasurementRow = normalizeMeasurementRow;
+  Store.normalizeTypes = normalizeTypes;
   Store.workoutKey = workoutKey;
   Store.measKey = measKey;
 

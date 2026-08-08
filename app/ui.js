@@ -30,10 +30,14 @@
     Back: { color: "#8b5cf6", emoji: "🧗" },
     Chest: { color: "#6366f1", emoji: "🏋️" },
     Legs: { color: "#f97316", emoji: "🦵" },
-    Strength: { color: "#a855f7", emoji: "💪" },
-    Arms: { color: "#0ea5e9", emoji: "🦾" },
+    Biceps: { color: "#ec4899", emoji: "💪" },
+    Triceps: { color: "#0ea5e9", emoji: "🦾" },
+    Forearms: { color: "#06b6d4", emoji: "🤜" },
+    Abs: { color: "#84cc16", emoji: "🧘" },
+    Strength: { color: "#a855f7", emoji: "🏋️‍♂️" },
     Cardio: { color: "#f43f5e", emoji: "❤️" },
     // Legacy types — still styled so historical records keep their colors.
+    Arms: { color: "#0ea5e9", emoji: "🦾" },
     Running: { color: "#eab308", emoji: "🏃" },
     Walking: { color: "#14b8a6", emoji: "🚶" },
     Cycling: { color: "#06b6d4", emoji: "🚴" },
@@ -51,8 +55,15 @@
     return { color: PALETTE[h % PALETTE.length], emoji: "🔹" };
   }
 
+  /** Split a stored type string ("Back, Biceps") into individual types. */
+  function splitTypes(str) {
+    return String(str == null ? "" : str).split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
   function existingTypes() {
-    return Array.from(new Set(Store().workouts.map((w) => w.type))).sort();
+    const set = new Set();
+    Store().workouts.forEach((w) => splitTypes(w.type).forEach((t) => set.add(t)));
+    return Array.from(set).sort();
   }
   function existingMeasTypes() {
     return Array.from(new Set(Store().measurements.map((m) => m.type))).sort();
@@ -163,12 +174,30 @@
 
   /* ---------------- workout form ---------------- */
 
-  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Strength", "Arms", "Cardio"];
+  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Biceps", "Triceps", "Forearms", "Abs", "Strength", "Cardio"];
+
+  /** Toggle-chip multi-select for workout types. `prefix` scopes the ids
+   *  ("wf" for the modal form, "qa" for quick add). */
+  function typePickerHTML(prefix, selected) {
+    const sel = new Set(selected || []);
+    const all = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
+    return `<div class="type-picker" id="${prefix}Picker">` + all.map((t) => {
+      const st = typeStyle(t);
+      return `<button type="button" class="type-chip${sel.has(t) ? " is-on" : ""}" data-action="toggle-type" data-picker="${prefix}" data-type="${esc(t)}" style="--tc:${st.color}" title="${esc(t)}"><span class="tcdot"></span>${st.emoji} ${esc(t)}</button>`;
+    }).join("") + `</div>`;
+  }
+
+  /** Individual type badges for a stored type string ("Back, Biceps"). */
+  function typeBadgesHTML(typeStr) {
+    const parts = splitTypes(typeStr);
+    return (parts.length ? parts : ["Other"]).map((t) => {
+      const st = typeStyle(t);
+      return `<span class="type-badge badge"><span class="dot" style="background:${st.color}"></span>${st.emoji} ${esc(t)}</span>`;
+    }).join("");
+  }
 
   function workoutFormHTML(values = {}) {
-    const types = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
-    const opts = types.map((t) => `<option value="${esc(t)}" ${t === (values.type || "Strength") ? "selected" : ""}>${t}</option>`).join("");
-    const customSel = values.type && !types.includes(values.type) ? `<option value="${esc(values.type)}" selected>${esc(values.type)} (custom)</option>` : "";
+    const selected = splitTypes(values.type || "");
     return `
       <h2>${values.id ? "Edit workout" : "Add workout"}</h2>
       <p class="modal-sub">${values.id ? "Update the details below." : "Quick entry — only date and type are required."}</p>
@@ -178,12 +207,14 @@
             <label for="wfDate">Date *</label>
             <input class="input" id="wfDate" name="date" type="date" required value="${esc(values.date || "")}">
           </div>
-          <div class="field">
-            <label for="wfType">Workout type *</label>
-            <select class="select" id="wfType" name="type">${opts}${customSel}
-              <option value="__custom__">➕ Custom type…</option>
-            </select>
-            <input class="input" id="wfCustomType" name="customType" type="text" placeholder="Custom type name" style="margin-top:8px;${values.id ? "" : "display:none"}" value="${esc(values.type && !types.includes(values.type) ? values.type : "")}">
+          <div class="field" style="grid-column:1/-1">
+            <label for="wfTypePicker">Workout type(s) *</label>
+            ${typePickerHTML("wf", selected)}
+            <div class="type-custom-row">
+              <input class="input" id="wfCustomType" type="text" placeholder="Add a custom type…">
+              <button type="button" class="btn btn-ghost btn-sm" data-action="add-type" data-picker="wf">Add</button>
+            </div>
+            <input type="hidden" id="wfType" name="type" value="${esc(values.type || "")}">
           </div>
           <div class="field">
             <label for="wfDuration">Duration (min)</label>
@@ -212,11 +243,11 @@
       onSubmit: (f, { close }) => {
         const err = f.querySelector("#wfError");
         const date = f.date.value;
-        const type = f.type.value === "__custom__" ? (f.customType.value || "").trim() : f.type.value;
+        const type = f.type.value;
         const duration = f.duration.value === "" ? null : Number(f.duration.value);
         const calories = f.calories.value === "" ? null : Number(f.calories.value);
         if (!date) { err.textContent = "Please pick a date."; err.hidden = false; return; }
-        if (!type) { err.textContent = "Please enter a workout type."; err.hidden = false; return; }
+        if (!type) { err.textContent = "Pick at least one workout type."; err.hidden = false; return; }
         if (duration != null && (!isFinite(duration) || duration < 0)) { err.textContent = "Duration must be a positive number."; err.hidden = false; return; }
         if (calories != null && (!isFinite(calories) || calories < 0)) { err.textContent = "Calories must be a positive number."; err.hidden = false; return; }
         err.hidden = true;
@@ -230,14 +261,10 @@
         }
       },
       onOpen: (m) => {
-        const typeSel = m.querySelector("#wfType");
-        const custom = m.querySelector("#wfCustomType");
-        const toggle = () => { custom.style.display = typeSel.value === "__custom__" ? "" : "none"; if (typeSel.value === "__custom__") custom.focus(); };
-        typeSel.addEventListener("change", toggle);
         m.querySelector("#saveAnother")?.addEventListener("click", () => {
           const f = m.querySelector("#workoutForm");
           f.querySelector("#wfError").hidden = true;
-          const date = f.date.value, type = f.type.value === "__custom__" ? f.customType.value.trim() : f.type.value;
+          const date = f.date.value, type = f.type.value;
           const duration = f.duration.value === "" ? null : Number(f.duration.value);
           const calories = f.calories.value === "" ? null : Number(f.calories.value);
           if (!date || !type) { toast("Date and type are required", "warn"); return; }
@@ -477,8 +504,6 @@
   }
 
   function quickAddCardHTML() {
-    const types = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
-    const opts = types.map((t) => `<option value="${esc(t)}">${t}</option>`).join("");
     const mOpts = measurementTypes().map((t) => `<option value="${esc(t)}" ${t === "Weight" ? "selected" : ""}>${t}</option>`).join("");
     const mUnitOpts = unitOptsHTML(unitDefault("Weight"));
     const mode = state.qaMode;
@@ -497,12 +522,14 @@
               <label for="qaDate">Date</label>
               <input class="input" id="qaDate" name="date" type="date" value="${St().todayISO()}">
             </div>
-            <div class="field">
-              <label for="qaType">Type</label>
-              <select class="select" id="qaType" name="type">${opts}
-                <option value="__custom__">➕ Custom…</option>
-              </select>
-              <input class="input" id="qaCustomType" name="customType" type="text" placeholder="Custom type" style="margin-top:8px;display:none">
+            <div class="field" style="grid-column:1/-1">
+              <label for="qaTypePicker">Type</label>
+              ${typePickerHTML("qa", [])}
+              <div class="type-custom-row">
+                <input class="input" id="qaCustomType" type="text" placeholder="Add a custom type…">
+                <button type="button" class="btn btn-ghost btn-sm" data-action="add-type" data-picker="qa">Add</button>
+              </div>
+              <input type="hidden" id="qaType" name="type" value="">
             </div>
             <div class="field">
               <label for="qaDuration">Duration (min)</label>
@@ -610,10 +637,9 @@
 
   function recentRows(list) {
     return list.map((w) => {
-      const st = typeStyle(w.type);
       return `
         <div class="wk-row">
-          <span class="type-badge badge"><span class="dot" style="background:${st.color}"></span>${st.emoji} ${esc(w.type)}</span>
+          <span class="type-badges">${typeBadgesHTML(w.type)}</span>
           <div class="wk-date"><b>${St().shortDate(w.date)}</b><span>${St().weekdayName(w.date)}</span></div>
           <div class="wk-meta">
             ${w.calories != null ? `<div class="m"><b>${St().fmtNum(w.calories)}</b><span>kcal</span></div>` : ""}
@@ -812,10 +838,9 @@
         ${dayGoalsHTML(cal.calories, cal.duration)}
         <div>
           ${all.map((w) => {
-            const st = typeStyle(w.type);
             return `
             <div class="wk-item">
-              <span class="type-badge badge"><span class="dot" style="background:${st.color}"></span>${st.emoji} ${esc(w.type)}</span>
+              <span class="type-badges">${typeBadgesHTML(w.type)}</span>
               <div class="grow"><b>${w.calories != null ? St().fmtNum(w.calories) + " kcal" : ""}${w.duration != null ? " · " + w.duration + " min" : ""}</b>
                 <p>${w.notes ? esc(w.notes) : "—"}</p></div>
               <div class="wk-actions">
@@ -1260,7 +1285,9 @@
     const hl = curYearNow ? ms.map((m, i) => i).filter((i) => i >= new Date().getMonth() + 1) : null;
     const hasCmp = a !== b && cmp.totals.workouts.a > 0 && cmp.totals.workouts.b > 0;
     const tb = St().typeBreakdown(all, year);
-    const tbTotal = tb.reduce((s, t) => s + t.count, 0);
+    // Distinct workouts in the year — NOT the sum of breakdown counts, which
+    // counts each type tag (a "Back, Biceps" workout counts twice).
+    const tbWorkouts = all.filter((w) => St().yearOf(w.date) === year).length;
 
     wrap.innerHTML = `
       <div class="grid-2">
@@ -1292,7 +1319,7 @@
 
       <div class="grid-2" style="margin-top:16px">
         <div class="card">
-          <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">${tbTotal} workouts</span></div>
+          <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">${tbWorkouts} workouts</span></div>
           <div id="acTypeBars"></div>
         </div>
         <div class="card">

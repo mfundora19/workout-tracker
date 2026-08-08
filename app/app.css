@@ -266,6 +266,22 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .chip.is-active { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* ---------- Workout type multi-select ---------- */
+.type-picker { display: flex; flex-wrap: wrap; gap: 7px; }
+.type-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 13px; border-radius: 99px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-dim); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.type-chip:hover { border-color: var(--tc, var(--accent)); color: var(--text); transform: translateY(-1px); }
+.type-chip .tcdot { width: 7px; height: 7px; border-radius: 50%; background: var(--tc, var(--accent)); opacity: .45; transition: opacity .15s; }
+.type-chip.is-on { background: color-mix(in srgb, var(--tc, var(--accent)) 16%, transparent); border-color: var(--tc, var(--accent)); color: var(--text); }
+.type-chip.is-on .tcdot { opacity: 1; }
+.type-custom-row { display: flex; gap: 8px; margin-top: 9px; }
+.type-custom-row .input { flex: 1; }
+.type-badges { display: inline-flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+
 /* ---------- Badges ---------- */
 .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
 .type-badge { background: var(--surface-3); color: var(--text-dim); }
