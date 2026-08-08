@@ -442,6 +442,29 @@ function dump() {
       <div id="settingsBody"></div>
       <div id="dashGreeting"></div><div id="dashGrid"></div>
     `);
+
+    // --- workout type picker: default order, collapsed by default, add/remove ---
+    const pt = Focus.UI.pickerTypes();
+    ok("picker types default order Back..Other", pt.slice(0, 11).join("|") === "Back|Triceps|Chest|Biceps|Legs|Forearms|Abs|Walk|Bike|Cardio|Other", pt.join("|"));
+    Focus.UI.openWorkoutForm({ date: "2026-09-01" });
+    const pickerBody = document.getElementById("wfPicker");
+    ok("type picker collapsed by default", pickerBody && pickerBody.hidden === true, pickerBody ? "hidden=" + pickerBody.hidden : "no body");
+    const chipOrder = Array.from(document.querySelectorAll("#wfPicker .type-chip")).map((c) => c.dataset.type);
+    ok("chips render in default order first", chipOrder.slice(0, 11).join("|") === "Back|Triceps|Chest|Biceps|Legs|Forearms|Abs|Walk|Bike|Cardio|Other", chipOrder.join("|"));
+    ok("no remove ✕ on default chips", document.querySelectorAll("#wfPicker .type-chip-x").length === 0, "x=" + document.querySelectorAll("#wfPicker .type-chip-x").length);
+    ok("collapsed summary shows placeholder", document.getElementById("wfPickerValue").textContent.includes("Select types"), document.getElementById("wfPickerValue").textContent);
+    Focus.UI.closeModal();
+    const yogaW = await Focus.Store.addWorkout({ date: "2026-09-15", type: "Yoga", duration: 30, calories: 100 });
+    Focus.UI.openWorkoutForm({ date: "2026-09-16" });
+    const yogaChip = document.querySelector('#wfPicker .type-chip[data-type="Yoga"]');
+    ok("custom (data-derived) type gets a remove ✕", !!yogaChip && !!yogaChip.querySelector(".type-chip-x"), yogaChip ? yogaChip.outerHTML : "missing chip");
+    Focus.UI.closeModal();
+    Focus.UI.openWorkoutForm(yogaW);
+    ok("edit summary shows selected badge", document.getElementById("wfPickerValue").textContent.includes("Yoga"), document.getElementById("wfPickerValue").textContent);
+    Focus.UI.closeModal();
+    await Focus.Store.deleteWorkout(yogaW.id);
+    ok("cleanup back to 92 after picker tests", Focus.Store.workouts.length === 92);
+
     ["renderDashboard", "renderCalendar", "renderTools", "renderProgress", "renderAnalytics", "renderData", "renderSettings"].forEach((fn) => {
       try {
         Focus.UI[fn]();

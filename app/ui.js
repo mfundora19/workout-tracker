@@ -35,6 +35,8 @@
     Triceps: { color: "#0ea5e9", emoji: "🦾" },
     Forearms: { color: "#06b6d4", emoji: "🤜" },
     Abs: { color: "#84cc16", emoji: "🧘" },
+    Walk: { color: "#14b8a6", emoji: "🚶" },
+    Bike: { color: "#06b6d4", emoji: "🚴" },
     Cardio: { color: "#f43f5e", emoji: "❤️" },
     // Legacy types — still styled so historical records keep their colors.
     Strength: { color: "#a855f7", emoji: "🏋️‍♂️" },
@@ -179,17 +181,56 @@
 
   /* ---------------- workout form ---------------- */
 
-  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Biceps", "Triceps", "Forearms", "Abs", "Cardio"];
+  /** Preferred default order — defaults always come first in the picker. */
+  const TYPE_OPTIONS = ["Back", "Triceps", "Chest", "Biceps", "Legs", "Forearms", "Abs", "Walk", "Bike", "Cardio", "Other"];
 
-  /** Toggle-chip multi-select for workout types. `prefix` scopes the ids
-   *  ("wf" for the modal form, "qa" for quick add). */
-  function typePickerHTML(prefix, selected) {
-    const sel = new Set(selected || []);
-    const all = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
-    return `<div class="type-picker" id="${prefix}Picker">` + all.map((t) => {
+  /** Ordered picker list: defaults, then user-added custom types (persisted in
+   *  settings.customTypes), then any types still found in the data. Types the
+   *  user removed (settings.removedTypes) are hidden everywhere — historical
+   *  records keep their badges, they just leave the picker. */
+  function pickerTypes() {
+    const s = Store().settings;
+    const removed = new Set(s.removedTypes || []);
+    const custom = (s.customTypes || []).filter((t) => !removed.has(t));
+    const fromData = existingTypes().filter((t) => !TYPE_OPTIONS.includes(t) && !custom.includes(t) && !removed.has(t));
+    return [...TYPE_OPTIONS, ...custom, ...fromData];
+  }
+
+  /** Mini badges shown on the collapsed picker summary for the chosen types. */
+  function typeSummaryHTML(selected) {
+    const list = splitTypes(selected);
+    if (!list.length) return `<span class="tpt-placeholder">Select types…</span>`;
+    return list.map((t) => {
       const st = typeStyle(t);
-      return `<button type="button" class="type-chip${sel.has(t) ? " is-on" : ""}" data-action="toggle-type" data-picker="${prefix}" data-type="${esc(t)}" style="--tc:${st.color}" title="${esc(t)}"><span class="tcdot"></span>${st.emoji} ${esc(t)}</button>`;
-    }).join("") + `</div>`;
+      return `<span class="tpt-badge" style="--tc:${st.color}">${st.emoji} ${esc(t)}</span>`;
+    }).join("");
+  }
+
+  /** Collapsed-by-default toggle + chip multi-select for workout types.
+   *  `prefix` scopes the ids ("wf" for the modal form, "qa" for quick add).
+   *  Non-default chips carry a small ✕ so users can add/remove their own types. */
+  function typePickerHTML(prefix, selected) {
+    const sel = new Set(splitTypes(selected));
+    const all = pickerTypes();
+    const chips = all.map((t) => {
+      const st = typeStyle(t);
+      const removable = !TYPE_OPTIONS.includes(t);
+      return `<button type="button" class="type-chip${sel.has(t) ? " is-on" : ""}" data-action="toggle-type" data-picker="${prefix}" data-type="${esc(t)}" style="--tc:${st.color}" title="${esc(t)}"><span class="tcdot"></span>${st.emoji} ${esc(t)}${removable ? `<span class="type-chip-x" data-action="remove-type" data-picker="${prefix}" data-type="${esc(t)}" title="Remove ${esc(t)} from the list">✕</span>` : ""}</button>`;
+    }).join("");
+    return `
+      <div class="type-picker-wrap">
+        <button type="button" class="type-picker-toggle" id="${prefix}PickerToggle" data-action="toggle-picker" data-picker="${prefix}" aria-expanded="false" aria-controls="${prefix}Picker">
+          <span class="tpt-value" id="${prefix}PickerValue">${typeSummaryHTML(selected)}</span>
+          <span class="tpt-chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="type-picker-body" id="${prefix}Picker" hidden>
+          <div class="type-picker">${chips}</div>
+          <div class="type-custom-row">
+            <input class="input" id="${prefix}CustomType" type="text" placeholder="Add a custom type…">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="add-type" data-picker="${prefix}">Add</button>
+          </div>
+        </div>
+      </div>`;
   }
 
   /** Individual type badges for a stored type string ("Back, Biceps"). */
@@ -213,12 +254,8 @@
             <input class="input" id="wfDate" name="date" type="date" required value="${esc(values.date || "")}">
           </div>
           <div class="field" style="grid-column:1/-1">
-            <label for="wfTypePicker">Workout type(s) *</label>
+            <label for="wfPickerToggle">Workout type(s) *</label>
             ${typePickerHTML("wf", selected)}
-            <div class="type-custom-row">
-              <input class="input" id="wfCustomType" type="text" placeholder="Add a custom type…">
-              <button type="button" class="btn btn-ghost btn-sm" data-action="add-type" data-picker="wf">Add</button>
-            </div>
             <input type="hidden" id="wfType" name="type" value="${esc(values.type || "")}">
           </div>
           <div class="field">
@@ -528,12 +565,8 @@
               <input class="input" id="qaDate" name="date" type="date" value="${St().todayISO()}">
             </div>
             <div class="field" style="grid-column:1/-1">
-              <label for="qaTypePicker">Type</label>
+              <label for="qaPickerToggle">Type</label>
               ${typePickerHTML("qa", [])}
-              <div class="type-custom-row">
-                <input class="input" id="qaCustomType" type="text" placeholder="Add a custom type…">
-                <button type="button" class="btn btn-ghost btn-sm" data-action="add-type" data-picker="qa">Add</button>
-              </div>
               <input type="hidden" id="qaType" name="type" value="">
             </div>
             <div class="field">
@@ -1952,7 +1985,7 @@
 
   window.Focus = window.Focus || {};
   window.Focus.UI = {
-    state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes,
+    state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes, pickerTypes, typeSummaryHTML,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog, closeInfoPopover,
     openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,

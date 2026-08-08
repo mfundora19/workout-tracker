@@ -228,6 +228,14 @@
 
   /* ---------------- global actions ---------------- */
 
+  /** Refresh the collapsed picker summary (mini badges / "Select types…"). */
+  function updateTypeSummary(picker) {
+    const hidden = document.getElementById(picker + "Type");
+    const value = document.getElementById(picker + "PickerValue");
+    if (!hidden || !value) return;
+    value.innerHTML = U().typeSummaryHTML(hidden.value || "");
+  }
+
   function initGlobalDelegation() {
     document.addEventListener("click", (e) => {
       const target = e.target.closest("[data-action]");
@@ -257,6 +265,40 @@
           document.querySelectorAll(`.type-chip[data-picker="${picker}"]`).forEach((c) => {
             c.classList.toggle("is-on", cur.has(c.dataset.type));
           });
+          updateTypeSummary(picker);
+          break;
+        }
+        case "toggle-picker": {
+          // Expand/collapse the workout-type chip list (collapsed by default).
+          const picker = target.dataset.picker;
+          const body = document.getElementById(picker + "Picker");
+          if (!body) break;
+          const open = body.hidden;
+          body.hidden = !open;
+          target.classList.toggle("is-open", open);
+          target.setAttribute("aria-expanded", open);
+          if (open) body.querySelector(".type-chip")?.focus({ preventScroll: true });
+          break;
+        }
+        case "remove-type": {
+          // Remove a custom (non-default) type from the picker everywhere.
+          const picker = target.dataset.picker;
+          const t = target.dataset.type;
+          const stg = Focus.Store.settings;
+          const customTypes = (stg.customTypes || []).filter((x) => x !== t);
+          const removedTypes = [...(stg.removedTypes || []).filter((x) => x !== t), t];
+          Focus.Store.setSettings({ customTypes, removedTypes });
+          const container = document.getElementById(picker + "Picker");
+          if (container) container.querySelectorAll(".type-chip").forEach((c) => { if (c.dataset.type === t) c.remove(); });
+          const hidden = document.getElementById(picker + "Type");
+          if (hidden) {
+            const cur = new Set((hidden.value || "").split(",").map((s2) => s2.trim()).filter(Boolean));
+            if (cur.has(t)) {
+              cur.delete(t);
+              hidden.value = Focus.Store.normalizeTypes(Array.from(cur).join(", "));
+            }
+          }
+          updateTypeSummary(picker);
           break;
         }
         case "add-type": {
@@ -267,7 +309,12 @@
           const hidden = document.getElementById(picker + "Type");
           const container = document.getElementById(picker + "Picker");
           if (!hidden || !container) break;
-          const cur = new Set((hidden.value || "").split(",").map((s) => s.trim()).filter(Boolean));
+          // Persist the custom type so it shows up in every picker.
+          const stg = Focus.Store.settings;
+          const customTypes = [...(stg.customTypes || []).filter((x) => x !== name), name];
+          const removedTypes = (stg.removedTypes || []).filter((x) => x !== name);
+          Focus.Store.setSettings({ customTypes, removedTypes });
+          const cur = new Set((hidden.value || "").split(",").map((s2) => s2.trim()).filter(Boolean));
           let exists = false;
           container.querySelectorAll(".type-chip").forEach((c) => { if (c.dataset.type === name) exists = true; });
           if (exists) {
@@ -286,11 +333,20 @@
             dot.className = "tcdot";
             chip.appendChild(dot);
             chip.appendChild(document.createTextNode(" " + st.emoji + " " + name));
-            container.appendChild(chip);
+            const x = document.createElement("span");
+            x.className = "type-chip-x";
+            x.dataset.action = "remove-type";
+            x.dataset.picker = picker;
+            x.dataset.type = name;
+            x.title = "Remove " + name + " from the list";
+            x.textContent = "✕";
+            chip.appendChild(x);
+            container.querySelector(".type-picker")?.appendChild(chip);
           }
           cur.add(name);
-          hidden.value = Array.from(cur).join(", ");
+          hidden.value = Focus.Store.normalizeTypes(Array.from(cur).join(", "));
           if (input) input.value = "";
+          updateTypeSummary(picker);
           break;
         }
         case "edit-workout": {
