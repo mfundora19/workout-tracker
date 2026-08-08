@@ -123,12 +123,52 @@ Google Sheets → download as .xlsx → Import Excel in the app
   `dd/mm` dates default to **day-first** (international / dd-mm-yyyy convention) —
   always visible in the import preview before you confirm.
 
-### PDF report
+### PDF report — a Progress & Analytics Report
 
-**Data → Export PDF Report** builds a printable annual report locally in your
-browser (no internet needed): a stats overview page, per-month charts for
-workouts/calories/duration, a year-over-year comparison (only when the previous
-year has data), and measurement trend lines (only for types with enough readings).
+**Data → Export PDF Report** builds a multi-page **annual analytics report**
+locally in your browser (no internet, no data leaves the device). It does not
+just print your numbers — it interprets them. The structure:
+
+1. **Cover / Executive summary** — reporting period, a plain-language summary of
+   the year, four highlight metrics, and the top three insights.
+2. **Executive Summary** — narrative insight cards (volume, consistency, month-
+   by-month, body measurements) derived directly from your records.
+3. **Key Performance Indicators** — KPI cards with year-over-year deltas
+   (absolute + % change, only when the comparison year has data), plus a
+   training-mix donut.
+4. **Progress Analysis** — monthly charts for workouts / calories / duration,
+   each followed by a written interpretation (peak month, quietest month,
+   biggest jump).
+5. **Monthly Performance** — one compact table of every month, then the
+   month-over-month signals.
+6. **Year-over-Year** — comparison KPIs, grouped monthly bars and cumulative
+   calorie lines, plus a written reading of what changed and which months drove
+   it. Skipped entirely when the comparison year has no workouts.
+7. **Measurements** — per type: initial / latest / change (+%), a trend line,
+   and a neutral interpretation (never labelled good/bad).
+8. **Consistency & Streaks** — a full-year activity heatmap (Mon-aligned
+   weeks), active-day %, streaks, and the longest inactivity gap.
+9. **Key Takeaways** — 3–7 closing insights.
+
+Technical notes:
+
+- **Insights engine**: analytics live in `stats.js` (pure functions over the
+  records — `volumeInsights`, `monthlyInsights`, `comparisonInsights`,
+  `measurementInsights`, `consistencyInsights`, `execSummary`, `keyTakeaways`,
+  `yearActivityGrid`); the PDF renderer only presents them. Every statement is
+  backed by the data — nothing is estimated or invented.
+- **Layout engine**: every block (section, KPI, insight, chart, table) reserves
+  its height and moves to a continuation page when it would not fit, so charts
+  are never clipped and headings never dangle at a page bottom.
+- **Accuracy guards**: safe percentage changes (null when the base is zero),
+  current partial months are never reported as finished declines, zero-values
+  are handled (e.g. “No training duration was recorded”), and a comparison year
+  must actually contain workouts to appear.
+- Charts stay **vector** (jsPDF primitives) so they remain sharp when zoomed.
+- Low-data years still produce a clean two-page report explaining that there
+  is nothing to analyse yet. Passing `{ debug: true }` to `exportPdf` returns
+  layout telemetry (page count, per-page usage, warnings) used by the tests.
+
 Pick the report year and optional comparison year, then **Export PDF**.
 
 ---
