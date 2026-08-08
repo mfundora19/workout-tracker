@@ -14,7 +14,10 @@ Google Sheets archiving.
 - 📊 **Dashboard** — how am I doing right now (week, month, year, streaks, goals, vs last year)
 - 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels, a
   month view with a day panel, and subtle marking of your best day & current month
-- 📏 **Progress** — weight, body fat, waist, hips… any measurement, any frequency
+- 📏 **Progress** — weight, body fat, height, neck, waist, hips… any measurement,
+  any frequency, plus a **Body composition** card that computes your current BMI
+  (and estimated body fat % when you've recorded the needed measurements) from
+  your latest records
 - 📈 **Analytics** — compact charts: monthly workouts/calories/duration, cumulative
   lines, workout-type distribution, a consistency heatmap, and a **year-over-year
   comparison** (defaults to current vs previous year; hidden until you have data
@@ -24,12 +27,17 @@ Google Sheets archiving.
   `_AppData` sheet that makes re-import perfectly exact), a local **PDF annual
   report**, a full-fidelity **JSON backup**, and CSV exports — with a safe import
   preview that adds & updates but never deletes
-- 🧰 **Tools** — BMI calculator and a kg/lb/g/oz weight converter
+- 🧰 **Tools** — **BMI + body-fat calculator**: BMI from height & weight, plus an
+  estimated **body fat %** (U.S. Navy circumference method, male/female formulas)
+  once you add neck and waist (and hips for women) — with a combined
+  BMI + body-fat interpretation (Very Athletic → Very High), a ⓘ explainer of
+  the body-fat ranges, and a kg/lb/g/oz weight converter
 - 🎯 **Goals** — set daily calorie / duration and weekly workout targets in
   Settings; watch them on the dashboard and calendar (gold ✓ on goal days)
 - ⚙️ **Settings** — theme (dark/light), **accent color** (violet, orange, green,
   red, blue — recolors buttons, charts and the calendar heat), a **Motion** toggle
-  for the subtle animations, weight unit (kg/lb), goals, privacy & about
+  for the subtle animations, weight unit (kg/lb), **body profile** (male/female,
+  used by the body-fat estimate), goals, privacy & about
 
 ---
 
@@ -150,11 +158,26 @@ Pick the report year and optional comparison year, then **Export PDF**.
 - Measurements are **completely date-based** — record them daily, weekly,
   monthly, or whenever: `Aug 1`, `Aug 12`, `Aug 27` is just as valid as
   `Aug 1 · Sep 18 · Nov 3`.
-- Built-in types: Weight, Body Fat %, Chest, Waist, Hips, Arm, Thigh — plus
-  **custom measurements** and custom units.
+- Built-in types: Weight, Body Fat %, Height, Neck, Waist, Chest, Hips, Arm,
+  Thigh — plus **custom measurements** and custom units.
 - For each type the app computes First, Latest, Change, % Change, Average,
   Lowest, Highest, and a trend — **only from records that actually exist**.
   No fake "monthly" assumptions. Low data just shows fewer stats.
+
+## How BMI & body fat work
+
+- **BMI** = weight (kg) ÷ height (m)², categorised with the WHO bands. It needs
+  only a Height and a Weight.
+- **Estimated body fat** uses the **U.S. Navy / Hodgdon circumference method**
+  (men: waist & neck; women: waist, hips & neck — all vs height). It appears
+  only when every required measurement is present; until then the UI tells you
+  exactly which one to add. Never a diagnosis — it's ±3–4% for most adults.
+- The two are read together: body fat is the primary signal and BMI modulates
+  the wording, so a high BMI with low body fat reads **"Very Athletic /
+  Muscular"** rather than overweight.
+- The **Tools** calculator prefills from your latest recorded measurements, and
+  the **Progress** view's *Body composition* card computes the same numbers
+  from your stored records — you never enter the same data twice.
 
 ## How yearly comparisons work
 
