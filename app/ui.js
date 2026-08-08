@@ -34,9 +34,9 @@
     Triceps: { color: "#0ea5e9", emoji: "🦾" },
     Forearms: { color: "#06b6d4", emoji: "🤜" },
     Abs: { color: "#84cc16", emoji: "🧘" },
-    Strength: { color: "#a855f7", emoji: "🏋️‍♂️" },
     Cardio: { color: "#f43f5e", emoji: "❤️" },
     // Legacy types — still styled so historical records keep their colors.
+    Strength: { color: "#a855f7", emoji: "🏋️‍♂️" },
     Arms: { color: "#0ea5e9", emoji: "🦾" },
     Running: { color: "#eab308", emoji: "🏃" },
     Walking: { color: "#14b8a6", emoji: "🚶" },
@@ -174,7 +174,7 @@
 
   /* ---------------- workout form ---------------- */
 
-  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Biceps", "Triceps", "Forearms", "Abs", "Strength", "Cardio"];
+  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Biceps", "Triceps", "Forearms", "Abs", "Cardio"];
 
   /** Toggle-chip multi-select for workout types. `prefix` scopes the ids
    *  ("wf" for the modal form, "qa" for quick add). */
