@@ -17,7 +17,6 @@
     calMode: "year",
     calMonth: new Date().getMonth() + 1,
     calDay: null,
-    logSearch: "",
     progType: null,
     anaA: null,
     anaB: null,
@@ -451,7 +450,7 @@
     const recent = recentDays(all, 3);
     parts.push(`
       <div class="card big-card">
-        <div class="card-title"><h3>Recent activity</h3><button class="btn btn-sm btn-ghost" data-action="goto" data-view="log">View all</button></div>
+        <div class="card-title"><h3>Recent activity</h3><span class="sub">last 3 days</span></div>
         <div id="dashRecent">${recent.length ? recentRows(recent) : `<div class="chart-empty">No workouts yet.</div>`}</div>
       </div>`);
 
@@ -739,101 +738,128 @@
   }
 
   /* =====================================================================
-   * LOG (unified workouts + measurements timeline)
+   * TOOLS (BMI calculator + weight converter)
    * =================================================================== */
 
-  function renderLog() {
-    const workouts = Store().workouts;
-    const measurements = Store().measurements;
-    const q = (state.logSearch || "").toLowerCase().trim();
+  const KG_PER_LB = 0.45359237;
+  const G_PER_OZ = 28.349523125;
 
-    // The search input is static markup (kept out of re-renders so typing never loses focus).
-    const searchInput = document.getElementById("logSearch");
-    if (searchInput && searchInput.value !== (state.logSearch || "")) searchInput.value = state.logSearch || "";
-    const list = document.getElementById("logList");
-    const total = workouts.length + measurements.length;
+  function renderTools() {
+    const wt = Store().settings.weightUnit || "lb";
+    document.getElementById("toolsBody").innerHTML = `
+      <div class="tools-grid">
+        <div class="card data-card">
+          <h3>BMI calculator</h3>
+          <p class="desc">Body Mass Index from height and weight. A rough guide, not a diagnosis.</p>
+          <div class="form-grid">
+            <div class="field">
+              <label for="bmiHeight">Height</label>
+              <div class="input-with-unit">
+                <input class="input" id="bmiHeight" type="number" step="any" min="0" placeholder="175" value="175">
+                <select class="select" id="bmiHeightUnit" aria-label="Height unit">
+                  <option value="cm" selected>cm</option>
+                  <option value="in">in</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="bmiWeight">Weight</label>
+              <div class="input-with-unit">
+                <input class="input" id="bmiWeight" type="number" step="any" min="0" placeholder="70" value="${wt === "lb" ? "154" : "70"}">
+                <select class="select" id="bmiWeightUnit" aria-label="Weight unit">
+                  <option value="kg">kg</option>
+                  <option value="lb" ${wt === "lb" ? "selected" : ""}>lb</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="bmi-result" aria-live="polite">
+            <div class="bmi-value"><b id="bmiValue">22.9</b><span>BMI</span></div>
+            <div class="bmi-cat ok" id="bmiCat">Normal weight</div>
+          </div>
+        </div>
 
-    const items = [];
-    workouts.forEach((w) => items.push({ date: w.date, stamp: w.createdAt || w.date, kind: "workout", ref: w }));
-    measurements.forEach((m) => items.push({ date: m.date, stamp: m.createdAt || m.date, kind: "meas", ref: m }));
-    items.sort((a, b) => {
-      const ka = a.date + "~" + a.stamp, kb = b.date + "~" + b.stamp;
-      return ka < kb ? 1 : ka > kb ? -1 : 0;
+        <div class="card data-card">
+          <h3>Weight converter</h3>
+          <p class="desc">Convert between kilograms, pounds, grams and ounces instantly.</p>
+          <div class="field">
+            <label for="convValue">Value</label>
+            <div class="input-with-unit">
+              <input class="input" id="convValue" type="number" step="any" min="0" placeholder="80" value="80">
+              <select class="select" id="convUnit" aria-label="Source unit">
+                <option value="kg" selected>kg</option>
+                <option value="lb">lb</option>
+                <option value="g">g</option>
+                <option value="oz">oz</option>
+              </select>
+            </div>
+          </div>
+          <div class="conv-results" id="convResults"></div>
+        </div>
+      </div>`;
+    updateBMI();
+    updateConverter();
+    const refresh = () => { updateBMI(); updateConverter(); };
+    ["bmiHeight", "bmiHeightUnit", "bmiWeight", "bmiWeightUnit", "convValue", "convUnit"].forEach((id) => {
+      const n = document.getElementById(id);
+      if (!n) return;
+      n.addEventListener("input", refresh);
+      n.addEventListener("change", refresh);
     });
+  }
 
-    const count = document.getElementById("logCount");
-    const filtered = items.filter((it) => {
-      if (!q) return true;
-      const hay = it.kind === "workout"
-        ? (it.ref.type + " " + (it.ref.notes || "")).toLowerCase()
-        : (it.ref.type + " " + (it.ref.notes || "") + " " + it.ref.value).toLowerCase();
-      return hay.includes(q);
-    });
-
-    if (!filtered.length) {
-      if (count) count.textContent = total ? (q ? "0 of " + St().fmtNum(total) : "0") + " records" : "No records";
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="es-icon">${ICONS.activity}</div>
-          <h3>${items.length ? "Nothing matches" : "Nothing here yet"}</h3>
-          <p>${items.length ? "Try a different search." : "Your workouts and measurements will appear here as a single timeline."}</p>
-          <button class="btn btn-primary" data-action="quick-add">${ICONS.plus} Add workout</button>
-        </div>`;
+  function updateBMI() {
+    const v = document.getElementById("bmiValue");
+    const cat = document.getElementById("bmiCat");
+    const hEl = document.getElementById("bmiHeight");
+    const wEl = document.getElementById("bmiWeight");
+    const huEl = document.getElementById("bmiHeightUnit");
+    const wuEl = document.getElementById("bmiWeightUnit");
+    if (!v || !cat || !hEl || !wEl || !huEl || !wuEl) return;
+    const h = parseFloat(hEl.value);
+    const w = parseFloat(wEl.value);
+    const meters = huEl.value === "in" ? h * 2.54 / 100 : h / 100;
+    const kg = wuEl.value === "lb" ? w * KG_PER_LB : w;
+    if (!isFinite(h) || !isFinite(w) || h <= 0 || w <= 0 || !(meters > 0)) {
+      v.textContent = "—";
+      cat.textContent = "Enter your height and weight";
+      cat.className = "bmi-cat neutral";
       return;
     }
-
-    if (count) count.textContent = (q ? filtered.length + " of " + St().fmtNum(total) : St().fmtNum(total)) + " records";
-
-    const groups = new Map();
-    filtered.forEach((it) => { if (!groups.has(it.date)) groups.set(it.date, []); groups.get(it.date).push(it); });
-    list.innerHTML = Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([date, rows]) => {
-      const dayW = rows.filter((r) => r.kind === "workout");
-      const dayM = rows.filter((r) => r.kind === "meas");
-      const kcal = dayW.reduce((s, r) => s + (r.ref.calories || 0), 0);
-      const dur = dayW.reduce((s, r) => s + (r.ref.duration || 0), 0);
-      const bits = [];
-      bits.push(dayW.length + " workout" + (dayW.length === 1 ? "" : "s"));
-      if (dayM.length) bits.push(dayM.length + " measurement" + (dayM.length === 1 ? "" : "s"));
-      if (kcal) bits.push(St().fmtNum(kcal) + " kcal");
-      if (dur) bits.push(St().fmtDuration(dur));
-      return `
-        <div class="wk-group">
-          <div class="wk-group-head"><h3>${St().weekdayName(date)}, ${St().shortDate(date)}</h3><span>${bits.join(" · ")}</span></div>
-          ${rows.map((it) => it.kind === "workout" ? logWorkoutRow(it.ref) : logMeasRow(it.ref)).join("")}
-        </div>`;
-    }).join("");
+    const bmi = kg / (meters * meters);
+    v.textContent = bmi.toFixed(1);
+    let label, cls;
+    if (bmi < 18.5) { label = "Underweight"; cls = "warn"; }
+    else if (bmi < 25) { label = "Normal weight"; cls = "ok"; }
+    else if (bmi < 30) { label = "Overweight"; cls = "warn"; }
+    else { label = "Obese"; cls = "bad"; }
+    cat.textContent = label;
+    cat.className = "bmi-cat " + cls;
   }
 
-  function logWorkoutRow(w) {
-    const st = typeStyle(w.type);
-    return `
-      <div class="wk-row">
-        <span class="type-badge badge"><span class="dot" style="background:${st.color}"></span>${st.emoji} ${esc(w.type)}</span>
-        ${w.notes ? `<span class="wk-notes">${esc(w.notes)}</span>` : ""}
-        <div class="wk-meta">
-          ${w.calories != null ? `<div class="m"><b>${St().fmtNum(w.calories)}</b><span>kcal</span></div>` : ""}
-          ${w.duration != null ? `<div class="m"><b>${w.duration}</b><span>min</span></div>` : ""}
-          <div class="wk-actions">
-            <button class="mini-btn" data-action="edit-workout" data-id="${w.id}" title="Edit">${ICONS.pencil}</button>
-            <button class="mini-btn danger" data-action="delete-workout" data-id="${w.id}" title="Delete">${ICONS.trash}</button>
-          </div>
-        </div>
-      </div>`;
+  function updateConverter() {
+    const out = document.getElementById("convResults");
+    if (!out) return;
+    const val = parseFloat(document.getElementById("convValue").value);
+    const unit = document.getElementById("convUnit").value;
+    if (!isFinite(val) || val < 0) {
+      out.innerHTML = `<div class="chart-empty">Enter a value to convert.</div>`;
+      return;
+    }
+    const kg = unit === "kg" ? val : unit === "lb" ? val * KG_PER_LB : unit === "g" ? val / 1000 : val * G_PER_OZ / 1000;
+    const rows = [
+      ["Kilograms", kg],
+      ["Pounds", kg / KG_PER_LB],
+      ["Grams", kg * 1000],
+      ["Ounces", kg * 1000 / G_PER_OZ]
+    ];
+    out.innerHTML = rows.map(([name, v2]) => `
+      <div class="conv-row"><span>${name}</span><b>${fmtNumber(v2)}</b></div>`).join("");
   }
 
-  function logMeasRow(m) {
-    return `
-      <div class="wk-row">
-        <span class="type-badge badge"><span class="dot" style="background:var(--accent)"></span>📏 ${esc(m.type)}</span>
-        ${m.notes ? `<span class="wk-notes">${esc(m.notes)}</span>` : ""}
-        <div class="wk-meta">
-          <div class="m"><b>${St().fmtNum(m.value, 1)}</b><span>${m.unit ? esc(m.unit) : ""}</span></div>
-          <div class="wk-actions">
-            <button class="mini-btn" data-action="edit-measurement" data-id="${m.id}" title="Edit">${ICONS.pencil}</button>
-            <button class="mini-btn danger" data-action="delete-measurement" data-id="${m.id}" title="Delete">${ICONS.trash}</button>
-          </div>
-        </div>
-      </div>`;
+  function fmtNumber(n) {
+    const s = n.toFixed(2).replace(/\.?0+$/, "");
+    return s === "" || s === "-" ? "0" : s;
   }
 
   /* =====================================================================
@@ -1292,7 +1318,7 @@
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog,
     openWorkoutForm, openMeasurementForm, unitDefault,
-    renderDashboard, renderCalendar, renderLog, renderProgress, renderAnalytics, renderData, renderSettings,
+    renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, wireDrop, cssColor
   };
 })();

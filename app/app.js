@@ -9,10 +9,10 @@
   const VIEW_META = {
     dashboard: ["Dashboard", "Your year at a glance"],
     calendar: ["Calendar", "Workout days, intensity and streaks"],
-    log: ["Log", "Workouts & measurements timeline"],
     progress: ["Progress", "Body measurements and trends"],
     analytics: ["Analytics", "Charts and year-over-year insights"],
     data: ["Data", "Import, export and backup"],
+    tools: ["Tools", "BMI calculator & weight converter"],
     settings: ["Settings", "Preferences, units and about"]
   };
 
@@ -125,10 +125,10 @@
     const v = App.currentView;
     if (v === "dashboard") Focus.UI.renderDashboard();
     else if (v === "calendar") Focus.UI.renderCalendar();
-    else if (v === "log") Focus.UI.renderLog();
     else if (v === "progress") Focus.UI.renderProgress();
     else if (v === "analytics") Focus.UI.renderAnalytics();
     else if (v === "data") Focus.UI.renderData();
+    else if (v === "tools") Focus.UI.renderTools();
     else if (v === "settings") Focus.UI.renderSettings();
   }
 
@@ -188,13 +188,6 @@
       if (e.target.id === "anaB") { Focus.UI.state.anaB = Number(e.target.value); renderCurrent(); }
     });
 
-    document.addEventListener("input", (e) => {
-      if (e.target.id === "logSearch") {
-        Focus.UI.state.logSearch = e.target.value;
-        debounce(() => renderCurrent(), 180)();
-      }
-    });
-
     // quick add: switch between workout and measurement modes (persisted so
     // re-renders keep the same tab active)
     document.addEventListener("click", (e) => {
@@ -225,14 +218,6 @@
         f.value.focus();
       });
     });
-  }
-
-  let _deb = null;
-  function debounce(fn, ms) {
-    return () => {
-      clearTimeout(_deb);
-      _deb = setTimeout(fn, ms);
-    };
   }
 
   /* ---------------- global actions ---------------- */

@@ -172,14 +172,14 @@ function dump() {
       <div id="calModeSeg"><button class="seg-btn is-active" data-cal-mode="year">Year</button><button class="seg-btn" data-cal-mode="month">Month</button></div>
       <div id="calLegend"></div>
       <div id="calendarBody"></div>
-      <div class="log-toolbar"><input class="input search" id="logSearch" type="search"><span class="log-count" id="logCount"></span></div><div id="logList"></div>
+      <div id="toolsBody"></div>
       <div id="progressHead"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
       <div id="dataBody"></div>
       <div id="settingsBody"></div>
       <div id="dashGreeting"></div><div id="dashGrid"></div>
     `);
-    ["renderDashboard", "renderCalendar", "renderLog", "renderProgress", "renderAnalytics", "renderData", "renderSettings"].forEach((fn) => {
+    ["renderDashboard", "renderCalendar", "renderTools", "renderProgress", "renderAnalytics", "renderData", "renderSettings"].forEach((fn) => {
       try {
         Focus.UI[fn]();
         ok("UI " + fn + " renders", true);
@@ -219,17 +219,35 @@ function dump() {
     Focus.UI.state.calMode = "year";
     Focus.UI.state.calDay = null;
 
-    // --- log view ---
-    Focus.UI.renderLog();
-    ok("log lists workouts and measurements", document.getElementById("logList").querySelectorAll(".wk-row").length === 150, "rows=" + document.getElementById("logList").querySelectorAll(".wk-row").length);
-    ok("log count shows total", document.getElementById("logCount").textContent.includes("150"), document.getElementById("logCount").textContent);
-    Focus.UI.state.logSearch = "waist";
-    Focus.UI.renderLog();
-    const logRows = document.getElementById("logList").querySelectorAll(".wk-row").length;
-    ok("log search filters to waist", logRows === 29 && document.getElementById("logList").textContent.includes("Waist"), "rows=" + logRows);
-    ok("log count shows filtered", document.getElementById("logCount").textContent.includes("29 of 150"), document.getElementById("logCount").textContent);
-    Focus.UI.state.logSearch = "";
-    Focus.UI.renderLog();
+    // --- tools view ---
+    Focus.Store.settings.weightUnit = "lb";
+    Focus.UI.renderTools();
+    ok("BMI weight default matches lb setting", document.getElementById("bmiWeight").value === "154" && document.getElementById("bmiWeightUnit").value === "lb" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiWeight").value + " / " + document.getElementById("bmiCat").textContent);
+    const fire = (id) => document.getElementById(id).dispatchEvent(new Event("input", { bubbles: true }));
+    document.getElementById("bmiHeight").value = "175";
+    document.getElementById("bmiWeight").value = "70";
+    document.getElementById("bmiWeightUnit").value = "kg";
+    fire("bmiWeight");
+    ok("BMI 175cm/70kg = 22.9 normal", document.getElementById("bmiValue").textContent === "22.9" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiValue").textContent + " / " + document.getElementById("bmiCat").textContent);
+    document.getElementById("bmiWeight").value = "150";
+    document.getElementById("bmiWeightUnit").value = "lb";
+    document.getElementById("bmiHeight").value = "68";
+    document.getElementById("bmiHeightUnit").value = "in";
+    fire("bmiHeight");
+    ok("BMI 68in/150lb = 22.8 normal", document.getElementById("bmiValue").textContent === "22.8" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiValue").textContent);
+    document.getElementById("bmiWeight").value = "";
+    fire("bmiWeight");
+    ok("BMI empty weight shows prompt", document.getElementById("bmiCat").textContent === "Enter your height and weight");
+    // weight converter
+    document.getElementById("convValue").value = "1";
+    document.getElementById("convUnit").value = "lb";
+    fire("convUnit");
+    const conv = document.getElementById("convResults").textContent;
+    ok("1 lb -> 0.45 kg / 16 oz", conv.includes("0.45") && conv.includes("16") && conv.includes("Kilograms") && conv.includes("Ounces"), conv);
+    document.getElementById("convValue").value = "100";
+    document.getElementById("convUnit").value = "kg";
+    fire("convValue");
+    ok("100 kg -> 220.46 lb", document.getElementById("convResults").textContent.includes("220.46"), document.getElementById("convResults").textContent);
 
     // --- settings: weight unit preference ---
     Focus.Store.settings.weightUnit = "kg";
