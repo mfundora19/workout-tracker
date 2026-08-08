@@ -257,6 +257,9 @@
         case "add-measurement":
           Focus.UI.openMeasurementForm({ date: target.dataset.date || S().todayISO() });
           break;
+        case "view-all-measurements":
+          Focus.UI.openMeasurementList(target.dataset.type);
+          break;
         case "edit-measurement": {
           const m = Focus.Store.measurements.find((x) => x.id === id);
           if (m) Focus.UI.openMeasurementForm(m);

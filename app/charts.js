@@ -237,7 +237,9 @@
       });
     });
 
-    const every = n > 24 ? 3 : n > 12 ? 2 : 1;
+    // Thin x labels so dense date labels (e.g. weekly measurements) never overlap:
+    // aim for ~7 labels, always including the last one.
+    const every = Math.max(1, Math.ceil(n / 7));
     labels.forEach((lb, i) => {
       if (i % every !== 0 && i !== n - 1) return;
       const t = el("text", { x: xOf(i), y: H - 8, "text-anchor": "middle", "font-size": 10.5, fill: textFaint });

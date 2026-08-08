@@ -398,6 +398,7 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .stat-mini .v { font-size: 19px; font-weight: 750; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .stat-mini .v small { font-size: 12px; color: var(--text-faint); font-weight: 600; }
 .stat-mini .trend { font-size: 12px; font-weight: 700; }
+.analysis-title { margin: 16px 0 8px; font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; }
 .trend.down-good { color: var(--success); }
 .trend.up-bad { color: var(--danger); }
 .trend.neutral { color: var(--text-faint); }
@@ -435,6 +436,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
   width: 100%; max-width: 520px; padding: 22px;
   animation: pop .2s ease;
 }
+.modal.wide { max-width: 760px; }
 @keyframes pop { from { opacity: 0; transform: scale(.96) translateY(8px); } to { opacity: 1; transform: none; } }
 .modal h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: -.3px; }
 .modal .modal-sub { margin: 0 0 16px; font-size: 13px; color: var(--text-dim); }

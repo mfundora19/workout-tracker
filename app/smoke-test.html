@@ -249,6 +249,16 @@ function dump() {
     fire("convValue");
     ok("100 kg -> 220.46 lb", document.getElementById("convResults").textContent.includes("220.46"), document.getElementById("convResults").textContent);
 
+    // --- progress view: last-5 table, analysis tiles, view-all modal ---
+    Focus.UI.renderProgress();
+    ok("progress table shows 5 most recent", document.querySelectorAll("#progressTable tbody tr").length === 5, "rows=" + document.querySelectorAll("#progressTable tbody tr").length);
+    ok("progress view-all button present", !!document.querySelector("#progressTable [data-action='view-all-measurements']"));
+    ok("summary has 12 analysis tiles", document.querySelectorAll("#progressStatsCard .stat-mini").length === 12, "tiles=" + document.querySelectorAll("#progressStatsCard .stat-mini").length);
+    ok("summary shows last-change analysis", document.getElementById("progressStatsCard").textContent.includes("Last change") && document.getElementById("progressStatsCard").textContent.includes("Change / month"));
+    Focus.UI.openMeasurementList("Waist");
+    ok("view-all modal lists every record", document.querySelectorAll("#modal .preview-scroll tbody tr").length === 29, "rows=" + document.querySelectorAll("#modal .preview-scroll tbody tr").length);
+    Focus.UI.closeModal();
+
     // --- settings: weight unit preference ---
     Focus.Store.settings.weightUnit = "kg";
     ok("unitDefault honours kg setting", Focus.UI.unitDefault("Weight") === "kg", "got " + Focus.UI.unitDefault("Weight"));

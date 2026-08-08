@@ -81,7 +81,8 @@
     back: '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>',
-    trophy: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 6H4a2 2 0 0 0 2 4M17 6h3a2 2 0 0 1-2 4"/></svg>'
+    trophy: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 6H4a2 2 0 0 0 2 4M17 6h3a2 2 0 0 1-2 4"/></svg>',
+    eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'
   };
   function icon(name, cls) {
     return `<span class="${cls || "stat-icon"}">${ICONS[name] || ICONS.activity}</span>`;
@@ -93,11 +94,13 @@
     const backdrop = document.getElementById("modalBackdrop");
     const modal = document.getElementById("modal");
     modal.innerHTML = html;
+    if (opts.wide) modal.classList.add("wide"); else modal.classList.remove("wide");
     backdrop.hidden = false;
     document.body.style.overflow = "hidden";
     const close = () => {
       backdrop.hidden = true;
       document.body.style.overflow = "";
+      modal.classList.remove("wide");
       modal.innerHTML = "";
       if (opts.onClose) opts.onClose();
     };
@@ -120,6 +123,7 @@
     const b = document.getElementById("modalBackdrop");
     b.hidden = true;
     document.body.style.overflow = "";
+    document.getElementById("modal").classList.remove("wide");
   }
 
   function toast(msg, type = "success", ms = 3200) {
@@ -979,6 +983,27 @@
     const trendGood = (stats.trend === "down" && (state.progType === "Weight" || state.progType === "Body Fat %" || state.progType === "Waist" || state.progType === "Hips")) || (stats.trend === "up" && !["Weight", "Body Fat %", "Waist", "Hips"].includes(state.progType));
     const trendCls = trendGood ? "down-good" : stats.trend === "up" ? "up-bad" : "neutral";
     const arrow = stats.trend === "down" ? "▼" : stats.trend === "up" ? "▲" : "◆";
+
+    // deeper analysis from the records (only when enough data exists)
+    const recs = stats.records;
+    let lastChange = null, changePerMonth = null, recsPerMonth = null, spanDays = null, monthsSpan = null;
+    if (recs.length >= 2) {
+      lastChange = recs[recs.length - 1].value - recs[recs.length - 2].value;
+      const ms = St().parse(recs[recs.length - 1].date) - St().parse(recs[0].date);
+      spanDays = Math.max(0, Math.round(ms / 86400000));
+      monthsSpan = spanDays / 30.4375;
+      // rates are only meaningful over a real time span (>= 1 week); otherwise
+      // a couple of same-day entries would inflate "per month" absurdly
+      if (spanDays >= 7) {
+        changePerMonth = stats.change / monthsSpan;
+        recsPerMonth = (recs.length - 1) / monthsSpan;
+      }
+    }
+    const sign = (v) => (v > 0.0001 ? "+" : v < -0.0001 ? "−" : "");
+    const lastCls = lastChange == null ? "neutral"
+      : (lastChange < -0.0001 && trendGood) || (lastChange > 0.0001 && !trendGood) ? "down-good"
+      : (lastChange > 0.0001 && trendGood) || (lastChange < -0.0001 && !trendGood) ? "up-bad" : "neutral";
+
     card.innerHTML = `
       <div class="card">
         <div class="card-title"><h3>${esc(state.progType)} — summary</h3><span class="sub">${stats.count} record${stats.count > 1 ? "s" : ""} · ${St().MONTHS_LONG[St().monthOf(stats.first.date) - 1]} ${St().yearOf(stats.first.date)} → now</span></div>
@@ -992,30 +1017,67 @@
           <div class="stat-mini"><div class="l">Highest</div><div class="v">${St().fmtNum(stats.max, 1)} <small>${esc(stats.unit)}</small></div></div>
           <div class="stat-mini"><div class="l">Trend</div><div class="v trend ${trendCls}">${arrow} ${stats.trend === "flat" ? "stable" : stats.trend}</div></div>
         </div>
+        <div class="analysis-title">Analysis</div>
+        <div class="stat-mini-grid">
+          <div class="stat-mini"><div class="l">Last change</div><div class="v trend ${lastCls}">${lastChange == null ? "—" : sign(lastChange) + St().fmtNum(Math.abs(lastChange), 1) + " " + esc(stats.unit)}</div></div>
+          <div class="stat-mini"><div class="l">Change / month</div><div class="v">${changePerMonth == null ? "—" : sign(changePerMonth) + St().fmtNum(Math.abs(changePerMonth), 2) + " <small>" + esc(stats.unit) + "/mo</small>"}</div></div>
+          <div class="stat-mini"><div class="l">Records / month</div><div class="v">${recsPerMonth == null ? "—" : St().fmtNum(recsPerMonth, 1)} <small>avg</small></div></div>
+          <div class="stat-mini"><div class="l">Time span</div><div class="v">${monthsSpan == null ? "—" : monthsSpan >= 1 ? St().fmtNum(monthsSpan, 1) + " <small>months</small>" : spanDays + " <small>days</small>"}</div></div>
+        </div>
       </div>`;
 
-    // table
+    // table — the 5 most recent records, full history behind "View all"
+    const allRecs = stats.records.slice().reverse();
+    const recent = allRecs.slice(0, 5);
+    const rowHTML = (r) => `
+      <tr>
+        <td><b>${St().prettyDate(r.date)}</b></td>
+        <td><b>${St().fmtNum(r.value, 1)}</b> ${esc(r.unit)}</td>
+        <td style="color:var(--text-dim)">${r.notes ? esc(r.notes) : "—"}</td>
+        <td><div class="wk-actions">
+          <button class="mini-btn" data-action="edit-measurement" data-id="${r.id}">${ICONS.pencil}</button>
+          <button class="mini-btn danger" data-action="delete-measurement" data-id="${r.id}">${ICONS.trash}</button>
+        </div></td>
+      </tr>`;
     document.getElementById("progressTable").innerHTML = `
       <div class="card">
-        <div class="card-title"><h3>All ${esc(state.progType)} records</h3></div>
+        <div class="card-title"><h3>${esc(state.progType)} records</h3>
+          <button class="btn btn-sm btn-ghost" data-action="view-all-measurements" data-type="${esc(state.progType)}">${ICONS.eye} View all (${allRecs.length})</button>
+        </div>
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Date</th><th>Value</th><th>Notes</th><th style="width:110px"></th></tr></thead>
-            <tbody>
-              ${stats.records.slice().reverse().map((r) => `
-                <tr>
-                  <td><b>${St().prettyDate(r.date)}</b></td>
-                  <td><b>${St().fmtNum(r.value, 1)}</b> ${esc(r.unit)}</td>
-                  <td style="color:var(--text-dim)">${r.notes ? esc(r.notes) : "—"}</td>
-                  <td><div class="wk-actions">
-                    <button class="mini-btn" data-action="edit-measurement" data-id="${r.id}">${ICONS.pencil}</button>
-                    <button class="mini-btn danger" data-action="delete-measurement" data-id="${r.id}">${ICONS.trash}</button>
-                  </div></td>
-                </tr>`).join("")}
-            </tbody>
+            <tbody>${recent.map(rowHTML).join("")}</tbody>
           </table>
         </div>
+        ${allRecs.length > 5 ? `<p style="font-size:12px;color:var(--text-faint);margin:10px 2px 0">Showing the 5 most recent of ${allRecs.length} — “View all” opens the full history in a window.</p>` : ""}
       </div>`;
+  }
+
+  /** Full record list for a measurement type, in a scrollable modal. */
+  function openMeasurementList(type) {
+    const recs = Store().measurements.filter((m) => m.type === type).sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
+    openModal(`
+      <h2>All ${esc(type)} records</h2>
+      <p class="modal-sub">${recs.length} record${recs.length === 1 ? "" : "s"} · newest first</p>
+      <div class="preview-scroll">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Value</th><th>Notes</th><th style="width:110px"></th></tr></thead>
+          <tbody>
+            ${recs.map((r) => `
+              <tr>
+                <td><b>${St().prettyDate(r.date)}</b></td>
+                <td><b>${St().fmtNum(r.value, 1)}</b> ${esc(r.unit)}</td>
+                <td style="color:var(--text-dim)">${r.notes ? esc(r.notes) : "—"}</td>
+                <td><div class="wk-actions">
+                  <button class="mini-btn" data-action="edit-measurement" data-id="${r.id}">${ICONS.pencil}</button>
+                  <button class="mini-btn danger" data-action="delete-measurement" data-id="${r.id}">${ICONS.trash}</button>
+                </div></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-close>Close</button></div>`, { wide: true });
   }
 
   /* =====================================================================
@@ -1317,7 +1379,7 @@
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog,
-    openWorkoutForm, openMeasurementForm, unitDefault,
+    openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
     renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, wireDrop, cssColor
   };
