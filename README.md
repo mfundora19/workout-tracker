@@ -336,7 +336,7 @@ files. You can disconnect the internet completely and everything keeps working.
 - [x] Close the browser, reopen `Focus-Workout-Tracker.html` → data is still there
 - [x] Works with the network cable unplugged
 
-A repeatable automated smoke test lives at `app/smoke-test.html` — open it in a
+A repeatable automated smoke test lives at `app/tests/smoke-test.html` — open it in a
 browser and it prints pass/fail for dozens of checks against the core logic,
 including the exact Excel round-trip.
 
@@ -351,17 +351,22 @@ WorkoutTracker/
 ├── Focus-Workout-Tracker.html  ← open this
 ├── README.md
 ├── app/                  ← everything the app needs, in one folder
-│   ├── app.css           ← design system, light + dark themes, accents, motion
-│   ├── app.js            ← bootstrap & wiring
-│   ├── charts.js         ← SVG charts (zero dependencies)
-│   ├── excel.js          ← .xlsx/.csv import & export (styled workbook)
-│   ├── pdf.js            ← local PDF annual report builder
-│   ├── seed-data.js      ← your historical data, embedded
-│   ├── stats.js          ← streaks, monthly/yearly, comparisons
-│   ├── store.js          ← IndexedDB persistence + dedup + multi-type normalize
-│   ├── ui.js             ← all views & dialogs
-│   ├── smoke-test.html   ← optional automated checks
-│   ├── lib/jspdf.umd.min.js ← PDF library, bundled locally (no CDN)
-│   └── xlsx.full.min.js  ← SheetJS, bundled locally (no CDN)
+│   ├── css/              ← design system, light + dark themes, accents, motion
+│   │   └── app.css
+│   ├── js/               ← application source
+│   │   ├── app.js        ← bootstrap & wiring
+│   │   ├── charts.js     ← SVG charts (zero dependencies)
+│   │   ├── excel.js      ← .xlsx/.csv import & export (styled workbook)
+│   │   ├── pdf.js        ← local PDF annual report builder
+│   │   ├── seed-data.js  ← your historical data, embedded
+│   │   ├── stats.js      ← streaks, monthly/yearly, comparisons
+│   │   ├── store.js      ← IndexedDB persistence + dedup + multi-type normalize
+│   │   └── ui.js         ← all views & dialogs
+│   ├── lib/              ← bundled locally, no CDN
+│   │   ├── jspdf.umd.min.js ← PDF library
+│   │   ├── xlsx.full.min.js ← SheetJS
+│   │   └── fonts/fonts.js   ← embedded Unicode font for the PDF report
+│   └── tests/            ← optional automated checks
+│       └── smoke-test.html
 └── data/                 ← keep your Excel/JSON exports & imports here
 ```
