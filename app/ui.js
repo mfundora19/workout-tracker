@@ -66,8 +66,12 @@
     Store().workouts.forEach((w) => splitTypes(w.type).forEach((t) => set.add(t)));
     return Array.from(set).sort();
   }
+  // Preferred chip order in Progress: the body-fat trio first, then the rest.
+  const MEAS_CHIP_ORDER = ["Weight", "Waist", "Neck"];
   function existingMeasTypes() {
-    return Array.from(new Set(Store().measurements.map((m) => m.type))).sort();
+    const set = new Set(Store().measurements.map((m) => m.type));
+    const rest = Array.from(set).filter((t) => !MEAS_CHIP_ORDER.includes(t)).sort();
+    return [...MEAS_CHIP_ORDER.filter((t) => set.has(t)), ...rest];
   }
 
   /* ---------------- small helpers ---------------- */
@@ -1448,6 +1452,15 @@
     const trendGood = (stats.trend === "down" && (state.progType === "Weight" || state.progType === "Body Fat %" || state.progType === "Waist" || state.progType === "Hips")) || (stats.trend === "up" && !["Weight", "Body Fat %", "Waist", "Hips"].includes(state.progType));
     const trendCls = trendGood ? "down-good" : stats.trend === "up" ? "up-bad" : "neutral";
     const arrow = stats.trend === "down" ? "▼" : stats.trend === "up" ? "▲" : "◆";
+    // Headline highlight — one colored line that sums up the selected type.
+    const headEmoji = stats.trend === "down" ? "📉" : stats.trend === "up" ? "📈" : "⚖️";
+    const headText = stats.trend === "flat"
+      ? "Stable — no real change overall"
+      : trendGood
+        ? `Great trend — ${St().fmtNum(Math.abs(stats.change), 1)} ${esc(stats.unit)} ${stats.trend} overall`
+        : `Watch this — ${St().fmtNum(Math.abs(stats.change), 1)} ${esc(stats.unit)} ${stats.trend} overall`;
+    const headCls = stats.trend === "flat" ? "neutral" : trendGood ? "ok" : "warn";
+    const changeCls = stats.trend === "flat" ? "" : trendGood ? "down-good" : "up-bad";
 
     // deeper analysis from the records (only when enough data exists)
     const recs = stats.records;
@@ -1472,11 +1485,12 @@
     card.innerHTML = `
       <div class="card">
         <div class="card-title"><h3>${esc(state.progType)} — summary</h3><span class="sub">${stats.count} record${stats.count > 1 ? "s" : ""} · ${St().MONTHS_LONG[St().monthOf(stats.first.date) - 1]} ${St().yearOf(stats.first.date)} → now</span></div>
+        <div class="sum-headline ${headCls}">${headEmoji} ${headText}</div>
         <div class="stat-mini-grid">
           <div class="stat-mini"><div class="l">First</div><div class="v">${St().fmtNum(stats.first.value, 1)} <small>${esc(stats.unit)}</small></div></div>
           <div class="stat-mini"><div class="l">Latest</div><div class="v">${St().fmtNum(stats.latest.value, 1)} <small>${esc(stats.unit)}</small></div></div>
-          <div class="stat-mini"><div class="l">Change</div><div class="v">${St().fmtNum(stats.change, 1)} <small>${esc(stats.unit)}</small></div></div>
-          <div class="stat-mini"><div class="l">% Change</div><div class="v">${St().fmtNum(stats.pctChange, 1)}%</div></div>
+          <div class="stat-mini"><div class="l">Change</div><div class="v ${changeCls}">${St().fmtNum(stats.change, 1)} <small>${esc(stats.unit)}</small></div></div>
+          <div class="stat-mini"><div class="l">% Change</div><div class="v ${changeCls}">${St().fmtNum(stats.pctChange, 1)}%</div></div>
           <div class="stat-mini"><div class="l">Average</div><div class="v">${St().fmtNum(stats.avg, 1)} <small>${esc(stats.unit)}</small></div></div>
           <div class="stat-mini"><div class="l">Lowest</div><div class="v">${St().fmtNum(stats.min, 1)} <small>${esc(stats.unit)}</small></div></div>
           <div class="stat-mini"><div class="l">Highest</div><div class="v">${St().fmtNum(stats.max, 1)} <small>${esc(stats.unit)}</small></div></div>

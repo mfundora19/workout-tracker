@@ -14,10 +14,12 @@ Google Sheets archiving.
 - 📊 **Dashboard** — how am I doing right now (week, month, year, streaks, goals, vs last year)
 - 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels, a
   month view with a day panel, and subtle marking of your best day & current month
-- 📏 **Progress** — weight, body fat, height, neck, waist, hips… any measurement,
-  any frequency, plus a **Body composition** card that computes your current BMI
-  (and estimated body fat % when you've recorded the needed measurements) from
-  your latest records
+- 📏 **Progress** — weight, waist, neck, height, hips… any measurement, any
+  frequency, with **Weight first** (then Waist → Neck) as the default view. The
+  selected type's **trend chart** and a stacked **Body composition** card (current
+  BMI on top, estimated body fat % below — both from your latest records, no
+  re-entry) sit side by side with a **summary** that leads with a colored trend
+  headline (📉/📈) and highlights the change values in green or red
 - 📈 **Analytics** — compact charts: monthly workouts/calories/duration, cumulative
   lines, workout-type distribution, a consistency heatmap, and a **year-over-year
   comparison** (defaults to current vs previous year; hidden until you have data

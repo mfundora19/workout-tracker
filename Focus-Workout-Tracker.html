@@ -6,7 +6,7 @@
 <title>Focus-Workout-Tracker</title>
 <meta name="description" content="Private, offline workout and fitness tracker. Your data never leaves this device.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Cg transform='translate(4 4)' fill='%23fff'%3E%3Crect x='2.5' y='8.5' width='3.4' height='7' rx='1.2'/%3E%3Crect x='18.1' y='8.5' width='3.4' height='7' rx='1.2'/%3E%3Crect x='7' y='6.5' width='3' height='11' rx='1.2'/%3E%3Crect x='14' y='6.5' width='3' height='11' rx='1.2'/%3E%3Crect x='8.5' y='10.6' width='7' height='2.8' rx='1.4'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app/app.css">
+<link rel="stylesheet" href="app/app.css?v=3">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -113,9 +113,11 @@
     <!-- Progress -->
     <section class="view" id="view-progress" hidden>
       <div class="progress-head" id="progressHead"></div>
-      <div id="progressCompCard"></div>
-      <div class="grid-2">
-        <div id="progressChartCard"></div>
+      <div class="grid-2 progress-grid">
+        <div class="progress-left">
+          <div id="progressChartCard"></div>
+          <div id="progressCompCard"></div>
+        </div>
         <div id="progressStatsCard"></div>
       </div>
       <div id="progressTable"></div>

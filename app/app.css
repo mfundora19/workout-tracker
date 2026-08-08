@@ -458,8 +458,8 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .stat-mini .v small { font-size: 12px; color: var(--text-faint); font-weight: 600; }
 .stat-mini .trend { font-size: 12px; font-weight: 700; }
 .analysis-title { margin: 16px 0 8px; font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; }
-.trend.down-good { color: var(--success); }
-.trend.up-bad { color: var(--danger); }
+.trend.down-good, .stat-mini .v.down-good { color: var(--success); }
+.trend.up-bad, .stat-mini .v.up-bad { color: var(--danger); }
 .trend.neutral { color: var(--text-faint); }
 .meas-row { display: flex; align-items: center; gap: 14px; }
 
@@ -666,16 +666,33 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .info-row span { color: var(--text-dim); font-weight: 500; }
 .info-row b { font-variant-numeric: tabular-nums; }
 .info-pop p { margin: 9px 0 0; font-size: 11px; color: var(--text-faint); line-height: 1.45; }
-.comp-card { margin-top: 16px; }
-.comp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-.comp-tile { background: var(--surface-2); border-radius: 12px; padding: 14px 16px; }
-.comp-val b { font-size: 30px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; line-height: 1; }
+.comp-card { margin-top: 0; }
+/* Progress layout: chart + body composition stack in the left column while the
+   summary card stretches to match their combined height. */
+/* Flex row (overrides .grid-2's grid) so both columns stretch to the same
+   height — the summary card always matches the chart + body-composition pair. */
+.progress-grid { display: flex; align-items: stretch; gap: 16px; }
+.progress-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+#progressCompCard { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#progressCompCard > .card { flex: 1 1 auto; display: flex; flex-direction: column; }
+#progressCompCard .comp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-content: center; }
+#progressCompCard .comp-tile { display: flex; flex-direction: column; justify-content: center; }
+#progressStatsCard { flex: 1 1 0; min-width: 0; display: flex; }
+#progressStatsCard > .card { flex: 1 1 auto; display: flex; flex-direction: column; }
+#progressStatsCard .analysis-title { margin-top: auto; }
+.comp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.comp-tile { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.comp-val b { font-size: 26px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; line-height: 1; }
 .comp-val span { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
 .comp-tile .bmi-cat { display: inline-block; margin-top: 9px; }
 .comp-note { margin: 8px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 .comp-missing { display: flex; flex-direction: column; justify-content: center; }
 .comp-missing p { margin: 6px 0 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
-.comp-empty { display: flex; align-items: center; gap: 16px; padding: 18px 4px 6px; }
+.sum-headline { display: flex; align-items: center; gap: 8px; margin: -2px 0 12px; padding: 9px 13px; border-radius: 10px; font-size: 13px; font-weight: 600; line-height: 1.4; }
+.sum-headline.ok { background: var(--success-soft); color: var(--success); }
+.sum-headline.warn { background: var(--warn-soft); color: var(--warn); }
+.sum-headline.neutral { background: var(--surface-2); color: var(--text-dim); }
+.comp-empty { flex: 1 1 auto; display: flex; align-items: center; gap: 16px; padding: 6px 4px; }
 .comp-empty .es-icon { flex: 0 0 auto; }
 .comp-empty p { margin: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.6; }
 @media (max-width: 560px) { .comp-grid { grid-template-columns: 1fr; } .comp-empty { flex-direction: column; text-align: center; } }
@@ -733,6 +750,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .dash-charts { grid-template-columns: 1fr; }
   .month-detail { grid-template-columns: 1fr; }
+  .progress-grid { flex-direction: column; }
 }
 @media (max-width: 1100px) {
   .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -784,3 +802,4 @@ html:not(.no-anim) .day-cell:not(.empty):hover { transform: translateY(-1px); }
 @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
 /* Manual "Motion: Off" toggle — kill every transition/animation instantly. */
 html.no-anim *, html.no-anim *::before, html.no-anim *::after { transition: none !important; animation: none !important; }
+

@@ -357,7 +357,7 @@ function dump() {
       <div id="calLegend"></div>
       <div id="calendarBody"></div>
       <div id="toolsBody"></div>
-      <div id="progressHead"></div><div id="progressCompCard"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
+      <div id="progressHead"></div><div class="grid-2 progress-grid"><div class="progress-left"><div id="progressChartCard"></div><div id="progressCompCard"></div></div><div id="progressStatsCard"></div></div><div id="progressTable"></div>
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
       <div id="dataBody"></div>
       <div id="settingsBody"></div>
@@ -522,8 +522,12 @@ function dump() {
     fire("convValue");
     ok("100 kg -> 220.46 lb", document.getElementById("convResults").textContent.includes("220.46"), document.getElementById("convResults").textContent);
 
-    // --- progress view: body-composition card ---
+    // --- progress view: chips, headline, body-composition card ---
     Focus.UI.renderProgress();
+    const chipLabels = Array.from(document.querySelectorAll("#progressHead .chip")).map((c) => c.textContent);
+    ok("progress chips ordered Weight then Waist", chipLabels[0] === "Weight" && chipLabels[1] === "Waist", chipLabels.join(","));
+    ok("progress defaults to Weight", Focus.UI.state.progType === "Weight", Focus.UI.state.progType);
+    ok("summary shows colored trend headline", !!document.querySelector("#progressStatsCard .sum-headline") && document.getElementById("progressStatsCard").textContent.includes("Great trend"), document.getElementById("progressStatsCard").textContent.slice(0, 80));
     ok("comp card incomplete without Height", document.getElementById("progressCompCard").textContent.includes("Height") && document.getElementById("progressCompCard").textContent.includes("Weight"), document.getElementById("progressCompCard").textContent.slice(0, 100));
     // add Height + Neck records -> BMI + BF% computed from stored measurements
     await Focus.Store.addMeasurement({ date: "2026-08-01", type: "Height", value: 175, unit: "cm" });
