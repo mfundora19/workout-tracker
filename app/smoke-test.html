@@ -172,13 +172,14 @@ function dump() {
       <div id="calModeSeg"><button class="seg-btn is-active" data-cal-mode="year">Year</button><button class="seg-btn" data-cal-mode="month">Month</button></div>
       <div id="calLegend"></div>
       <div id="calendarBody"></div>
-      <div id="workoutFilters"></div><div id="workoutList"></div>
+      <div class="log-toolbar"><input class="input search" id="logSearch" type="search"><span class="log-count" id="logCount"></span></div><div id="logList"></div>
       <div id="progressHead"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
       <div id="dataBody"></div>
+      <div id="settingsBody"></div>
       <div id="dashGreeting"></div><div id="dashGrid"></div>
     `);
-    ["renderDashboard", "renderCalendar", "renderWorkouts", "renderProgress", "renderAnalytics", "renderData"].forEach((fn) => {
+    ["renderDashboard", "renderCalendar", "renderLog", "renderProgress", "renderAnalytics", "renderData", "renderSettings"].forEach((fn) => {
       try {
         Focus.UI[fn]();
         ok("UI " + fn + " renders", true);
@@ -217,6 +218,25 @@ function dump() {
     ok("day panel add-measurement carries the date", measBtn && measBtn.dataset.date === "2026-08-07", "date=" + (measBtn && measBtn.dataset.date));
     Focus.UI.state.calMode = "year";
     Focus.UI.state.calDay = null;
+
+    // --- log view ---
+    Focus.UI.renderLog();
+    ok("log lists workouts and measurements", document.getElementById("logList").querySelectorAll(".wk-row").length === 150, "rows=" + document.getElementById("logList").querySelectorAll(".wk-row").length);
+    ok("log count shows total", document.getElementById("logCount").textContent.includes("150"), document.getElementById("logCount").textContent);
+    Focus.UI.state.logSearch = "waist";
+    Focus.UI.renderLog();
+    const logRows = document.getElementById("logList").querySelectorAll(".wk-row").length;
+    ok("log search filters to waist", logRows === 29 && document.getElementById("logList").textContent.includes("Waist"), "rows=" + logRows);
+    ok("log count shows filtered", document.getElementById("logCount").textContent.includes("29 of 150"), document.getElementById("logCount").textContent);
+    Focus.UI.state.logSearch = "";
+    Focus.UI.renderLog();
+
+    // --- settings: weight unit preference ---
+    Focus.Store.settings.weightUnit = "kg";
+    ok("unitDefault honours kg setting", Focus.UI.unitDefault("Weight") === "kg", "got " + Focus.UI.unitDefault("Weight"));
+    Focus.Store.settings.weightUnit = "lb";
+    Focus.UI.renderSettings();
+    ok("settings renders with unit segs", document.getElementById("settingsBody").querySelectorAll("[data-set-weightunit]").length === 2);
 
   } catch (e) {
     fail++;

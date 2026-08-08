@@ -17,10 +17,7 @@
     calMode: "year",
     calMonth: new Date().getMonth() + 1,
     calDay: null,
-    wkYear: "all",
-    wkMonth: "all",
-    wkType: "all",
-    wkSearch: "",
+    logSearch: "",
     progType: null,
     anaA: null,
     anaB: null,
@@ -255,8 +252,9 @@
   const UNITS = ["", "kg", "lb", "g", "cm", "in", "%", "mm", "m"];
   const UNIT_DEFAULTS = { Weight: "lb", "Body Fat %": "%", Waist: "cm", Chest: "cm", Hips: "cm", Arm: "cm", Thigh: "cm" };
 
-  /** Sensible default unit for a measurement type ('' when unknown). */
+  /** Sensible default unit for a measurement type ('' when unknown). Weight honours the user's preferred unit in Settings. */
   function unitDefault(type) {
+    if (type === "Weight") return Store().settings.weightUnit || UNIT_DEFAULTS.Weight;
     return UNIT_DEFAULTS[type] || "";
   }
 
@@ -453,7 +451,7 @@
     const recent = recentDays(all, 3);
     parts.push(`
       <div class="card big-card">
-        <div class="card-title"><h3>Recent activity</h3><button class="btn btn-sm btn-ghost" data-action="goto" data-view="workouts">View all</button></div>
+        <div class="card-title"><h3>Recent activity</h3><button class="btn btn-sm btn-ghost" data-action="goto" data-view="log">View all</button></div>
         <div id="dashRecent">${recent.length ? recentRows(recent) : `<div class="chart-empty">No workouts yet.</div>`}</div>
       </div>`);
 
@@ -741,81 +739,75 @@
   }
 
   /* =====================================================================
-   * WORKOUTS
+   * LOG (unified workouts + measurements timeline)
    * =================================================================== */
 
-  function renderWorkouts() {
-    const all = Store().workouts;
-    const years = St().availableYears(all, Store().measurements);
-    const types = ["all", ...existingTypes()];
-    const f = state;
+  function renderLog() {
+    const workouts = Store().workouts;
+    const measurements = Store().measurements;
+    const q = (state.logSearch || "").toLowerCase().trim();
 
-    document.getElementById("workoutFilters").innerHTML = `
-      <select class="select" id="wfYear" aria-label="Filter by year">
-        <option value="all" ${f.wkYear === "all" ? "selected" : ""}>All years</option>
-        ${years.map((y) => `<option value="${y}" ${String(f.wkYear) === String(y) ? "selected" : ""}>${y}</option>`).join("")}
-      </select>
-      <select class="select" id="wfMonth" aria-label="Filter by month">
-        <option value="all" ${f.wkMonth === "all" ? "selected" : ""}>All months</option>
-        ${St().MONTHS_LONG.map((m, i) => `<option value="${i + 1}" ${String(f.wkMonth) === String(i + 1) ? "selected" : ""}>${m}</option>`).join("")}
-      </select>
-      <select class="select" id="wfType" aria-label="Filter by type">
-        <option value="all" ${f.wkType === "all" ? "selected" : ""}>All types</option>
-        ${types.filter((t) => t !== "all").map((t) => `<option value="${esc(t)}" ${f.wkType === t ? "selected" : ""}>${t}</option>`).join("")}
-      </select>
-      <input class="input search" id="wfSearch" type="search" placeholder="🔍 Search notes, types…" value="${esc(f.wkSearch)}" aria-label="Search workouts">`;
+    // The search input is static markup (kept out of re-renders so typing never loses focus).
+    const searchInput = document.getElementById("logSearch");
+    if (searchInput && searchInput.value !== (state.logSearch || "")) searchInput.value = state.logSearch || "";
+    const list = document.getElementById("logList");
+    const total = workouts.length + measurements.length;
 
-    const filtered = all.filter((w) => {
-      if (f.wkYear !== "all" && St().yearOf(w.date) !== Number(f.wkYear)) return false;
-      if (f.wkMonth !== "all" && St().monthOf(w.date) !== Number(f.wkMonth)) return false;
-      if (f.wkType !== "all" && w.type !== f.wkType) return false;
-      if (f.wkSearch) {
-        const q = f.wkSearch.toLowerCase();
-        const hay = (w.type + " " + (w.notes || "") + " " + w.date).toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
+    const items = [];
+    workouts.forEach((w) => items.push({ date: w.date, stamp: w.createdAt || w.date, kind: "workout", ref: w }));
+    measurements.forEach((m) => items.push({ date: m.date, stamp: m.createdAt || m.date, kind: "meas", ref: m }));
+    items.sort((a, b) => {
+      const ka = a.date + "~" + a.stamp, kb = b.date + "~" + b.stamp;
+      return ka < kb ? 1 : ka > kb ? -1 : 0;
     });
 
-    const list = document.getElementById("workoutList");
+    const count = document.getElementById("logCount");
+    const filtered = items.filter((it) => {
+      if (!q) return true;
+      const hay = it.kind === "workout"
+        ? (it.ref.type + " " + (it.ref.notes || "")).toLowerCase()
+        : (it.ref.type + " " + (it.ref.notes || "") + " " + it.ref.value).toLowerCase();
+      return hay.includes(q);
+    });
+
     if (!filtered.length) {
+      if (count) count.textContent = total ? (q ? "0 of " + St().fmtNum(total) : "0") + " records" : "No records";
       list.innerHTML = `
         <div class="empty-state">
-          <div class="es-icon">${ICONS.dumbbell}</div>
-          <h3>No workouts found</h3>
-          <p>${all.length ? "Try adjusting your filters." : "No workouts recorded yet. Start by adding your first workout."}</p>
+          <div class="es-icon">${ICONS.activity}</div>
+          <h3>${items.length ? "Nothing matches" : "Nothing here yet"}</h3>
+          <p>${items.length ? "Try a different search." : "Your workouts and measurements will appear here as a single timeline."}</p>
           <button class="btn btn-primary" data-action="quick-add">${ICONS.plus} Add workout</button>
         </div>`;
       return;
     }
 
-    const groups = new Map();
-    filtered.forEach((w) => {
-      const key = w.date.slice(0, 7);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(w);
-    });
+    if (count) count.textContent = (q ? filtered.length + " of " + St().fmtNum(total) : St().fmtNum(total)) + " records";
 
-    const totalCal = filtered.reduce((s, w) => s + (w.calories || 0), 0);
-    const totalDur = filtered.reduce((s, w) => s + (w.duration || 0), 0);
-    list.innerHTML = `
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px"><strong>${filtered.length}</strong> workouts · <strong>${St().fmtNum(totalCal)}</strong> kcal · <strong>${St().fmtDuration(totalDur)}</strong></p>
-      ${Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([key, rows]) => {
-        const [y, m] = key.split("-").map(Number);
-        const kcal = rows.reduce((s, w) => s + (w.calories || 0), 0);
-        return `
+    const groups = new Map();
+    filtered.forEach((it) => { if (!groups.has(it.date)) groups.set(it.date, []); groups.get(it.date).push(it); });
+    list.innerHTML = Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([date, rows]) => {
+      const dayW = rows.filter((r) => r.kind === "workout");
+      const dayM = rows.filter((r) => r.kind === "meas");
+      const kcal = dayW.reduce((s, r) => s + (r.ref.calories || 0), 0);
+      const dur = dayW.reduce((s, r) => s + (r.ref.duration || 0), 0);
+      const bits = [];
+      bits.push(dayW.length + " workout" + (dayW.length === 1 ? "" : "s"));
+      if (dayM.length) bits.push(dayM.length + " measurement" + (dayM.length === 1 ? "" : "s"));
+      if (kcal) bits.push(St().fmtNum(kcal) + " kcal");
+      if (dur) bits.push(St().fmtDuration(dur));
+      return `
         <div class="wk-group">
-          <div class="wk-group-head"><h3>${St().MONTHS_LONG[m - 1]} ${y}</h3><span>${rows.length} workouts · ${St().fmtNum(kcal)} kcal</span></div>
-          ${rows.map((w) => workoutRow(w)).join("")}
+          <div class="wk-group-head"><h3>${St().weekdayName(date)}, ${St().shortDate(date)}</h3><span>${bits.join(" · ")}</span></div>
+          ${rows.map((it) => it.kind === "workout" ? logWorkoutRow(it.ref) : logMeasRow(it.ref)).join("")}
         </div>`;
-      }).join("")}`;
+    }).join("");
   }
 
-  function workoutRow(w) {
+  function logWorkoutRow(w) {
     const st = typeStyle(w.type);
     return `
       <div class="wk-row">
-        <div class="wk-date"><b>${St().shortDate(w.date)}</b><span>${St().weekdayName(w.date)}</span></div>
         <span class="type-badge badge"><span class="dot" style="background:${st.color}"></span>${st.emoji} ${esc(w.type)}</span>
         ${w.notes ? `<span class="wk-notes">${esc(w.notes)}</span>` : ""}
         <div class="wk-meta">
@@ -825,6 +817,80 @@
             <button class="mini-btn" data-action="edit-workout" data-id="${w.id}" title="Edit">${ICONS.pencil}</button>
             <button class="mini-btn danger" data-action="delete-workout" data-id="${w.id}" title="Delete">${ICONS.trash}</button>
           </div>
+        </div>
+      </div>`;
+  }
+
+  function logMeasRow(m) {
+    return `
+      <div class="wk-row">
+        <span class="type-badge badge"><span class="dot" style="background:var(--accent)"></span>📏 ${esc(m.type)}</span>
+        ${m.notes ? `<span class="wk-notes">${esc(m.notes)}</span>` : ""}
+        <div class="wk-meta">
+          <div class="m"><b>${St().fmtNum(m.value, 1)}</b><span>${m.unit ? esc(m.unit) : ""}</span></div>
+          <div class="wk-actions">
+            <button class="mini-btn" data-action="edit-measurement" data-id="${m.id}" title="Edit">${ICONS.pencil}</button>
+            <button class="mini-btn danger" data-action="delete-measurement" data-id="${m.id}" title="Delete">${ICONS.trash}</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  /* =====================================================================
+   * SETTINGS
+   * =================================================================== */
+
+  function renderSettings() {
+    const s = Store().settings;
+    const theme = document.documentElement.getAttribute("data-theme") || "dark";
+    const wt = s.weightUnit || "lb";
+    const w = Store().workouts.length, m = Store().measurements.length;
+    document.getElementById("settingsBody").innerHTML = `
+      <div class="settings-grid">
+        <div class="card data-card">
+          <h3>Appearance</h3>
+          <p class="desc">The look of Focus. Your choice is saved locally and applies instantly.</p>
+          <div class="setting-row">
+            <div class="setting-label"><b>Theme</b><span>Dark is easy on the eyes; light is crisp.</span></div>
+            <div class="seg" role="group" aria-label="Theme">
+              <button class="seg-btn ${theme === "dark" ? "is-active" : ""}" data-action="set-theme" data-set-theme="dark">🌙 Dark</button>
+              <button class="seg-btn ${theme === "light" ? "is-active" : ""}" data-action="set-theme" data-set-theme="light">☀️ Light</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card data-card">
+          <h3>Units</h3>
+          <p class="desc">Default unit for new weight entries in Quick add and the measurement form.</p>
+          <div class="setting-row">
+            <div class="setting-label"><b>Weight unit</b><span>Only affects new records — existing ones keep their units.</span></div>
+            <div class="seg" role="group" aria-label="Weight unit">
+              <button class="seg-btn ${wt === "kg" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="kg">kg</button>
+              <button class="seg-btn ${wt === "lb" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="lb">lb</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card data-card">
+          <h3>Privacy</h3>
+          <p class="desc">Focus is designed to be completely private.</p>
+          <ul class="about-list">
+            <li>🔒 No account, no login, no tracking.</li>
+            <li>🚫 No internet connection is ever used.</li>
+            <li>💾 Everything is stored in this browser only.</li>
+            <li>📦 Move data with the export/import tools in the <b>Data</b> view.</li>
+          </ul>
+        </div>
+
+        <div class="card data-card">
+          <h3>About</h3>
+          <p class="desc">Focus — a personal, offline fitness tracker.</p>
+          <ul class="about-list">
+            <li><b>Data</b> — ${St().fmtNum(w)} workouts · ${St().fmtNum(m)} measurements</li>
+            <li><b>Version</b> — 1.0.0</li>
+            <li><b>Storage</b> — your browser's IndexedDB</li>
+            <li><b>Offline</b> — open <code>index.html</code> and it just works</li>
+          </ul>
         </div>
       </div>`;
   }
@@ -1226,7 +1292,7 @@
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog,
     openWorkoutForm, openMeasurementForm, unitDefault,
-    renderDashboard, renderCalendar, renderWorkouts, renderProgress, renderAnalytics, renderData,
+    renderDashboard, renderCalendar, renderLog, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, wireDrop, cssColor
   };
 })();

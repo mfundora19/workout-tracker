@@ -13,11 +13,13 @@ Google Sheets archiving.
 
 - 📊 **Dashboard** — how am I doing right now (month, year, streaks, vs last year)
 - 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels
-- 🏋️ **Workouts** — history, filters, search, and ultra-fast entry
+- 🧾 **Log** — a single timeline of every workout and measurement, with search
+  and inline edit/delete
 - 📏 **Progress** — weight, body fat, waist, hips… any measurement, any frequency
 - 📈 **Analytics** — 10+ charts: monthly bars, cumulative lines, type mix,
   consistency heatmap, and full **year-over-year comparison**
 - 💾 **Data** — Excel / JSON / CSV export, smart import, backup & restore
+- ⚙️ **Settings** — theme, default weight unit (kg/lb), privacy & about
 
 ---
 

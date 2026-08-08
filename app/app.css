@@ -517,6 +517,17 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .import-drop span { font-size: 12.5px; color: var(--text-faint); }
 .import-drop svg { width: 30px; height: 30px; margin: 0 auto; fill: none; stroke: var(--text-dim); stroke-width: 1.6; }
 
+/* ---------- Log & Settings ---------- */
+.log-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
+.log-toolbar .search { flex: 1; max-width: 420px; }
+.log-count { font-size: 13px; color: var(--text-faint); font-weight: 600; white-space: nowrap; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px 0 2px; }
+.setting-label b { display: block; font-size: 14px; }
+.setting-label span { font-size: 12.5px; color: var(--text-dim); }
+.about-list { margin: 0; padding-left: 2px; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--text-dim); }
+.about-list code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-family: var(--mono); font-size: 12px; color: var(--text); }
+
 /* ---------- Dashboard ---------- */
 .dash-greeting { margin-bottom: 16px; }
 .dash-greeting h2 { margin: 0; font-size: 21px; letter-spacing: -.4px; }
@@ -539,6 +550,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 }
 @media (max-width: 1100px) {
   .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .settings-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1024px) {
   .sidebar { width: 78px; flex: 0 0 78px; padding: 18px 10px 14px; }

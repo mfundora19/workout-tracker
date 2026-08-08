@@ -9,10 +9,11 @@
   const VIEW_META = {
     dashboard: ["Dashboard", "Your year at a glance"],
     calendar: ["Calendar", "Workout days, intensity and streaks"],
-    workouts: ["Workouts", "History, filters and quick entry"],
+    log: ["Log", "Workouts & measurements timeline"],
     progress: ["Progress", "Body measurements and trends"],
     analytics: ["Analytics", "Charts and year-over-year insights"],
-    data: ["Data", "Import, export and backup"]
+    data: ["Data", "Import, export and backup"],
+    settings: ["Settings", "Preferences, units and about"]
   };
 
   const App = {
@@ -124,10 +125,11 @@
     const v = App.currentView;
     if (v === "dashboard") Focus.UI.renderDashboard();
     else if (v === "calendar") Focus.UI.renderCalendar();
-    else if (v === "workouts") Focus.UI.renderWorkouts();
+    else if (v === "log") Focus.UI.renderLog();
     else if (v === "progress") Focus.UI.renderProgress();
     else if (v === "analytics") Focus.UI.renderAnalytics();
     else if (v === "data") Focus.UI.renderData();
+    else if (v === "settings") Focus.UI.renderSettings();
   }
 
   /* ---------------- year control ---------------- */
@@ -182,16 +184,13 @@
         const unit = document.getElementById("qmUnit");
         if (unit) unit.value = Focus.UI.unitDefault(e.target.value);
       }
-      if (e.target.id === "wfYear") { Focus.UI.state.wkYear = e.target.value; renderCurrent(); }
-      if (e.target.id === "wfMonth") { Focus.UI.state.wkMonth = e.target.value; renderCurrent(); }
-      if (e.target.id === "wfType") { Focus.UI.state.wkType = e.target.value; renderCurrent(); }
       if (e.target.id === "anaA") { Focus.UI.state.anaA = Number(e.target.value); renderCurrent(); }
       if (e.target.id === "anaB") { Focus.UI.state.anaB = Number(e.target.value); renderCurrent(); }
     });
 
     document.addEventListener("input", (e) => {
-      if (e.target.id === "wfSearch") {
-        Focus.UI.state.wkSearch = e.target.value;
+      if (e.target.id === "logSearch") {
+        Focus.UI.state.logSearch = e.target.value;
         debounce(() => renderCurrent(), 180)();
       }
     });
@@ -293,6 +292,24 @@
           Focus.UI.state.progType = target.dataset.type;
           renderCurrent();
           break;
+        case "set-theme": {
+          const next = target.dataset.setTheme;
+          if (next === "light" || next === "dark") {
+            document.documentElement.setAttribute("data-theme", next);
+            Focus.Store.setSetting("theme", next);
+            renderCurrent();
+          }
+          break;
+        }
+        case "set-weightunit": {
+          const next = target.dataset.setWeightunit;
+          if (next === "kg" || next === "lb") {
+            Focus.Store.setSetting("weightUnit", next);
+            Focus.UI.toast("New weight entries will default to " + next);
+            renderCurrent();
+          }
+          break;
+        }
         case "openmonth":
           Focus.UI.state.calMode = "month";
           Focus.UI.state.calMonth = Number(target.dataset.month);
