@@ -139,8 +139,8 @@ just print your numbers — it interprets them. The structure:
 4. **Progress Analysis** — monthly charts for workouts / calories / duration,
    each followed by a written interpretation (peak month, quietest month,
    biggest jump).
-5. **Monthly Performance** — one compact table of every month, then the
-   month-over-month signals.
+5. **Monthly Performance** — one compact table of every month with a totals
+   row, plus at-a-glance highlights (busiest / quietest month, biggest climb).
 6. **Year-over-Year** — comparison KPIs, grouped monthly bars and cumulative
    calorie lines, plus a written reading of what changed and which months drove
    it. Skipped entirely when the comparison year has no workouts.
@@ -164,6 +164,11 @@ Technical notes:
   current partial months are never reported as finished declines, zero-values
   are handled (e.g. “No training duration was recorded”), and a comparison year
   must actually contain workouts to appear.
+- **Training mix is by type mentions, not workouts**: a workout tagged with
+  several types counts once per type, and the donut says so explicitly (e.g.
+  “120 mentions across 102 workouts”). The leading categories are capped at
+  six and the tail is folded into a single “Other” bucket, so the legend never
+  shows two identical “Other” entries.
 - Charts stay **vector** (jsPDF primitives) so they remain sharp when zoomed.
   Monthly bar charts show the actual value inside (or just above) each bar;
   x-axis labels get their own dedicated space so captions never cover them.

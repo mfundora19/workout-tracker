@@ -304,14 +304,14 @@ function dump() {
     ok("monthlyInsights finds jump", mi.some((i) => i.title.startsWith("Biggest month-over-month jump")), JSON.stringify(mi.map((i) => i.title)));
     ok("monthlyInsights skips partial current month decline", !mi.some((i) => i.title.startsWith("Largest month-over-month drop") && i.title.includes("Aug")), JSON.stringify(mi.map((i) => i.title)));
     const caps = S.chartCaptions(Focus.Store.workouts, 2026);
-    ok("chartCaptions workouts has Apr + Jan", caps.workouts.includes("Apr was your most active month") && caps.workouts.includes("fewest workouts"), caps.workouts);
+    ok("chartCaptions workouts has Apr + Jan", caps.workouts.includes("Training peaked in") && caps.workouts.includes("fewest workouts"), caps.workouts);
     ok("chartCaptions duration says no duration data", caps.duration.includes("No training duration was recorded"), caps.duration);
     const mei = S.measurementInsights(Focus.Store.measurements, 2026);
     const wa = mei.find((i) => i.metric === "Waist");
     ok("measurement insight title has no sign prefix", wa && wa.title === "Waist: 91 cm", wa && wa.title);
     ok("measurement insight body neutral", wa && /decreased from 98 cm/.test(wa.body), wa && wa.body);
     const ci = S.consistencyInsights(Focus.Store.workouts, 2026);
-    ok("consistency insight 25% of days", ci[0] && ci[0].title === "Trained on 25% of days", ci[0] && ci[0].title);
+    ok("consistency insight 25% of the year's days", ci[0] && ci[0].title === "Trained on 25% of the year's days", ci[0] && ci[0].title);
     ok("consistency longest streak 13", ci.some((i) => i.title === "Longest streak: 13 days"), JSON.stringify(ci.map((i) => i.title)));
     const es = S.execSummary(Focus.Store.workouts, Focus.Store.measurements, 2026);
     ok("execSummary has year in numbers", es.length > 0 && es[0].title === "The year in numbers", es[0] && es[0].title);

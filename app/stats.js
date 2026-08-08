@@ -624,7 +624,9 @@
     const out = [];
     if (!cmp) return out;
     const t = cmp.totals;
-    const add = (metric, noun, fmt) => {
+    // `noun` labels the value in the card title; `bodyNoun`/`bodyFmt` read
+    // naturally in the sentence ("Calories went from 44,421 kcal in 2025 …").
+    const add = (metric, noun, fmt, bodyNoun, bodyFmt) => {
       const row = t[metric];
       if (!row) return;
       const pct = pctChange(row.a, row.b);
@@ -635,15 +637,15 @@
         : (pct > 0 ? "+" : "") + Math.round(pct) + "%";
       out.push(mkInsight("comparison", metric,
         fmt(row.a) + " " + noun + " (" + pctPart + (pct != null ? " vs " + cmp.yearB : "") + ")",
-        noun.charAt(0).toUpperCase() + noun.slice(1) + " went from **" + fmt(row.b) + "** in " + cmp.yearB +
-          " to **" + fmt(row.a) + "** in " + cmp.yearA + ".",
+        bodyNoun + " went from **" + bodyFmt(row.b) + "** in " + cmp.yearB +
+          " to **" + bodyFmt(row.a) + "** in " + cmp.yearA + ".",
         dir === "up" ? "positive" : dir === "down" ? "negative" : "neutral",
         { magnitude: Math.round(row.diff) }));
     };
-    add("workouts", "workouts", (v) => String(v));
-    add("days", "active days", (v) => String(v));
-    add("calories", "kcal", (v) => fmtNum(v));
-    add("duration", "min of training", (v) => fmtNum(v));
+    add("workouts", "workouts", (v) => String(v), "Workouts", (v) => String(v));
+    add("days", "active days", (v) => String(v), "Active days", (v) => String(v));
+    add("calories", "kcal", (v) => fmtNum(v), "Calories", (v) => fmtNum(v) + " kcal");
+    add("duration", "min of training", (v) => fmtNum(v), "Training duration", (v) => fmtNum(v) + " min");
     // Which months drove the change?
     const deltas = cmp.months
       .map((m) => ({ month: m.label, delta: m.a.workouts - m.b.workouts }))
@@ -693,7 +695,7 @@
       let body = s.type + " " + dirWord + " from " + fmtNum(s.first.value, 1) + unit + " (" +
         shortDate(s.first.date) + ") to **" + fmtNum(s.latest.value, 1) + unit + "** (" + shortDate(s.latest.date) + ")";
       if (pct != null && Math.abs(delta) > 0.0001) body += ", a **" + Math.round(Math.abs(pct) * 10) / 10 + "% change**";
-      if (s.count >= 3) body += ". Across **" + s.count + "** readings it ranged " + fmtNum(s.min, 1) + " to " + fmtNum(s.max, 1) + unit;
+      if (s.count >= 3) body += ". Across **" + s.count + "** readings it ranged from " + fmtNum(s.min, 1) + " to " + fmtNum(s.max, 1) + unit;
       out.push(mkInsight("measurement", s.type,
         s.type + ": " + fmtNum(s.latest.value, 1) + unit,
         body + ".",
@@ -718,7 +720,9 @@
       if (gap > maxGap) { maxGap = gap; gapFrom = sorted[i - 1]; gapTo = sorted[i]; }
     }
     out.push(mkInsight("consistency", "frequency",
-      "Trained on " + (activePct < 1 ? "less than 1%" : Math.round(activePct) + "%") + " of days",
+      "Trained on " + (activePct < 1 ? "less than 1%" : Math.round(activePct) + "%") + " of the year's days",
+      // (the denominator is the full calendar year, visible as "N of 365" in
+      // the report's stat strip — even when the year is still in progress)
       "**" + plural(sorted.length, "active day") + "** across " + year +
         (maxGap > 0 ? ", with a longest break of **" + plural(maxGap, "day") +
           "** (" + shortDate(gapFrom) + " to " + shortDate(gapTo) + ")" : "") + ".",
@@ -771,12 +775,12 @@
       const d = sorted[i].workouts - sorted[i - 1].workouts;
       if (d > 0 && (!bestMom || d > bestMom.delta)) bestMom = { delta: d, cur: sorted[i], prev: sorted[i - 1] };
     }
-    out.workouts = (best ? best.label + " was your most active month (**" + best.days + "** workout day" + (best.days === 1 ? "" : "s") + "). " : "") +
+    out.workouts = (best ? "Training peaked in **" + best.label + "** with **" + best.days + "** workout day" + (best.days === 1 ? "" : "s") + ". " : "") +
       (quiet && quiet.label !== best.label
         ? (isCurMonth(quiet) ? quiet.label + " has " + quiet.workouts + " workout" + (quiet.workouts === 1 ? "" : "s") + " so far this month. "
-          : quiet.label + " had the fewest workouts (**" + quiet.workouts + "**). ")
+          : "**" + quiet.label + "** had the fewest workouts (**" + quiet.workouts + "**). ")
         : "") +
-      (bestMom ? "Workout count climbed most between **" + bestMom.prev.label + "** and **" + bestMom.cur.label + "** (+" + bestMom.delta + ")." : "");
+      (bestMom ? "The biggest climb came between **" + bestMom.prev.label + "** and **" + bestMom.cur.label + "** (+" + bestMom.delta + " workouts)." : "");
     out.calories = mostCal && mostCal.calories > 0 ? mostCal.label + " led in calories with **" + fmtNum(mostCal.calories) + " kcal**." : "";
     out.duration = mostDur && mostDur.duration > 0 ? mostDur.label + " led in training time with **" + fmtDuration(mostDur.duration) + "**." :
       withData.length ? "No training duration was recorded in " + year + "." : "";

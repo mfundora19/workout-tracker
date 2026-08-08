@@ -324,17 +324,24 @@
     // Emoji-like glyphs (DejaVu) shown beside each insight, by tone.
     const INS_ICON = { positive: "\u2713", warn: "\u26A0", negative: "\u2717", info: "\u2192", neutral: "\u2022", accent: "\u2605", accent2: "\u2605" };
 
+    /** Measured height of one insight card (must match addInsight's drawing). */
+    function insightH(ins, o = {}) {
+      const bodySize = o.bodySize || 8.5;
+      const titleSize = o.titleSize || 9;
+      const pad = o.pad || 12;
+      const maxW = (o.maxW || CW) - 32;
+      const bodyLines = richWrap(richSegments(ins.body), maxW, bodySize);
+      return pad + titleSize * 1.4 + bodyLines.length * bodySize * 1.45 + pad;
+    }
+
     /** A slim block: colored accent bar, tone icon, bold title line, wrapped body. */
     function addInsight(ins, o = {}) {
       const tc = toneColor(ins.tone);
       const titleSize = o.titleSize || 9;
       const bodySize = o.bodySize || 8.5;
-      const maxW = (o.maxW || CW) - 32;
-      const bodyLines = richWrap(richSegments(ins.body), maxW, bodySize);
-      const titleH = titleSize * 1.4;
-      const bodyH = bodyLines.length * bodySize * 1.45;
-      const pad = 12;
-      const h = pad + titleH + bodyH + pad;
+      const pad = o.pad || 12;
+      const bodyLines = richWrap(richSegments(ins.body), (o.maxW || CW) - 32, bodySize);
+      const h = insightH(ins, o);
       ensure(h);
       doc.setFillColor(...hexToRgb(INK.light));
       doc.roundedRect(M, y, CW, h, 5, 5, "F");
@@ -352,7 +359,7 @@
       }
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(pdfSafe(String(ins.title)), tx, titleBaseline);
-      drawRich(bodyLines, M + 14, y + pad + titleH + bodySize, bodySize, INK.muted, 1.45);
+      drawRich(bodyLines, M + 14, y + pad + titleSize * 1.4 + bodySize, bodySize, INK.muted, 1.45);
       track(M, y, CW, h, "insight:" + ins.type + ":" + String(ins.metric));
       y += h + 9;
       return h;
@@ -366,7 +373,7 @@
       doc.roundedRect(x, yy, 3, h, 1.5, 1.5, "F");
       // value + unit on one line
       doc.setFont(FONT, "bold");
-      doc.setFontSize(13);
+      doc.setFontSize(14);
       doc.setTextColor(...hexToRgb(INK.dark));
       const vx = x + 12;
       doc.text(pdfSafe(String(it.value)), vx, yy + 21);
@@ -415,9 +422,10 @@
     function addTable(headers, rows, opts = {}) {
       const widths = opts.widths || headers.map(() => CW / headers.length);
       const align = opts.align || headers.map(() => "left");
-      const rowH = 15;
+      const rowH = opts.rowH || 15;
+      const footer = opts.footer;
       const totalW = widths.reduce((a, b) => a + b, 0);
-      const h = rowH * (rows.length + 1) + 4;
+      const h = rowH * (rows.length + (footer ? 2 : 1)) + 4;
       ensure(h);
       const x = M + (CW - totalW) / 2;
       doc.setFillColor(...hexToRgb(INK.dark));
@@ -450,9 +458,23 @@
         doc.setLineWidth(0.4);
         doc.line(x, yy, x + totalW, yy);
       });
+      if (footer) {
+        const yy = y + rowH * (rows.length + 1);
+        doc.setFillColor(...hexToRgb(INK.light));
+        doc.rect(x, yy, totalW, rowH, "F");
+        doc.setFont(FONT, "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...hexToRgb(INK.dark));
+        cx = x;
+        footer.forEach((cell, i) => {
+          doc.text(pdfSafe(String(cell)), align[i] === "right" ? cx + widths[i] - 8 : cx + 8, yy + rowH - 5,
+            align[i] === "right" ? { align: "right" } : undefined);
+          cx += widths[i];
+        });
+      }
       doc.setDrawColor(...hexToRgb(INK.grid));
       doc.setLineWidth(0.8);
-      doc.line(x, y + rowH * (rows.length + 1), x + totalW, y + rowH * (rows.length + 1));
+      doc.line(x, y + rowH * (rows.length + (footer ? 2 : 1)), x + totalW, y + rowH * (rows.length + (footer ? 2 : 1)));
       track(x, y, totalW, h, "table:" + String(headers[0]));
       y += h + 10;
     }
@@ -515,24 +537,24 @@
       }
       if (manySeries) {
         doc.setFont(FONT, "normal");
-        doc.setFontSize(7.5);
+        doc.setFontSize(8);
         let lx = x + w;
         series.slice().reverse().forEach((s) => {
           const tw = doc.getTextWidth(pdfSafe(s.name));
           lx -= tw;
           doc.setTextColor(...hexToRgb(INK.dark));
           doc.text(pdfSafe(s.name), lx, y - 8);
-          lx -= 6;
+          lx -= 7;
           doc.setFillColor(...hexToRgb(s.color));
-          doc.rect(lx, y - 12, 7, 7, "F");
-          lx -= 11;
+          doc.rect(lx, y - 13, 8, 8, "F");
+          lx -= 13;
         });
       }
 
       doc.setDrawColor(...hexToRgb(INK.grid));
       doc.setLineWidth(0.5);
       doc.setFont(FONT, "normal");
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       for (let i = 0; i <= 4; i++) {
         const yy = yBase - (h * i) / 4;
@@ -552,23 +574,23 @@
           // otherwise make every later bar invisible.
           doc.setFillColor(...hexToRgb(s.color));
           doc.roundedRect(bx, yBase - bh, barW, bh, 1.5, 1.5, "F");
-          // Value labels: inside the bar when it has room, just above it when
-          // not. Skipped entirely for zero months and for grouped series.
+          // Value labels: centered inside the bar when it has real room (tall
+          // enough, and not wider than the bar), otherwise placed just above
+          // the bar in dark ink. The decision uses the label's actual measured
+          // width, so it adapts to any dataset. Skipped for zero months and
+          // for grouped (comparison) series.
           if (!manySeries) {
             const label = fmt(v);
             doc.setFont(FONT, "bold");
-            doc.setFontSize(6.5);
+            doc.setFontSize(7.5);
             const lw = doc.getTextWidth(label);
             const cx = bx + barW / 2;
-            if (bh >= 13 && lw <= barW + 6) {
+            if (bh >= 13.5 && lw <= barW + 4) {
               doc.setTextColor(255, 255, 255);
-              doc.text(label, cx, yBase - bh / 2 + 2.5, { align: "center" });
-            } else if (bh >= 13) {
-              doc.setTextColor(255, 255, 255);
-              doc.text(label, cx, yBase - bh + 9, { align: "center" });
+              doc.text(label, cx, yBase - bh / 2 + 2.8, { align: "center" });
             } else {
-              doc.setTextColor(...hexToRgb(INK.muted));
-              doc.text(label, cx, yBase - bh - 4, { align: "center" });
+              doc.setTextColor(...hexToRgb(INK.dark));
+              doc.text(label, cx, yBase - bh - 3, { align: "center" });
             }
           }
         });
@@ -576,7 +598,7 @@
 
       const every = n > 26 ? 4 : n > 13 ? 3 : n > 8 ? 2 : 1;
       doc.setFont(FONT, "normal");
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       labels.forEach((lb, i) => {
         if (i % every !== 0 && i !== n - 1) return;
@@ -607,24 +629,24 @@
       }
       if (manySeries) {
         doc.setFont(FONT, "normal");
-        doc.setFontSize(7.5);
+        doc.setFontSize(8);
         let lx = x + w;
         series.slice().reverse().forEach((s) => {
           const tw = doc.getTextWidth(pdfSafe(s.name));
           lx -= tw;
           doc.setTextColor(...hexToRgb(INK.dark));
           doc.text(pdfSafe(s.name), lx, y - 8);
-          lx -= 6;
+          lx -= 7;
           doc.setFillColor(...hexToRgb(s.color));
-          doc.rect(lx, y - 12, 7, 7, "F");
-          lx -= 11;
+          doc.rect(lx, y - 13, 8, 8, "F");
+          lx -= 13;
         });
       }
 
       doc.setDrawColor(...hexToRgb(INK.grid));
       doc.setLineWidth(0.5);
       doc.setFont(FONT, "normal");
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       for (let i = 0; i <= 4; i++) {
         const yy = yBase - (h * i) / 4;
@@ -664,7 +686,7 @@
 
       const every = n > 26 ? 4 : n > 13 ? 3 : n > 8 ? 2 : 1;
       doc.setFont(FONT, "normal");
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       labels.forEach((lb, i) => {
         if (i % every !== 0 && i !== n - 1) return;
@@ -836,15 +858,16 @@
     y += 24;
     const paras = S.execSummary(workouts, measurements, year, compareYear);
     paras.forEach((p) => {
-      const bodyLines = richWrap(richSegments(p.body), CW, 9);
-      const bodyH = bodyLines.length * 9 * 1.5;
-      const h = 14 + bodyH + 6;
+      const bodyLines = richWrap(richSegments(p.body), CW, 9.5);
+      const bodyH = bodyLines.length * 9.5 * 1.6;
+      const h = 18 + bodyH + 10;
       ensure(h);
       doc.setFont(FONT, "bold");
-      doc.setFontSize(9.5);
+      doc.setFontSize(10);
       doc.setTextColor(...hexToRgb(INK.dark));
-      doc.text(pdfSafe(p.title), M, y + 10);
-      drawRich(bodyLines, M, y + 25, 9, INK.muted, 1.5);
+      doc.text(pdfSafe(p.title), M, y + 12);
+      drawRich(bodyLines, M, y + 29, 9.5, INK.muted, 1.6);
+      track(M, y, CW, h, "summary:" + p.title);
       y += h;
     });
 
@@ -859,31 +882,32 @@
       ];
       const gap = 12;
       const w4 = (CW - gap * 3) / 4;
-      ensure(64);
-      hs.forEach((it, i) => drawKpiCard(M + i * (w4 + gap), y, w4, 56, it));
-      y += 68;
+      ensure(70);
+      hs.forEach((it, i) => drawKpiCard(M + i * (w4 + gap), y, w4, 62, it));
+      y += 74;
 
       // Key insights (top three)
       const take = S.keyTakeaways(workouts, measurements, year, compareYear).slice(0, 3);
       if (take.length) {
-        y += 12;
+        y += 14;
         doc.setFont(FONT, "bold");
-        doc.setFontSize(9.5);
+        doc.setFontSize(10);
         doc.setTextColor(...hexToRgb(INK.accent));
         doc.text("KEY INSIGHTS", M, y + 8);
-        y += 20;
+        y += 24;
         take.forEach((ins) => {
-          const bodyLines = richWrap(richSegments(ins.body), CW - 26, 8);
-          const h = 10 + bodyLines.length * 8 * 1.45;
+          const bodyLines = richWrap(richSegments(ins.body), CW - 28, 8.5);
+          const h = 12 + bodyLines.length * 8.5 * 1.5;
           ensure(h);
           doc.setFillColor(...hexToRgb(toneColor(ins.tone)));
-          doc.circle(M + 4, y + 6, 3, "F");
+          doc.circle(M + 4, y + 6.5, 3.2, "F");
           doc.setFont(FONT, "bold");
-          doc.setFontSize(8.5);
+          doc.setFontSize(9);
           doc.setTextColor(...hexToRgb(INK.dark));
-          doc.text(pdfSafe(String(ins.title)), M + 14, y + 8);
-          drawRich(bodyLines, M + 14, y + 18, 8, INK.muted, 1.45);
-          y += h + 3;
+          doc.text(pdfSafe(String(ins.title)), M + 15, y + 9);
+          drawRich(bodyLines, M + 15, y + 20, 8.5, INK.muted, 1.5);
+          track(M, y, CW, h, "cover-insight:" + ins.title);
+          y += h + 5;
         });
       }
     } else {
@@ -970,15 +994,19 @@
       addKpiQuad([
         { label: "Avg calories / workout", value: ys.workouts ? S.fmtNum(Math.round(ys.avgCal)) : "—", unit: "kcal", tone: "success" },
         { label: "Avg duration / workout", value: ys.workouts ? S.fmtNum(Math.round(ys.avgDur)) : "—", unit: "min", tone: "success" },
-        { label: "Current streak", value: st.current, unit: "days", tone: "info" },
-        { label: "Longest streak", value: ys.longestStreak, unit: "days", tone: "info" }
+        { label: "Current streak", value: st.current, unit: st.current === 1 ? "day" : "days", tone: "info" },
+        { label: "Longest streak", value: ys.longestStreak, unit: ys.longestStreak === 1 ? "day" : "days", tone: "info" }
       ]);
       y += 2;
       addText(compareYear
         ? "Changes are shown against " + compareYear + " when a comparison year with data was selected."
         : "No comparison year was available, so changes are not shown.",
         { size: 7.5, color: INK.muted });
-      // Training mix (composition)
+      // Training mix (composition). typeBreakdown counts each selected type on
+      // a workout (multi-type workouts appear once per type), so the total here
+      // is "type mentions", never the raw workout count — the labels say so.
+      // When "Other" is already one of the leading categories, the remaining
+      // tail is folded into it so the legend never shows two "Other" entries.
       const tb = S.typeBreakdown(workouts, year);
       if (tb.length) {
         y += 10;
@@ -986,20 +1014,29 @@
         const top = tb.slice(0, 6);
         const rest = tb.slice(6);
         const slices = top.map((t, i) => ({ label: t.type, value: t.count, color: donutColors[i % donutColors.length] }));
-        if (rest.length) slices.push({ label: "Other", value: rest.reduce((s, t) => s + t.count, 0), color: INK.muted });
-        const donutH = 130;
+        if (rest.length) {
+          const other = slices.find((s) => s.label === "Other");
+          const tail = rest.reduce((s, t) => s + t.count, 0);
+          if (other) other.value += tail;
+          else slices.push({ label: "Other", value: tail, color: INK.muted });
+        }
+        const mentionTotal = slices.reduce((s, sl) => s + sl.value, 0);
+        const donutH = 150;
         ensure(donutH);
         doc.setFont(FONT, "bold");
         doc.setFontSize(10);
         doc.setTextColor(...hexToRgb(INK.dark));
-        doc.text("Training mix by session count", M, y + 8);
-        donutChart(M + 92, y + 74, 46, slices, { centerLabel: "sessions" });
+        doc.text("Training mix by type mentions", M, y + 8);
+        donutChart(M + 96, y + 84, 50, slices, { centerLabel: "mentions" });
         y += donutH;
-        const topType = tb[0];
-        if (topType) {
-          addText(topType.type + " was your most common training type (" + Math.round(topType.pct) + "% of type mentions).",
+        const topSlice = slices.slice().sort((a, b) => b.value - a.value)[0];
+        if (topSlice) {
+          addText(topSlice.label + " was your most common training type (" +
+            Math.round((topSlice.value / mentionTotal) * 100) + "% of type mentions).",
             { size: 8.5, color: INK.muted, italic: true });
         }
+        addRich("Each workout counts once per type it was tagged with — **" + mentionTotal +
+          " mentions** across **" + ys.workouts + " workouts**.", { size: 8, color: INK.muted });
       }
     }
 
@@ -1013,13 +1050,13 @@
       const caps = S.chartCaptions(workouts, year);
       addChart((x, yy, w, h) => barChart(x, yy, w, h, labels,
         [{ name: "Workouts", values: ms.map((m) => m.workouts), color: INK.accent }],
-        { title: "Workouts per month", unit: "sessions" }), 170, caps.workouts || null);
+        { title: "Workouts per month", unit: "sessions" }), 190, caps.workouts || null);
       addChart((x, yy, w, h) => barChart(x, yy, w, h, labels,
         [{ name: "kcal", values: ms.map((m) => m.calories), color: INK.success }],
-        { title: "Calories per month", unit: "kcal", fmt: (v) => S.fmtNum(v) }), 170, caps.calories || null);
+        { title: "Calories per month", unit: "kcal", fmt: (v) => S.fmtNum(v) }), 190, caps.calories || null);
       addChart((x, yy, w, h) => barChart(x, yy, w, h, labels,
         [{ name: "min", values: ms.map((m) => m.duration), color: INK.info }],
-        { title: "Training time per month", unit: "minutes", fmt: (v) => S.fmtDuration(v) }), 170, caps.duration || null);
+        { title: "Training time per month", unit: "min", fmt: (v) => S.fmtDuration(v) }), 190, caps.duration || null);
       const sig = S.monthlyInsights(workouts, year);
       if (sig.length) {
         y += 4;
@@ -1045,13 +1082,61 @@
           m.duration ? S.fmtDuration(m.duration) : "—",
           m.workouts ? Math.round(m.avgCal) + " kcal" : "—"
         ]),
-        { widths: [58, 68, 80, 95, 92, 92], align: ["left", "right", "right", "right", "right", "right"] }
+        {
+          widths: [58, 68, 80, 95, 92, 92],
+          align: ["left", "right", "right", "right", "right", "right"],
+          rowH: 16,
+          footer: ["Total", ys.workouts, ys.days,
+            ys.calories ? S.fmtNum(ys.calories) : "—",
+            ys.duration ? S.fmtDuration(ys.duration) : "—",
+            ys.workouts ? Math.round(ys.avgCal) + " kcal" : "—"]
+        }
       );
-      y += 4;
-      const sig = S.monthlyInsights(workouts, year);
-      if (sig.length) {
-        addText("What stands out", { size: 9, bold: true, color: INK.dark });
-        sig.forEach((i) => addInsight(i));
+      // A compact at-a-glance strip derived straight from the table above.
+      // The narrative month-by-month signals already live in Section 3, so
+      // nothing here repeats those sentences — just the table's own highlights.
+      const withData = ms.filter((m) => m.days > 0);
+      if (withData.length) {
+        y += 8;
+        const busiest = withData.slice().sort((a, b) => b.workouts - a.workouts)[0];
+        const quietest = withData.slice().sort((a, b) => a.workouts - b.workouts)[0];
+        let jump = null;
+        const sorted = ms.filter((m) => m.workouts > 0).sort((a, b) => a.month - b.month);
+        for (let i = 1; i < sorted.length; i++) {
+          const d = sorted[i].workouts - sorted[i - 1].workouts;
+          if (d > 0 && (!jump || d > jump.delta)) jump = { delta: d, cur: sorted[i], prev: sorted[i - 1] };
+        }
+        const wkt = (n) => n + " workout" + (n === 1 ? "" : "s");
+        const hls = [
+          { k: "Busiest month", v: busiest.label + " · " + wkt(busiest.workouts), tone: INK.success },
+          { k: "Quietest month", v: quietest.label + " · " + wkt(quietest.workouts), tone: INK.warn },
+          { k: "Biggest climb", v: jump ? jump.prev.label + " → " + jump.cur.label + " · +" + jump.delta : "—", tone: INK.accent }
+        ];
+        const hlW = (CW - 24) / 3;
+        ensure(72);
+        hls.forEach((hl, hi) => {
+          const hx = M + hi * (hlW + 12);
+          doc.setFillColor(...hexToRgb(INK.light));
+          doc.roundedRect(hx, y, hlW, 64, 5, 5, "F");
+          doc.setFillColor(...hexToRgb(hl.tone));
+          doc.roundedRect(hx, y, 3, 64, 1.5, 1.5, "F");
+          doc.setFont(FONT, "bold");
+          doc.setFontSize(11);
+          doc.setTextColor(...hexToRgb(INK.dark));
+          doc.text(pdfSafe(hl.v), hx + 12, y + 26);
+          doc.setFont(FONT, "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(...hexToRgb(INK.muted));
+          doc.text(hl.k, hx + 12, y + 42);
+          track(hx, y, hlW, 64, "month-highlight:" + hl.k);
+        });
+        y += 72;
+        const zeroMonths = ms.filter((m) => m.workouts === 0).map((m) => m.label);
+        if (zeroMonths.length) {
+          addText("No workouts were recorded in " + zeroMonths.join(", ") +
+            ", so those months show 0 across the table — the totals above ignore them.",
+            { size: 8, color: INK.muted });
+        }
       }
     }
 
@@ -1083,10 +1168,37 @@
         { title: "Cumulative calories", unit: "kcal", noFill: true }), 165, null);
       const cin = S.comparisonInsights(workouts, cmp);
       if (cin.length) {
+        // The whole "reading" block is one unit: it is measured first and
+        // moves as a whole to the next page when it cannot fit, so a lone
+        // insight card never dangles at the bottom of the chart page.
+        const cardOpts = { titleSize: 10, bodySize: 9.5, pad: 16 };
+        const blockH = 48 + cin.reduce((a, i) => a + insightH(i, cardOpts) + 9, 0) + 40;
+        ensure(blockH);
+        y += 6;
+        addText("Reading the comparison", { size: 10, bold: true, color: INK.dark });
+        addRich("How **" + year + "** stacked up against **" + compareYear + "** month by month.",
+          { size: 8.5, color: INK.muted });
         y += 8;
-        addText("Reading the comparison", { size: 9.5, bold: true, color: INK.dark });
-        y += 3;
-        cin.forEach((i) => addInsight(i));
+        cin.forEach((i) => addInsight(i, cardOpts));
+        // One closing, data-derived synthesis of the four headline metrics.
+        const dirs = [];
+        ["workouts", "days", "calories", "duration"].forEach((key, ki) => {
+          const noun = ["workouts", "active days", "calories", "training time"][ki];
+          const r = cmp.totals[key];
+          if (r && r.a !== r.b && !(r.a === 0 && r.b === 0)) dirs.push({ noun, up: r.a > r.b });
+        });
+        const upN = dirs.filter((d) => d.up).map((d) => d.noun);
+        const downN = dirs.filter((d) => !d.up).map((d) => d.noun);
+        if (dirs.length) {
+          y += 2;
+          const list = (arr) => arr.length > 1 ? arr.slice(0, -1).join(", ") + " and " + arr[arr.length - 1] : arr[0];
+          let line = upN.length && !downN.length
+            ? "Every headline metric rose in **" + year + "** — **" + list(upN) + "** were all up."
+            : !upN.length && downN.length
+              ? "Every headline metric fell in **" + year + "** — **" + list(downN) + "** were all down."
+              : "The year gained on **" + list(upN) + "** while **" + list(downN) + "** fell.";
+          addRich(line, { size: 9, color: INK.dark });
+        }
       }
     }
 
@@ -1133,11 +1245,14 @@
           doc.setFontSize(7);
           doc.setTextColor(...hexToRgb(INK.muted));
           doc.text(sd.k, sx + 10, yBefore + 30);
+          track(sx, yBefore, statW, 40, "meas-stat:" + sd.k);
         });
         y = yBefore + 42;
+        // No area fill for measurements — the trend line is the whole story,
+        // and a large filled shape under a subtle trend visually dominates it.
         addChart((x, yy, w, h) => lineChart(x, yy, w, h, labelsM,
           [{ name: s.type, values: pts.map((p) => p.value), color: colors[i % colors.length] }],
-          { title: s.type + " over time", unit: unit.trim() || undefined }), 140, cap);
+          { title: s.type + " over time", unit: unit.trim() || undefined, noFill: true }), 140, cap);
         if (i < mStats.length - 1) y += 6;
       });
       if (mSingles.length) {
@@ -1153,7 +1268,7 @@
       beginPage("Consistency & Streaks - " + year, "How regularly you trained");
       addSection(7, "Consistency & Streaks", "Frequency, streaks and the rhythm of your year");
       const grid = S.yearActivityGrid(workouts, year);
-      const heatH = 116;
+      const heatH = 138;
       ensure(heatH + 14);
       heatmapChart(M, y + 12, CW, heatH, grid);
       y += heatH + 16;
@@ -1184,6 +1299,7 @@
         doc.setFontSize(7);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(sd.k, sx + 10, y + 32);
+        track(sx, y, statW, 44, "stat:" + sd.k);
       });
       y += 56;
       addText("The heatmap shows every training day of the year; darker cells are higher-calorie sessions. The calendar starts on a Monday so each column is one full week.",
@@ -1199,21 +1315,22 @@
     } else {
       const take = S.keyTakeaways(workouts, measurements, year, compareYear);
       take.forEach((ins, i) => {
-        ensure(46);
+        ensure(64);
+        const bodyLines = richWrap(richSegments(ins.body), CW - 44, 9);
+        const h = 18 + 9.5 * 1.3 + bodyLines.length * 9 * 1.5 + 14;
         doc.setFillColor(...hexToRgb(toneColor(ins.tone)));
-        doc.circle(M + 8, y + 12, 7, "F");
+        doc.circle(M + 11, y + 18, 9, "F");
         doc.setFont(FONT, "bold");
-        doc.setFontSize(10);
+        doc.setFontSize(11);
         doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), M + 8, y + 15, { align: "center" });
-        const bodyLines = richWrap(richSegments(ins.body), CW - 40, 8.5);
-        const h = 14 + bodyLines.length * 8.5 * 1.45;
+        doc.text(String(i + 1), M + 11, y + 22, { align: "center" });
         doc.setFont(FONT, "bold");
-        doc.setFontSize(9);
+        doc.setFontSize(9.5);
         doc.setTextColor(...hexToRgb(INK.dark));
-        doc.text(pdfSafe(String(ins.title)), M + 26, y + 12);
-        drawRich(bodyLines, M + 26, y + 24, 8.5, INK.muted, 1.45);
-        y += h;
+        doc.text(pdfSafe(String(ins.title)), M + 30, y + 17);
+        drawRich(bodyLines, M + 30, y + 31, 9, INK.muted, 1.5);
+        track(M, y, CW, h, "takeaway:" + String(i + 1));
+        y += h + 8;
       });
       y += 4;
       addText("Report generated locally on this device. All figures are computed from your own records; this report is an estimate of your progress, not a medical assessment.",
