@@ -669,6 +669,12 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .swatch:hover { border-color: var(--sw); color: var(--text); }
 .swatch .sw-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--sw); }
 .swatch.is-active { border-color: var(--sw); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw) 30%, transparent); }
+.accent-picker { display: flex; align-items: center; }
+.accent-current { padding-right: 11px; }
+.accent-current .chev { display: inline-flex; margin-left: 3px; }
+.accent-current .chev svg, .swatch-close svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.accent-current .chev svg { transform: rotate(-90deg); }
+.swatch-close { padding: 6px 10px; }
 .goal-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 16px; }
 .goal-form .goal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
 .goal-actions { display: flex; align-items: flex-end; }

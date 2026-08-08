@@ -348,10 +348,15 @@
           if (next) {
             document.documentElement.setAttribute("data-accent", next);
             Focus.Store.setSetting("accent", next);
+            Focus.UI.state.accentOpen = false;
             renderCurrent();
           }
           break;
         }
+        case "toggle-accent":
+          Focus.UI.state.accentOpen = !Focus.UI.state.accentOpen;
+          renderCurrent();
+          break;
         case "set-animations": {
           const on = target.dataset.setAnimations === "on";
           Focus.Store.setSetting("animations", on);

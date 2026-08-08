@@ -21,7 +21,8 @@
     anaA: null,
     anaB: null,
     importPending: null,
-    qaMode: "workout"
+    qaMode: "workout",
+    accentOpen: false
   };
 
   /* ---------------- type styles ---------------- */
@@ -1019,6 +1020,7 @@
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
+    const curColor = (ACCENTS.find(([n]) => n === accent) || ACCENTS[0])[1];
     document.getElementById("settingsBody").innerHTML = `
       <div class="settings-grid">
         <div class="card data-card">
@@ -1030,11 +1032,15 @@
               <button class="seg-btn ${theme === "dark" ? "is-active" : ""}" data-action="set-theme" data-set-theme="dark">🌙 Dark</button>
               <button class="seg-btn ${theme === "light" ? "is-active" : ""}" data-action="set-theme" data-set-theme="light">☀️ Light</button>
             </div>
-          </div>
-          <div class="setting-row">
+          </div>            <div class="setting-row">
             <div class="setting-label"><b>Accent color</b><span>Charts, buttons and the calendar heat follow this color.</span></div>
-            <div class="swatch-row" role="group" aria-label="Accent color">
-              ${ACCENTS.map(([name, color]) => `<button class="swatch ${accent === name ? "is-active" : ""}" data-action="set-accent" data-accent="${name}" title="${name}" style="--sw:${color}"><span class="sw-dot"></span>${name}</button>`).join("")}
+            <div class="accent-picker ${state.accentOpen ? "open" : ""}">
+              ${state.accentOpen ? `
+                <div class="swatch-row" role="group" aria-label="Accent color">
+                  ${ACCENTS.map(([name, color]) => `<button class="swatch ${accent === name ? "is-active" : ""}" data-action="set-accent" data-accent="${name}" title="${name}" style="--sw:${color}"><span class="sw-dot"></span>${name}</button>`).join("")}
+                  <button class="swatch swatch-close" data-action="toggle-accent" title="Collapse" aria-label="Collapse">${ICONS.back.replace("M15 18l-6-6 6-6", "M6 9l6 6 6-6")}</button>
+                </div>` : `
+                <button class="swatch is-active accent-current" data-action="toggle-accent" title="Change accent color" style="--sw:${curColor}"><span class="sw-dot"></span>${accent}<span class="chev">${ICONS.back}</span></button>`}
             </div>
           </div>
           <div class="setting-row">
