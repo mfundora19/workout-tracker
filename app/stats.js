@@ -502,6 +502,394 @@
     ];
   }
 
+  /* ---------------- report insights engine ---------------- */
+  /*
+   * Pure, data-driven layer between raw records and the PDF report (and any
+   * future consumer). Every function here inspects the data and returns
+   * structured insights of the form:
+   *   { type, metric, title, body, tone, magnitude?, period? }
+   * where type ∈ {improvement, decline, consistency, milestone, peak, trough,
+   * trend, comparison, measurement, pattern} and tone ∈ {positive, negative,
+   * warn, info, neutral}. No sentence is ever emitted unless the data actually
+   * supports it — callers decide how to present (or drop) each insight.
+   */
+
+  /** Safe percentage change; null when the base is zero or missing. */
+  function pctChange(cur, prev) {
+    const a = Number(cur), b = Number(prev);
+    if (!isFinite(a) || !isFinite(b) || b === 0) return null;
+    return ((a - b) / Math.abs(b)) * 100;
+  }
+
+  function mkInsight(type, metric, title, body, tone, extra) {
+    return Object.assign({ type, metric, title, body, tone }, extra || {});
+  }
+
+  /** "1 workout" vs "3 workouts" — keeps every insight grammatically correct. */
+  function plural(n, word) {
+    return n + " " + word + (n === 1 ? "" : "s");
+  }
+
+  /** Derived monthly analysis used by several insight generators. */
+  function monthlyAnalysis(ms) {
+    const withData = ms.filter((m) => m.days > 0);
+    if (!withData.length) return null;
+    const by = (fn) => withData.slice().sort((a, b) => fn(b) - fn(a));
+    const best = by((m) => m.days)[0];
+    const mostCal = by((m) => m.calories)[0];
+    const mostConsistent = by((m) => m.bestStreak)[0];
+    const moms = [];
+    for (let i = 1; i < withData.length; i++) {
+      moms.push({ cur: withData[i], prev: withData[i - 1], delta: withData[i].workouts - withData[i - 1].workouts });
+    }
+    const bestMom = moms.length ? moms.slice().sort((a, b) => b.delta - a.delta)[0] : null;
+    const worstMom = moms.length ? moms.slice().sort((a, b) => a.delta - b.delta)[0] : null;
+    return { best, mostCal, mostConsistent, bestMom, worstMom, monthsWithData: withData.length };
+  }
+
+  /** Overall volume, concentration and peaks/troughs for a year. */
+  function volumeInsights(workouts, year) {
+    const ys = yearlyStats(workouts, year);
+    const out = [];
+    if (ys.workouts <= 0) return out;
+    const perMonth = ys.monthsWithData ? Math.round(ys.workouts / ys.monthsWithData) : 0;
+    out.push(mkInsight("volume", "workouts",
+      plural(ys.workouts, "workout") + " in " + year,
+      "You trained on " + plural(ys.days, "active day") +
+        ", averaging " + plural(perMonth, "workout") +
+        " per active month across " + ys.monthsWithData + " of 12 months.",
+      ys.workouts >= 48 ? "positive" : ys.workouts < 12 ? "negative" : "neutral",
+      { magnitude: ys.workouts }));
+    if (ys.monthsWithData === 1) {
+      const only = monthlyStats(workouts, year).find((m) => m.days > 0);
+      out.push(mkInsight("pattern", "concentration",
+        "All training fell in " + (only ? only.label : "one month"),
+        "The rest of the year has no recorded workouts — a regular weekly rhythm would smooth this out.",
+        "warn"));
+    } else if (ys.monthsWithData >= 2 && ys.bestMonth && ys.worstMonth && ys.bestMonth.label !== ys.worstMonth.label) {
+      out.push(mkInsight("peak", "activity",
+        "Strongest month: " + ys.bestMonth.label,
+        ys.bestMonth.label + " was your most active month with " + ys.bestMonth.days +
+          " workout day" + (ys.bestMonth.days === 1 ? "" : "s") + ".",
+        "positive"));
+      out.push(mkInsight("trough", "activity",
+        "Quietest month: " + ys.worstMonth.label,
+        ys.worstMonth.label + " had the fewest workouts of the year (" + ys.worstMonth.workouts + ").",
+        "warn"));
+    }
+    return out;
+  }
+
+  /** Month-to-month progress signals (best/worst, jumps, consistency). */
+  function monthlyInsights(workouts, year) {
+    const ma = monthlyAnalysis(monthlyStats(workouts, year));
+    const out = [];
+    if (!ma) return out;
+    // The current month is still in progress — never present a partial month's
+    // decline as a completed fact.
+    const now = todayISO();
+    const isCurMonth = (m) => yearOf(now) === year && monthOf(now) === m.month;
+    if (ma.monthsWithData >= 2 && ma.bestMom && ma.bestMom.delta > 0) {
+      out.push(mkInsight("improvement", "workouts",
+        "Biggest month-over-month jump: " + ma.bestMom.cur.label,
+        ma.bestMom.cur.label + " added " + ma.bestMom.delta + " workout" + (ma.bestMom.delta === 1 ? "" : "s") +
+          " vs " + ma.bestMom.prev.label + " (" + ma.bestMom.prev.workouts + " to " + ma.bestMom.cur.workouts + ").",
+        "positive"));
+    }
+    if (ma.monthsWithData >= 2 && ma.worstMom && ma.worstMom.delta < 0 && !isCurMonth(ma.worstMom.cur)) {
+      out.push(mkInsight("decline", "workouts",
+        "Largest month-over-month drop: " + ma.worstMom.cur.label,
+        ma.worstMom.cur.label + " fell " + Math.abs(ma.worstMom.delta) + " workout" +
+          (Math.abs(ma.worstMom.delta) === 1 ? "" : "s") + " vs " + ma.worstMom.prev.label + ".",
+        "warn"));
+    }
+    if (ma.mostConsistent && ma.mostConsistent.bestStreak >= 3) {
+      out.push(mkInsight("consistency", "streak",
+        "Most consistent stretch: " + ma.mostConsistent.label,
+        ma.mostConsistent.label + " held your longest in-month streak of " + ma.mostConsistent.bestStreak +
+          " consecutive day" + (ma.mostConsistent.bestStreak === 1 ? "" : "s") + ".",
+        "positive"));
+    }
+    if (ma.mostCal && ma.mostCal.calories > 0) {
+      out.push(mkInsight("peak", "calories",
+        "Highest-calorie month: " + ma.mostCal.label,
+        ma.mostCal.label + " led the year with " + fmtNum(ma.mostCal.calories) + " kcal.",
+        "neutral"));
+    }
+    return out;
+  }
+
+  /** Year-over-year comparison insights (only meaningful when both years have data). */
+  function comparisonInsights(workouts, cmp) {
+    const out = [];
+    if (!cmp) return out;
+    const t = cmp.totals;
+    const add = (metric, noun, fmt) => {
+      const row = t[metric];
+      if (!row) return;
+      const pct = pctChange(row.a, row.b);
+      if (row.a === 0 && row.b === 0) return;
+      const dir = row.diff > 0 ? "up" : row.diff < 0 ? "down" : "flat";
+      const pctPart = pct == null
+        ? (row.a > 0 && row.b === 0 ? "up from zero" : "unchanged")
+        : (pct > 0 ? "+" : "") + Math.round(pct) + "%";
+      out.push(mkInsight("comparison", metric,
+        fmt(row.a) + " " + noun + " (" + pctPart + (pct != null ? " vs " + cmp.yearB : "") + ")",
+        noun.charAt(0).toUpperCase() + noun.slice(1) + " went from " + fmt(row.b) + " in " + cmp.yearB +
+          " to " + fmt(row.a) + " in " + cmp.yearA + ".",
+        dir === "up" ? "positive" : dir === "down" ? "negative" : "neutral",
+        { magnitude: Math.round(row.diff) }));
+    };
+    add("workouts", "workouts", (v) => String(v));
+    add("days", "active days", (v) => String(v));
+    add("calories", "kcal", (v) => fmtNum(v));
+    add("duration", "min of training", (v) => fmtNum(v));
+    // Which months drove the change?
+    const deltas = cmp.months
+      .map((m) => ({ month: m.label, delta: m.a.workouts - m.b.workouts }))
+      .filter((d) => d.delta !== 0)
+      .sort((a, b) => b.delta - a.delta);
+    if (deltas.length) {
+      const top = deltas[0], bottom = deltas[deltas.length - 1];
+      if (top.delta > 0) {
+        out.push(mkInsight("trend", "driver",
+          "Driven by " + top.month,
+          top.month + " contributed the largest month-over-year gain (" + top.delta + " workout" +
+            (top.delta === 1 ? "" : "s") + " more than " + cmp.yearB + ").",
+          "positive"));
+      }
+      if (bottom.delta < 0 && bottom.month !== top.month) {
+        out.push(mkInsight("decline", "driver",
+          "Weakest vs " + cmp.yearB + ": " + bottom.month,
+          bottom.month + " was " + Math.abs(bottom.delta) + " workout" + (Math.abs(bottom.delta) === 1 ? "" : "s") +
+            " behind " + cmp.yearB + ".",
+          "warn"));
+      }
+    }
+    // Consistency change (months with at least one workout day).
+    const mA = monthlyStats(workouts, cmp.yearA).filter((m) => m.days > 0).length;
+    const mB = monthlyStats(workouts, cmp.yearB).filter((m) => m.days > 0).length;
+    if (mA !== mB) {
+      out.push(mkInsight("consistency", "months",
+        "Active months: " + mA + " vs " + mB,
+        "You trained in " + mA + " month" + (mA === 1 ? "" : "s") + " in " + cmp.yearA +
+          " compared with " + mB + " in " + cmp.yearB + ".",
+        mA > mB ? "positive" : "warn"));
+    }
+    return out;
+  }
+
+  /** Measurement trends for a year, kept neutral (never good/bad). */
+  function measurementInsights(records, year) {
+    const inYear = records.filter((r) => r.date.slice(0, 4) === String(year));
+    const stats = measurementStats(inYear);
+    const out = [];
+    for (const s of stats) {
+      if (s.count < 2) continue;
+      const delta = Number(s.latest.value) - Number(s.first.value);
+      const pct = pctChange(s.latest.value, s.first.value);
+      const dirWord = delta < -0.0001 ? "decreased" : delta > 0.0001 ? "increased" : "held steady";
+      const unit = s.unit ? " " + s.unit : "";
+      let body = s.type + " " + dirWord + " from " + fmtNum(s.first.value, 1) + unit + " (" +
+        shortDate(s.first.date) + ") to " + fmtNum(s.latest.value, 1) + unit + " (" + shortDate(s.latest.date) + ")";
+      if (pct != null && Math.abs(delta) > 0.0001) body += ", a " + Math.round(Math.abs(pct) * 10) / 10 + "% change";
+      if (s.count >= 3) body += ". Across " + s.count + " readings it ranged " + fmtNum(s.min, 1) + " to " + fmtNum(s.max, 1) + unit;
+      out.push(mkInsight("measurement", s.type,
+        s.type + ": " + fmtNum(s.latest.value, 1) + unit,
+        body + ".",
+        "info",
+        { magnitude: Math.round(delta * 10) / 10 }));
+    }
+    return out;
+  }
+
+  /** Consistency signals: frequency, streaks, longest inactivity gap. */
+  function consistencyInsights(workouts, year) {
+    const inYear = workouts.filter((w) => yearOf(w.date) === year);
+    const days = new Set(inYear.map((w) => w.date));
+    const sorted = Array.from(days).sort();
+    const out = [];
+    if (!sorted.length) return out;
+    const totalDays = dayOfYear(year + "-12-31");
+    const activePct = (sorted.length / totalDays) * 100;
+    let maxGap = 0, gapFrom = null, gapTo = null;
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = Math.round((parse(sorted[i]) - parse(sorted[i - 1])) / 86400000) - 1;
+      if (gap > maxGap) { maxGap = gap; gapFrom = sorted[i - 1]; gapTo = sorted[i]; }
+    }
+    out.push(mkInsight("consistency", "frequency",
+      "Trained on " + (activePct < 1 ? "less than 1%" : Math.round(activePct) + "%") + " of days",
+      plural(sorted.length, "active day") + " across " + year +
+        (maxGap > 0 ? ", with a longest break of " + plural(maxGap, "day") +
+          " (" + shortDate(gapFrom) + " to " + shortDate(gapTo) + ")" : "") + ".",
+      activePct >= 25 ? "positive" : activePct >= 10 ? "neutral" : "warn"));
+    const longest = longestStreakInSet(days);
+    if (longest >= 3) {
+      out.push(mkInsight("milestone", "streak",
+        "Longest streak: " + longest + " days",
+        "Your best run of consecutive training days inside " + year + ".",
+        "positive"));
+    }
+    const cur = streaks(workouts, todayISO()).current;
+    if (cur >= 3) {
+      out.push(mkInsight("consistency", "streak",
+        "Current streak: " + cur + " days",
+        "As of today you have trained " + cur + " days in a row.",
+        "positive"));
+    }
+    return out;
+  }
+
+  /**
+   * One-line analytical captions for the three monthly charts, derived
+   * directly from the monthly aggregates (peak, quietest, biggest jump).
+   * The current, still-incomplete month is worded "so far" when it is the
+   * quietest, so captions never overstate a partial month.
+   */
+  function chartCaptions(workouts, year) {
+    const ms = monthlyStats(workouts, year);
+    const withData = ms.filter((m) => m.days > 0);
+    const out = { workouts: "", calories: "", duration: "" };
+    if (!withData.length) return out;
+    const now = todayISO();
+    const isCurMonth = (m) => yearOf(now) === year && monthOf(now) === m.month;
+    const best = withData.reduce((a, b) => (a.days >= b.days ? a : b));
+    const quiet = withData.reduce((a, b) => (a.workouts <= b.workouts ? a : b));
+    const mostCal = withData.reduce((a, b) => (a.calories >= b.calories ? a : b));
+    const mostDur = withData.reduce((a, b) => (a.duration >= b.duration ? a : b));
+    const sorted = withData.slice().sort((a, b) => a.month - b.month);
+    let bestMom = null;
+    for (let i = 1; i < sorted.length; i++) {
+      const d = sorted[i].workouts - sorted[i - 1].workouts;
+      if (d > 0 && (!bestMom || d > bestMom.delta)) bestMom = { delta: d, cur: sorted[i], prev: sorted[i - 1] };
+    }
+    out.workouts = (best ? best.label + " was your most active month (" + best.days + " workout day" + (best.days === 1 ? "" : "s") + "). " : "") +
+      (quiet && quiet.label !== best.label
+        ? (isCurMonth(quiet) ? quiet.label + " has " + quiet.workouts + " workout" + (quiet.workouts === 1 ? "" : "s") + " so far this month. "
+          : quiet.label + " had the fewest workouts (" + quiet.workouts + "). ")
+        : "") +
+      (bestMom ? "Workout count climbed most between " + bestMom.prev.label + " and " + bestMom.cur.label + " (+" + bestMom.delta + ")." : "");
+    out.calories = mostCal && mostCal.calories > 0 ? mostCal.label + " led in calories with " + fmtNum(mostCal.calories) + " kcal." : "";
+    out.duration = mostDur && mostDur.duration > 0 ? mostDur.label + " led in training time with " + fmtDuration(mostDur.duration) + "." :
+      withData.length ? "No training duration was recorded in " + year + "." : "";
+    return out;
+  }
+
+  /** Cover-page narrative: 2-3 short paragraphs that only state what the data shows. */
+  function execSummary(workouts, measurements, year, compareYear) {
+    const ys = yearlyStats(workouts, year);
+    const paras = [];
+    if (ys.workouts <= 0) {
+      paras.push({ title: "No workouts recorded", body: "There is no workout data for " + year + ". This report covers only what you logged." });
+      return paras;
+    }
+    const perMonth = ys.monthsWithData ? Math.round(ys.workouts / ys.monthsWithData) : 0;
+    let s = "You completed " + plural(ys.workouts, "workout") + " across " + plural(ys.days, "active day") +
+      ", averaging " + plural(perMonth, "workout") +
+      " per active month" + (ys.monthsWithData < 12 ? " — training was concentrated in " + ys.monthsWithData + " of 12 months" : "") +
+      ". " + (ys.duration > 0 ? "Total training time reached " + fmtDuration(ys.duration) + " and you burned " + fmtCal(ys.calories) + "." : "You burned " + fmtCal(ys.calories) + " in total.");
+    paras.push({ title: "The year in numbers", body: s });
+    if (compareYear && compareYear !== year) {
+      const cmp = compareYears(workouts, year, compareYear);
+      const p = cmp.totals.workouts;
+      const pct = pctChange(p.a, p.b);
+      let c = "Compared with " + cmp.yearB + ", workout volume " +
+        (pct == null ? (p.a > 0 ? "went from zero to " + p.a : "was unchanged") :
+          pct > 0 ? "rose " + Math.round(pct) + "%" : pct < 0 ? "fell " + Math.round(Math.abs(pct)) + "%" : "held steady") +
+        " (" + p.b + " to " + p.a + " workouts).";
+      const ad = cmp.totals.duration.a && cmp.totals.workouts.a ? cmp.totals.duration.a / cmp.totals.workouts.a : null;
+      const bd = cmp.totals.duration.b && cmp.totals.workouts.b ? cmp.totals.duration.b / cmp.totals.workouts.b : null;
+      if (ad != null && bd != null) {
+        const dp = pctChange(ad, bd);
+        if (dp != null && Math.abs(dp) > 0.5) {
+          c += " Average session length " + (dp > 0 ? "grew " : "shrank ") + Math.round(Math.abs(dp)) + "%.";
+        }
+      }
+      paras.push({ title: "Year over year", body: c });
+    }
+    const cons = consistencyInsights(workouts, year);
+    if (cons.length) {
+      paras.push({ title: "Consistency", body: cons.map((i) => i.body).join(" ") });
+    }
+    return paras;
+  }
+
+  /** 3-7 closing takeaways, ordered by importance. */
+  function keyTakeaways(workouts, measurements, year, compareYear) {
+    const out = [];
+    const ys = yearlyStats(workouts, year);
+    if (ys.workouts > 0) {
+      out.push(mkInsight("milestone", "workouts",
+        plural(ys.workouts, "workout") + " logged",
+        "Across " + plural(ys.days, "active day") + " in " + year + ".", "positive"));
+    }
+    if (ys.bestMonth && ys.monthsWithData >= 2) {
+      out.push(mkInsight("peak", "activity",
+        "Peak month: " + ys.bestMonth.label,
+        ys.bestMonth.label + " was your most active month with " + ys.bestMonth.days + " workout days.", "positive"));
+    }
+    if (ys.longestStreak >= 3) {
+      out.push(mkInsight("milestone", "streak",
+        ys.longestStreak + "-day best streak",
+        "Your longest run of consecutive training days this year.", "positive"));
+    }
+    if (compareYear && compareYear !== year) {
+      const cmp = compareYears(workouts, year, compareYear);
+      const p = cmp.totals.workouts;
+      const pct = pctChange(p.a, p.b);
+      if (pct != null && pct !== 0) {
+        out.push(mkInsight("comparison", "workouts",
+          (pct > 0 ? "+" : "") + Math.round(pct) + "% workouts vs " + cmp.yearB,
+          "Workout volume went from " + p.b + " to " + p.a + " sessions.",
+          pct > 0 ? "positive" : "warn"));
+      }
+    }
+    const meas = measurementInsights(measurements, year).filter((i) => i.type === "measurement");
+    if (meas.length) out.push(meas[0]);
+    if (ys.monthsWithData >= 1 && ys.monthsWithData < 12) {
+      const inactive = 12 - ys.monthsWithData;
+      out.push(mkInsight("pattern", "opportunity",
+        inactive + " month" + (inactive === 1 ? "" : "s") + " with no training",
+        "Scheduling workouts in quieter months would raise consistency.", "warn"));
+    }
+    return out.slice(0, 7);
+  }
+
+  /**
+   * Activity grid for a year: 7-day weeks (Mon-Sun) aligned so Jan 1 always
+   * starts a fresh week column, for heatmap-style visualisations. Cells are
+   * null when outside the year, otherwise { date, level, workouts } where
+   * level = intensityForCalories. Also returns the week index where each
+   * month first appears (for month labels).
+   */
+  function yearActivityGrid(workouts, year) {
+    const agg = dayAggregates(workouts);
+    const firstDow = parse(year + "-01-01").getDay();
+    const offset = (firstDow + 6) % 7;
+    const weeks = [];
+    const monthAtWeek = [];
+    let d = addDays(year + "-01-01", -offset);
+    let guard = 0;
+    while (yearOf(d) <= year && guard < 60) {
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const iso = d;
+        if (yearOf(iso) === year) {
+          const a = agg.get(iso);
+          cells.push({ date: iso, level: a ? intensityForCalories(a.calories) : 0, workouts: a ? a.count : 0 });
+        } else {
+          cells.push(null);
+        }
+        d = addDays(d, 1);
+      }
+      const firstCell = cells.find((c) => c);
+      weeks.push(cells);
+      monthAtWeek.push(firstCell ? { month: monthOf(firstCell.date), label: MONTHS_SHORT[monthOf(firstCell.date) - 1] } : null);
+      guard++;
+    }
+    return { weeks, monthAtWeek };
+  }
+
   /* ---------------- calendar helpers ---------------- */
 
   /** Intensity level 0..4 for a day, based on total calories. */
@@ -576,6 +964,8 @@
     typeBreakdown, measurementStats, measurementSeries, intensityForCalories,
     toCm, toKg, convertTo, latestOfType, calcBMI, bmiCategory, navyNeeds,
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
+    pctChange, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
+    measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
     monthDayMap, availableYears, longestStreakInSet,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
