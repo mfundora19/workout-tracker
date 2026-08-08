@@ -27,14 +27,19 @@
   /* ---------------- type styles ---------------- */
 
   const TYPE_STYLES = {
-    Strength: { color: "#6366f1", emoji: "💪" },
+    Back: { color: "#8b5cf6", emoji: "🧗" },
+    Chest: { color: "#6366f1", emoji: "🏋️" },
+    Legs: { color: "#f97316", emoji: "🦵" },
+    Strength: { color: "#a855f7", emoji: "💪" },
+    Arms: { color: "#0ea5e9", emoji: "🦾" },
     Cardio: { color: "#f43f5e", emoji: "❤️" },
-    Running: { color: "#f97316", emoji: "🏃" },
+    // Legacy types — still styled so historical records keep their colors.
+    Running: { color: "#eab308", emoji: "🏃" },
     Walking: { color: "#14b8a6", emoji: "🚶" },
-    Cycling: { color: "#0ea5e9", emoji: "🚴" },
+    Cycling: { color: "#06b6d4", emoji: "🚴" },
     Swimming: { color: "#38bdf8", emoji: "🏊" },
     Sports: { color: "#84cc16", emoji: "🏀" },
-    HIIT: { color: "#a855f7", emoji: "⚡" },
+    HIIT: { color: "#d946ef", emoji: "⚡" },
     Other: { color: "#64748b", emoji: "✳️" }
   };
   const PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#0ea5e9", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#64748b", "#84cc16", "#f43f5e", "#06b6d4"];
@@ -158,7 +163,7 @@
 
   /* ---------------- workout form ---------------- */
 
-  const TYPE_OPTIONS = ["Strength", "Cardio", "Running", "Walking", "Cycling", "Swimming", "Sports", "HIIT", "Other"];
+  const TYPE_OPTIONS = ["Back", "Chest", "Legs", "Strength", "Arms", "Cardio"];
 
   function workoutFormHTML(values = {}) {
     const types = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
