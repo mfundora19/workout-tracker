@@ -836,7 +836,7 @@
           <div class="t"><b>${cal.duration ? St().fmtDuration(cal.duration) : "—"}</b><span>time</span></div>
         </div>
         ${dayGoalsHTML(cal.calories, cal.duration)}
-        <div>
+        <div class="day-wk-list">
           ${all.map((w) => {
             return `
             <div class="wk-item">
@@ -1003,12 +1003,22 @@
    * SETTINGS
    * =================================================================== */
 
+  const ACCENTS = [
+    ["violet", "#818cf8"],
+    ["orange", "#fb923c"],
+    ["green", "#34d399"],
+    ["red", "#f87171"],
+    ["blue", "#38bdf8"]
+  ];
+
   function renderSettings() {
     const s = Store().settings;
     const theme = document.documentElement.getAttribute("data-theme") || "dark";
     const wt = s.weightUnit || "lb";
     const g = s.goals || {};
     const w = Store().workouts.length, m = Store().measurements.length;
+    const accent = s.accent || "violet";
+    const anim = s.animations !== false;
     document.getElementById("settingsBody").innerHTML = `
       <div class="settings-grid">
         <div class="card data-card">
@@ -1019,6 +1029,19 @@
             <div class="seg" role="group" aria-label="Theme">
               <button class="seg-btn ${theme === "dark" ? "is-active" : ""}" data-action="set-theme" data-set-theme="dark">🌙 Dark</button>
               <button class="seg-btn ${theme === "light" ? "is-active" : ""}" data-action="set-theme" data-set-theme="light">☀️ Light</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Accent color</b><span>Charts, buttons and the calendar heat follow this color.</span></div>
+            <div class="swatch-row" role="group" aria-label="Accent color">
+              ${ACCENTS.map(([name, color]) => `<button class="swatch ${accent === name ? "is-active" : ""}" data-action="set-accent" data-accent="${name}" title="${name}" style="--sw:${color}"><span class="sw-dot"></span>${name}</button>`).join("")}
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Motion</b><span>Subtle transitions and entrance animations across the app.</span></div>
+            <div class="seg" role="group" aria-label="Motion">
+              <button class="seg-btn ${anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="on">✨ On</button>
+              <button class="seg-btn ${!anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="off">Off</button>
             </div>
           </div>
         </div>

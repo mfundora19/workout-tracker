@@ -79,6 +79,18 @@ html[data-theme="dark"] {
   --tooltip-text: #171a26;
 }
 
+/* ---------- Accent colors (picked in Settings > Appearance) ---------- */
+html[data-accent="violet"] { --accent: #6366f1; --accent-2: #8b5cf6; --accent-soft: rgba(99, 102, 241, .12); --heat-1: rgba(99, 102, 241, .16); --heat-2: rgba(99, 102, 241, .38); --heat-3: rgba(99, 102, 241, .62); --heat-4: rgba(99, 102, 241, .88); }
+html[data-accent="violet"][data-theme="dark"] { --accent: #818cf8; --accent-2: #a78bfa; --accent-soft: rgba(129, 140, 248, .14); --heat-1: rgba(129, 140, 248, .18); --heat-2: rgba(129, 140, 248, .4); --heat-3: rgba(129, 140, 248, .65); --heat-4: rgba(129, 140, 248, .92); }
+html[data-accent="orange"] { --accent: #f97316; --accent-2: #f59e0b; --accent-soft: rgba(249, 115, 22, .12); --heat-1: rgba(249, 115, 22, .16); --heat-2: rgba(249, 115, 22, .38); --heat-3: rgba(249, 115, 22, .62); --heat-4: rgba(249, 115, 22, .88); }
+html[data-accent="orange"][data-theme="dark"] { --accent: #fb923c; --accent-2: #fbbf24; --accent-soft: rgba(251, 146, 60, .14); --heat-1: rgba(251, 146, 60, .18); --heat-2: rgba(251, 146, 60, .4); --heat-3: rgba(251, 146, 60, .65); --heat-4: rgba(251, 146, 60, .92); }
+html[data-accent="green"] { --accent: #16a34a; --accent-2: #22c55e; --accent-soft: rgba(22, 163, 74, .12); --heat-1: rgba(22, 163, 74, .16); --heat-2: rgba(22, 163, 74, .38); --heat-3: rgba(22, 163, 74, .62); --heat-4: rgba(22, 163, 74, .88); }
+html[data-accent="green"][data-theme="dark"] { --accent: #4ade80; --accent-2: #86efac; --accent-soft: rgba(74, 222, 128, .13); --heat-1: rgba(74, 222, 128, .18); --heat-2: rgba(74, 222, 128, .4); --heat-3: rgba(74, 222, 128, .65); --heat-4: rgba(74, 222, 128, .92); }
+html[data-accent="red"] { --accent: #ef4444; --accent-2: #f43f5e; --accent-soft: rgba(239, 68, 68, .12); --heat-1: rgba(239, 68, 68, .16); --heat-2: rgba(239, 68, 68, .38); --heat-3: rgba(239, 68, 68, .62); --heat-4: rgba(239, 68, 68, .88); }
+html[data-accent="red"][data-theme="dark"] { --accent: #f87171; --accent-2: #fb7185; --accent-soft: rgba(248, 113, 113, .13); --heat-1: rgba(248, 113, 113, .18); --heat-2: rgba(248, 113, 113, .4); --heat-3: rgba(248, 113, 113, .65); --heat-4: rgba(248, 113, 113, .92); }
+html[data-accent="blue"] { --accent: #0ea5e9; --accent-2: #06b6d4; --accent-soft: rgba(14, 165, 233, .12); --heat-1: rgba(14, 165, 233, .16); --heat-2: rgba(14, 165, 233, .38); --heat-3: rgba(14, 165, 233, .62); --heat-4: rgba(14, 165, 233, .88); }
+html[data-accent="blue"][data-theme="dark"] { --accent: #38bdf8; --accent-2: #22d3ee; --accent-soft: rgba(56, 189, 248, .14); --heat-1: rgba(56, 189, 248, .18); --heat-2: rgba(56, 189, 248, .4); --heat-3: rgba(56, 189, 248, .65); --heat-4: rgba(56, 189, 248, .92); }
+
 /* ---------- Base ---------- */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -396,6 +408,13 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .wk-item .grow { flex: 1; min-width: 0; }
 .wk-item .grow b { font-size: 14px; }
 .wk-item .grow p { margin: 1px 0 0; font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Calendar day panel: workouts as compact horizontal cards so a busy day
+   doesn't stretch the right pane into a long vertical list. */
+.day-wk-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.day-wk-list .wk-item { flex: 1 1 190px; min-width: 170px; max-width: 320px; flex-direction: column; align-items: stretch; gap: 6px; }
+.day-wk-list .wk-item .grow b { font-size: 13.5px; }
+.day-wk-list .wk-item .grow p { font-size: 11.5px; }
+.day-wk-list .wk-actions { justify-content: flex-end; margin-top: auto; }
 .wk-actions { display: flex; gap: 6px; }
 .mini-btn {
   width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border);
@@ -638,6 +657,18 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .conv-row.source { background: var(--accent-soft); }
 .conv-row.source span { color: var(--accent); font-weight: 700; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+
+/* ---------- Accent swatches (Settings > Appearance) ---------- */
+.swatch-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
+  font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 99px; cursor: pointer;
+  transition: all .15s;
+}
+.swatch:hover { border-color: var(--sw); color: var(--text); }
+.swatch .sw-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--sw); }
+.swatch.is-active { border-color: var(--sw); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw) 30%, transparent); }
 .goal-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 16px; }
 .goal-form .goal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
 .goal-actions { display: flex; align-items: flex-end; }
@@ -704,3 +735,17 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Subtle motion, on by default and switched off from Settings (html.no-anim). */
+html:not(.no-anim) .view:not([hidden]) { animation: viewIn .28s ease; }
+html:not(.no-anim) #modalBackdrop:not([hidden]) { animation: fadeIn .18s ease; }
+html:not(.no-anim) #modal { animation: modalIn .22s ease; }
+html:not(.no-anim) .card { transition: transform .18s ease, box-shadow .18s ease, border-color .15s ease; }
+html:not(.no-anim) .stat:hover, html:not(.no-anim) .month-card:hover, html:not(.no-anim) .data-card:hover, html:not(.no-anim) .big-card:hover, html:not(.no-anim) .day-panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+html:not(.no-anim) .btn:active, html:not(.no-anim) .seg-btn:active, html:not(.no-anim) .icon-btn:active, html:not(.no-anim) .type-chip:active, html:not(.no-anim) .swatch:active { transform: scale(.96); }
+html:not(.no-anim) .day-cell:not(.empty):hover { transform: translateY(-1px); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+/* Manual "Motion: Off" toggle — kill every transition/animation instantly. */
+html.no-anim *, html.no-anim *::before, html.no-anim *::after { transition: none !important; animation: none !important; }

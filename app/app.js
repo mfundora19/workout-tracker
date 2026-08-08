@@ -86,11 +86,17 @@
 
   /* ---------------- theme ---------------- */
 
+  function applyMotionPref() {
+    document.documentElement.classList.toggle("no-anim", Focus.Store.settings.animations === false);
+  }
+
   function initTheme() {
     const saved = Focus.Store.settings.theme;
     const pref = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     const theme = saved === "light" || saved === "dark" ? saved : pref;
     document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-accent", Focus.Store.settings.accent || "violet");
+    applyMotionPref();
     if (!saved) Focus.Store.setSetting("theme", theme);
     document.getElementById("themeToggle").addEventListener("click", () => {
       const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -335,6 +341,22 @@
             Focus.Store.setSetting("theme", next);
             renderCurrent();
           }
+          break;
+        }
+        case "set-accent": {
+          const next = target.dataset.accent;
+          if (next) {
+            document.documentElement.setAttribute("data-accent", next);
+            Focus.Store.setSetting("accent", next);
+            renderCurrent();
+          }
+          break;
+        }
+        case "set-animations": {
+          const on = target.dataset.setAnimations === "on";
+          Focus.Store.setSetting("animations", on);
+          applyMotionPref();
+          renderCurrent();
           break;
         }
         case "set-weightunit": {
