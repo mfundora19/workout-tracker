@@ -1367,10 +1367,6 @@
           <div class="card-title"><h3>${a} vs ${b} · cumulative calories</h3><span class="sub">${St().fmtNum(cmp.totals.calories.a)} vs ${St().fmtNum(cmp.totals.calories.b)} (${St().fmtDelta(cmp.totals.calories.diff)})</span></div>
           <div class="chart-wrap" id="acCompareCal"></div>
         </div>
-        <div class="card span2">
-          <div class="card-title"><h3>${a} vs ${b} · month by month</h3><span class="sub">who's ahead?</span></div>
-          <div id="acBlocks"></div>
-        </div>
       </div>` : `
       <div class="card big-card cmp-hidden" style="margin-top:16px">
         <div class="card-title"><h3>Year-over-year comparison</h3><span class="sub">needs data in two years</span></div>
@@ -1411,10 +1407,6 @@
         { name: String(a) + " kcal", values: cmp.months.map((m) => m.cumA.calories) },
         { name: String(b) + " kcal", values: cmp.months.map((m) => m.cumB.calories), color: colorB }
       ], { height: 200, area: false, valueFmt: (v) => St().fmtNum(v) + " kcal" });
-      C().compareBars(document.getElementById("acBlocks"), cmp.months.map((m) => ({ label: m.label, a: m.a.workouts, b: m.b.workouts })), {
-        a: String(a), b: String(b), colorA: cssColor("--accent"), colorB: cssColor("--success"),
-        valueFmt: (v) => v + " workouts"
-      });
     }
   }
 

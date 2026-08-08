@@ -1,4 +1,4 @@
-# Focus — Workout & Fitness Tracker
+# Focus-Workout-Tracker — Workout & Fitness Tracker
 
 A **private, 100% offline** web application for tracking workouts, calories, body
 measurements and yearly fitness statistics. It replaces the `Workout Calendar.xlsx`
@@ -11,21 +11,25 @@ Google Sheets archiving.
 
 ## What it is
 
-- 📊 **Dashboard** — how am I doing right now (month, year, streaks, vs last year)
-- 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels
+- 📊 **Dashboard** — how am I doing right now (week, month, year, streaks, goals, vs last year)
+- 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels, a
+  month view with a day panel, and subtle marking of your best day & current month
 - 📏 **Progress** — weight, body fat, waist, hips… any measurement, any frequency
-- 📈 **Analytics** — 10+ compact charts: monthly bars, cumulative lines, type mix,
-  consistency heatmap, and **year-over-year comparison** (defaults to current vs
-  previous year; hidden until you have data in two years)
-- 💾 **Data & Backup** — human-friendly **Excel workbook** (Overview, Workouts,
-  Measurements, Monthly/Yearly Summary, Analytics + a hidden `_AppData` sheet
-  that makes re-import perfectly exact), **PDF annual report** (built locally),
-  full-fidelity **JSON backup**, and CSV exports — with a safe import preview
-  that adds & updates but never deletes
+- 📈 **Analytics** — compact charts: monthly workouts/calories/duration, cumulative
+  lines, workout-type distribution, a consistency heatmap, and a **year-over-year
+  comparison** (defaults to current vs previous year; hidden until you have data
+  in two years)
+- 💾 **Data & Backup** — human-friendly **Excel workbook** (`Overview`, `Workouts`,
+  `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics` + a hidden
+  `_AppData` sheet that makes re-import perfectly exact), a local **PDF annual
+  report**, a full-fidelity **JSON backup**, and CSV exports — with a safe import
+  preview that adds & updates but never deletes
 - 🧰 **Tools** — BMI calculator and a kg/lb/g/oz weight converter
 - 🎯 **Goals** — set daily calorie / duration and weekly workout targets in
   Settings; watch them on the dashboard and calendar (gold ✓ on goal days)
-- ⚙️ **Settings** — theme, default weight unit (kg/lb), goals, privacy & about
+- ⚙️ **Settings** — theme (dark/light), **accent color** (violet, orange, green,
+  red, blue — recolors buttons, charts and the calendar heat), a **Motion** toggle
+  for the subtle animations, weight unit (kg/lb), goals, privacy & about
 
 ---
 
@@ -38,12 +42,12 @@ Google Sheets archiving.
 That's it. There is no server, no build step, no terminal, no install.
 
 > **About opening from `file://`** — everything works when opening `Focus-Workout-Tracker.html`
-> directly, including storage, charts and Excel import/export. One browser note:
-> storage lives in your browser's IndexedDB and is tied to how the browser treats
-> the `file://` location — behavior varies (Chrome/Edge may keep data even if the
-> folder moves; Firefox/Safari may tie it to the exact path). To be safe: keep the
-> folder in a permanent spot, and before moving machines or clearing browser data,
-> use **Export JSON backup** and import it on the other side.
+> directly, including storage, charts, PDF reports and Excel import/export. One
+> browser note: storage lives in your browser's IndexedDB and is tied to how the
+> browser treats the `file://` location — behavior varies (Chrome/Edge may keep
+> data even if the folder moves; Firefox/Safari may tie it to the exact path). To
+> be safe: keep the folder in a permanent spot, and before moving machines or
+> clearing browser data, use **Export JSON backup** and import it on the other side.
 
 ---
 
@@ -87,28 +91,47 @@ Google Sheets → download as .xlsx → Import Excel in the app
 ```
 
 - **To archive:** Export Excel, then drag it into Google Drive / open with Google
-  Sheets. The workbook has clean sheets (`Workouts`, `Measurements`,
-  `Monthly Stats`, `Yearly Stats`, `Summary`) that read perfectly in Sheets.
+  Sheets. The workbook has clean, human-readable sheets (`Overview`, `Workouts`,
+  `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics`) that read
+  perfectly in Sheets. Dates are real dates, headers are frozen with filters, and
+  the final `_AppData` sheet (marked "do not edit") carries the internal record
+  IDs and timestamps that make re-import exact.
 - **To bring data back:** In Google Sheets, *File → Download → Microsoft Excel
   (.xlsx)*, then **Data → Import Excel** in the app.
 - Import shows a **preview** (will add / will update / unchanged / invalid) before
-  committing, and never duplicates existing records. Matching is by stable ID
-  when present, otherwise by **date + type + duration + calories** (workouts) or
-  **date + type + value + unit** (measurements).
-- Records that match an existing ID but have **different content** (e.g. you
-  edited a Notes cell in Google Sheets) are reported as **updates** — confirm the
-  preview and your edits sync back into the app.
+  committing, and never deletes local records. Matching priority:
+  1. **Stable ID** (from `_AppData`) → update if the content differs, skip if identical.
+  2. **Identical content** (date + type + duration + calories, or the measurement
+     equivalents) → skip.
+  3. **Human-edit key** — if you changed the *calories/notes* (workouts) or
+     *value/notes* (measurements) in Excel, the row is matched to the single record
+     with the same date + type + duration (or unit) and reported as an **update**.
+     Anything ambiguous is added as new — data is never silently overwritten.
 - Dates: the app exports `YYYY-MM-DD`, so app→Sheets→app round-trips are never
   ambiguous. When reading other files, common formats are accepted and ambiguous
   `dd/mm` dates default to **day-first** (international / dd-mm-yyyy convention) —
   always visible in the import preview before you confirm.
 
+### PDF report
+
+**Data → Export PDF Report** builds a printable annual report locally in your
+browser (no internet needed): a stats overview page, per-month charts for
+workouts/calories/duration, a year-over-year comparison (only when the previous
+year has data), and measurement trend lines (only for types with enough readings).
+Pick the report year and optional comparison year, then **Export PDF**.
+
 ---
 
 ## How workouts work
 
-- **Multiple workouts per day are allowed.** A day with 2 workouts shows both,
-  and daily totals (kcal, duration, count) are summed automatically.
+- **Multiple workouts per day are allowed.** A day with 2 workouts shows both as
+  compact side-by-side cards in the calendar day panel, and daily totals (kcal,
+  duration, count) are summed automatically.
+- **A workout can have several types.** Pick as many as you want from the chip
+  picker (e.g. **Back + Biceps**): each one gets its own colored badge, and
+  Analytics counts them separately. Custom types are supported too.
+- Preset types: **Back, Chest, Legs, Biceps, Triceps, Forearms, Abs, Cardio** —
+  plus **➕ custom** types. (Old "Other"/"Strength" records keep their styling.)
 - A **workout day** = a calendar day with at least one workout. For streaks,
   2 workouts on the same day still count as **one** workout day.
 - **Current streak**: consecutive workout days ending today — or yesterday if
@@ -139,19 +162,20 @@ Google Sheets → download as .xlsx → Import Excel in the app
   with or without data.
 - **Dashboard** shows your year vs the previous year.
 - **Analytics** lets you compare **any two years** (2026 vs 2024, 2025 vs 2023…):
-  per-month side-by-side bars, cumulative calorie lines, and a month-by-month
-  "who's ahead?" block diagram, plus totals with differences and percentages.
+  per-month side-by-side bars and cumulative calorie lines, plus totals with
+  differences and percentages. The comparison section only appears when both
+  years actually have data.
 
 ---
 
 ## Data model
 
-**Workout**
+**Workout** — `type` holds one or more comma-separated types.
 ```javascript
 {
   id: "id-…",              // unique, stable
   date: "2026-08-07",      // YYYY-MM-DD
-  type: "Strength",        // any text (custom types allowed)
+  type: "Back, Biceps",    // one or more types (normalized, sorted)
   duration: 45,            // minutes, optional
   calories: 420,           // optional
   notes: "",               // optional
@@ -173,8 +197,11 @@ Google Sheets → download as .xlsx → Import Excel in the app
 ```
 
 Years are discovered automatically from the data; you can also step into any
-year with the arrows. Exported Excel uses the same flat structure
-(`ID, Date, Year, Month, Workout Type, Duration, Calories, Notes, …`).
+year with the arrows. The exported Excel keeps the human sheet clean
+(`Date, Workout Type, Duration (min), Calories, Notes`) and moves internal
+fields (IDs, timestamps, schema version) into the `_AppData` sheet, so
+export → import round-trips are **byte-for-byte identical** (verified by the
+automated smoke test).
 
 ---
 
@@ -208,31 +235,33 @@ The workbook stores calories by overwriting a day cell in a yearly grid, so:
 
 ## Privacy
 
-**Focus never sends data anywhere.** There are no analytics, no telemetry, no
-external requests — the entire app (including the Excel library and every chart)
-is bundled in this folder and runs from your own files. You can disconnect the
-internet completely and everything keeps working.
+**Focus-Workout-Tracker never sends data anywhere.** There are no analytics, no
+telemetry, no external requests — the entire app (including the Excel and PDF
+libraries and every chart) is bundled in this folder and runs from your own
+files. You can disconnect the internet completely and everything keeps working.
 
 ---
 
 ## Offline test checklist
 
 - [x] Dashboard renders with your year's stats
-- [x] Add a workout (also 2+ on the same day) → totals update instantly
+- [x] Add a workout (also 2+ on the same day, also with multiple types) → totals update instantly
 - [x] Edit / delete a workout (delete asks for confirmation)
 - [x] Add a historical workout from a previous year
 - [x] Add, edit and delete a measurement
 - [x] Switch years, view calendar, drill into a month and a day
+- [x] Day panel shows multiple workouts as horizontal cards
 - [x] Compare any two years in Analytics
-- [x] Export Excel — opens in Excel & Google Sheets
-- [x] Import the exported Excel back → "0 new" (duplicates detected)
+- [x] Export Excel — opens in Excel & Google Sheets; re-import → "0 new" (duplicates detected, multi-type records preserved)
+- [x] Export PDF report for a year with data
 - [x] Export JSON backup, reset, import backup → everything restored
-- [x] Dark / light mode switch (remembered between sessions)
+- [x] Dark / light mode, accent color and motion toggle (all remembered between sessions)
 - [x] Close the browser, reopen `Focus-Workout-Tracker.html` → data is still there
 - [x] Works with the network cable unplugged
 
 A repeatable automated smoke test lives at `app/smoke-test.html` — open it in a
-browser and it prints pass/fail for dozens of checks against the core logic.
+browser and it prints pass/fail for dozens of checks against the core logic,
+including the exact Excel round-trip.
 
 Exports and imports live in the **`data/`** folder — see `data/README.md`.
 
@@ -245,15 +274,17 @@ WorkoutTracker/
 ├── Focus-Workout-Tracker.html  ← open this
 ├── README.md
 ├── app/                  ← everything the app needs, in one folder
-│   ├── app.css           ← design system, light + dark themes
+│   ├── app.css           ← design system, light + dark themes, accents, motion
 │   ├── app.js            ← bootstrap & wiring
 │   ├── charts.js         ← SVG charts (zero dependencies)
-│   ├── excel.js          ← .xlsx/.csv import & export
+│   ├── excel.js          ← .xlsx/.csv import & export (styled workbook)
+│   ├── pdf.js            ← local PDF annual report builder
 │   ├── seed-data.js      ← your historical data, embedded
 │   ├── stats.js          ← streaks, monthly/yearly, comparisons
-│   ├── store.js          ← IndexedDB persistence + dedup
+│   ├── store.js          ← IndexedDB persistence + dedup + multi-type normalize
 │   ├── ui.js             ← all views & dialogs
 │   ├── smoke-test.html   ← optional automated checks
+│   ├── lib/jspdf.umd.min.js ← PDF library, bundled locally (no CDN)
 │   └── xlsx.full.min.js  ← SheetJS, bundled locally (no CDN)
 └── data/                 ← keep your Excel/JSON exports & imports here
 ```
