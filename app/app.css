@@ -298,7 +298,6 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 /* Status emojis pinned to the bottom-right of each month card. */
 .month-foot { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 8px; min-height: 20px; }
 .best-chip { font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; }
-.act-chip { font-size: 14px; line-height: 1; opacity: .68; }
 .heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .heat .day {
   aspect-ratio: 1; border-radius: 4px;
@@ -315,6 +314,8 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .heat .day.lvl-4 { background: var(--heat-4); }
 .heat .day.has-workout { color: #fff; font-weight: 700; border: 0; }
 .heat .day.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Best day of the year (most calories) — subtle inner accent ring. */
+.heat .day.best-day { box-shadow: inset 0 0 0 1.5px var(--accent); }
 
 /* Month detail view */
 .month-detail { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
@@ -341,6 +342,8 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .day-cell .kcal { font-size: 10.5px; font-weight: 700; color: var(--accent); }
 .day-cell.lvl-3 .kcal, .day-cell.lvl-4 .kcal { color: #fff; }
 .day-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Best day of the month (most calories) — subtle inner accent ring. */
+.day-cell.best-day { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .day-cell .mini-bar { height: 4px; border-radius: 3px; margin-top: auto; }
 /* Daily-goal days get a gold ring + a small check badge. */
 .day-cell.goal-hit { border-color: var(--warn); }

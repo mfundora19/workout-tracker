@@ -209,6 +209,7 @@ function dump() {
     Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8;
     Focus.UI.renderCalendar();
     ok("calendar month view marks goal-hit days", document.querySelectorAll(".day-cell.goal-hit").length > 0, "count=" + document.querySelectorAll(".day-cell.goal-hit").length);
+    ok("month view marks the best day subtly", document.querySelectorAll(".day-cell.best-day").length === 1, "best=" + document.querySelectorAll(".day-cell.best-day").length);
     Focus.UI.state.calDay = "2026-08-07";
     Focus.UI.renderCalendar();
     ok("day panel shows goal progress", document.getElementById("dayPanel").textContent.includes("/ 400 kcal"), document.getElementById("dayPanel").textContent.slice(0, 80));
@@ -217,9 +218,11 @@ function dump() {
     ok("year view shows goal chips", document.querySelectorAll(".month-card .goal-chip").length > 0, "chips=" + document.querySelectorAll(".month-card .goal-chip").length);
     ok("year view highlights the current month", document.querySelectorAll("#calendarBody .month-card.is-current").length === 1 && document.querySelector("#calendarBody .month-card.is-current").dataset.month === String(new Date().getMonth() + 1), "cur=" + document.querySelectorAll("#calendarBody .month-card.is-current").length);
     ok("current month has a colored border but no This-month label", document.querySelectorAll(".cur-chip").length === 0);
-    ok("heatmap month cards show status emojis bottom-right", document.querySelectorAll("#acHeat .month-foot .act-chip, #acHeat .month-foot .best-chip").length > 0, "emoji chips=" + document.querySelectorAll("#acHeat .month-foot .act-chip, #acHeat .month-foot .best-chip").length);
-    ok("best month gets a Best chip (heatmap)", document.querySelectorAll("#acHeat .month-foot .best-chip").length === 1 && document.querySelector("#acHeat .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
-    ok("calendar year view keeps status emojis out", document.querySelectorAll("#calendarBody .month-foot .act-chip, #calendarBody .month-foot .best-chip").length === 0);
+    ok("year view marks the best day subtly", document.querySelectorAll("#calendarBody .heat .day.best-day").length === 1, "best=" + document.querySelectorAll("#calendarBody .heat .day.best-day").length);
+    ok("heatmap month cards show Best chip bottom-right", document.querySelectorAll("#acHeat .month-foot .best-chip").length === 1, "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
+    ok("no arm emoji chips remain anywhere", document.querySelectorAll(".act-chip").length === 0);
+    ok("best month gets a Best chip (heatmap)", document.querySelector("#acHeat .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
+    ok("calendar year view keeps status chips out", document.querySelectorAll("#calendarBody .month-foot .best-chip").length === 0);
     await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
     // --- dashboard quick add: measurement mode ---

@@ -117,7 +117,7 @@
         const bar = el("path", {
           d: `M${x} ${y + 5}Q${x} ${y} ${x + 5} ${y}L${x + barW - 5} ${y}Q${x + barW} ${y} ${x + barW} ${y + 5}L${x + barW} ${pad.t + plotH}L${x} ${pad.t + plotH}Z`,
           fill: colors[si],
-          opacity: opts.highlight && !opts.highlight.includes(i) ? 0.25 : 1
+          opacity: opts.highlight && !opts.highlight.includes(i) ? 0.4 : 0.88
         });
         bindTip(bar, tipForSeries(s, lb, v, opts));
         svg.appendChild(bar);

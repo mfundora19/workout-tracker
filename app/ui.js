@@ -645,24 +645,36 @@
     const g = Store().settings.goals || {};
     // Index of the year's most consistent month (most workout days) for the 🔥 badge.
     const bestIdx = ms.reduce((bi, m, i2) => (m.days > ms[bi].days ? i2 : bi), 0);
+    // The single most intense day of the year (most calories) gets a subtle dot.
+    let bestDayISO = null, bestCal = -1;
+    for (let mo = 1; mo <= 12; mo++) {
+      St().monthDayMap(all, year, mo).forEach((info, d) => {
+        if (info.calories > bestCal) {
+          bestCal = info.calories;
+          bestDayISO = year + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+        }
+      });
+    }
     const cards = ms.map((m, i) => {
       const map = St().monthDayMap(all, year, i + 1);
       let goalCnt = 0;
       const cells = [];
       for (let d = 1; d <= St().daysInMonth(year, i + 1); d++) {
         const info = map.get(d);
+        const iso = year + "-" + String(i + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
         const lvl = info ? info.level : 0;
         if (info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay))) goalCnt++;
         const today = year === St().yearOf(St().todayISO()) && d === St().dayOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
-        cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""}" ${info ? `data-day="${year}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
+        cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""} ${info && interactive && iso === bestDayISO ? "best-day" : ""}" ${info ? `data-day="${iso}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
       // Interactive grids (the real calendar) highlight the current month with
       // a colored border only; the analytics heatmap reuses this renderer.
       const isCur = interactive && year === St().yearOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
-      // The 💪/🔥 status emojis are a heatmap flourish — analytics only.
+      // The 🔥 Best badge is a heatmap flourish — analytics only. The goal
+      // chip shows in both grids.
       const isBest = !interactive && m.days > 0 && i === bestIdx;
       const foot = [
-        !interactive && m.days ? (isBest ? `<span class="best-chip" title="Most consistent month">🔥 Best</span>` : `<span class="act-chip" title="Active month">💪</span>`) : "",
+        isBest ? `<span class="best-chip" title="Most consistent month">🔥 Best</span>` : "",
         goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""
       ].filter(Boolean).join("");
       return `
@@ -697,6 +709,10 @@
     const sel = state.calDay;
     const g = Store().settings.goals || {};
 
+    // The month's most intense day (most calories) gets a subtle accent ring.
+    let bestD = -1, bestCal = -1;
+    map.forEach((info, d) => { if (info.calories > bestCal) { bestCal = info.calories; bestD = d; } });
+
     let goalHits = 0;
     let cells = "";
     for (let i = 0; i < firstWeekday; i++) cells += `<div class="day-cell empty"></div>`;
@@ -708,7 +724,7 @@
       const gHit = !!info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay));
       if (gHit) goalHits++;
       cells += `
-        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""} ${gHit ? "goal-hit" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
+        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""} ${gHit ? "goal-hit" : ""} ${d === bestD ? "best-day" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
           <span class="dnum">${d}</span>
           ${gHit ? `<span class="goal-check" title="Daily goal met">✓</span>` : ""}
           ${info ? `<span class="kcal">${St().fmtNum(info.calories)} kcal</span><span class="mini-bar" style="background:var(--heat-${info.level});width:${20 + info.level * 20}%"></span>` : ""}
