@@ -1113,7 +1113,7 @@
             <li><b>Data</b> — ${St().fmtNum(w)} workouts · ${St().fmtNum(m)} measurements</li>
             <li><b>Version</b> — 1.0.0</li>
             <li><b>Storage</b> — your browser's IndexedDB</li>
-            <li><b>Offline</b> — open <code>index.html</code> and it just works</li>
+            <li><b>Offline</b> — open <code>Focus-Workout-Tracker.html</code> and it just works</li>
           </ul>
         </div>
       </div>`;

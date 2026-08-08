@@ -32,12 +32,12 @@ Google Sheets archiving.
 ## How to start it
 
 1. Copy the `WorkoutTracker` folder anywhere you like (USB stick, laptop, desktop).
-2. Double-click **`index.html`** — it opens in your browser (Chrome, Edge, Firefox, Safari).
+2. Double-click **`Focus-Workout-Tracker.html`** — it opens in your browser (Chrome, Edge, Firefox, Safari).
 3. Start using it.
 
 That's it. There is no server, no build step, no terminal, no install.
 
-> **About opening from `file://`** — everything works when opening `index.html`
+> **About opening from `file://`** — everything works when opening `Focus-Workout-Tracker.html`
 > directly, including storage, charts and Excel import/export. One browser note:
 > storage lives in your browser's IndexedDB and is tied to how the browser treats
 > the `file://` location — behavior varies (Chrome/Edge may keep data even if the
@@ -228,7 +228,7 @@ internet completely and everything keeps working.
 - [x] Import the exported Excel back → "0 new" (duplicates detected)
 - [x] Export JSON backup, reset, import backup → everything restored
 - [x] Dark / light mode switch (remembered between sessions)
-- [x] Close the browser, reopen `index.html` → data is still there
+- [x] Close the browser, reopen `Focus-Workout-Tracker.html` → data is still there
 - [x] Works with the network cable unplugged
 
 A repeatable automated smoke test lives at `app/smoke-test.html` — open it in a
@@ -242,7 +242,7 @@ Exports and imports live in the **`data/`** folder — see `data/README.md`.
 
 ```
 WorkoutTracker/
-├── index.html            ← open this
+├── Focus-Workout-Tracker.html  ← open this
 ├── README.md
 ├── app/                  ← everything the app needs, in one folder
 │   ├── app.css           ← design system, light + dark themes
