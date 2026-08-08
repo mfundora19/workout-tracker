@@ -303,6 +303,16 @@
       }
     });
 
+    // calendar Year/Month mode toggle
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-cal-mode]");
+      if (btn) {
+        Pulse.UI.state.calMode = btn.dataset.calMode;
+        Pulse.UI.state.calDay = null;
+        renderCurrent();
+      }
+    });
+
     // calendar day click / keyboard
     document.addEventListener("click", (e) => {
       const day = e.target.closest("[data-calday]");

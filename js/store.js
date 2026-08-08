@@ -31,7 +31,7 @@
   function makeWorkout(data) {
     const t = nowIso();
     return {
-      id: uid(),
+      id: data.id || uid(),
       date: data.date,
       type: (data.type || "Other").trim() || "Other",
       duration: data.duration == null || data.duration === "" ? null : Math.max(0, Number(data.duration)),
@@ -45,7 +45,7 @@
   function makeMeasurement(data) {
     const t = nowIso();
     return {
-      id: uid(),
+      id: data.id || uid(),
       date: data.date,
       type: (data.type || "Weight").trim() || "Weight",
       value: Number(data.value),
@@ -167,55 +167,59 @@
 
     notify() { if (onChangeCb) onChangeCb(); },
 
-    /* ----- workouts ----- */
+    /* ----- workouts (persist first, then update memory) ----- */
     async addWorkout(data) {
       const w = makeWorkout(data);
+      await put("workouts", w);
       state.workouts.push(w);
       state.workouts.sort(byDateThenId);
-      await put("workouts", w);
       this.notify();
       return w;
     },
     async updateWorkout(id, patch) {
       const w = state.workouts.find((x) => x.id === id);
       if (!w) return null;
-      Object.assign(w, patch, { updatedAt: nowIso() });
-      if (patch.type) w.type = String(patch.type).trim() || "Other";
-      if (patch.duration != null && patch.duration !== "") w.duration = Math.max(0, Number(patch.duration));
-      if (patch.calories != null && patch.calories !== "") w.calories = Math.max(0, Number(patch.calories));
-      await put("workouts", w);
+      const updated = Object.assign({}, w, patch, { updatedAt: nowIso() });
+      if (patch.type) updated.type = String(patch.type).trim() || "Other";
+      if (patch.duration != null && patch.duration !== "") updated.duration = Math.max(0, Number(patch.duration));
+      else if (patch.duration === null) updated.duration = null;
+      if (patch.calories != null && patch.calories !== "") updated.calories = Math.max(0, Number(patch.calories));
+      else if (patch.calories === null) updated.calories = null;
+      await put("workouts", updated);
+      Object.assign(w, updated);
       this.notify();
       return w;
     },
     async deleteWorkout(id) {
-      state.workouts = state.workouts.filter((x) => x.id !== id);
       await del("workouts", id);
+      state.workouts = state.workouts.filter((x) => x.id !== id);
       this.notify();
     },
 
     /* ----- measurements ----- */
     async addMeasurement(data) {
       const m = makeMeasurement(data);
+      await put("measurements", m);
       state.measurements.push(m);
       state.measurements.sort(byDateThenId);
-      await put("measurements", m);
       this.notify();
       return m;
     },
     async updateMeasurement(id, patch) {
       const m = state.measurements.find((x) => x.id === id);
       if (!m) return null;
-      Object.assign(m, patch, { updatedAt: nowIso() });
-      m.value = Number(patch.value);
-      m.type = String(patch.type).trim();
-      m.unit = (patch.unit || "").trim();
-      await put("measurements", m);
+      const updated = Object.assign({}, m, patch, { updatedAt: nowIso() });
+      updated.value = Number(patch.value);
+      updated.type = String(patch.type).trim();
+      updated.unit = (patch.unit || "").trim();
+      await put("measurements", updated);
+      Object.assign(m, updated);
       this.notify();
       return m;
     },
     async deleteMeasurement(id) {
-      state.measurements = state.measurements.filter((x) => x.id !== id);
       await del("measurements", id);
+      state.measurements = state.measurements.filter((x) => x.id !== id);
       this.notify();
     },
 
@@ -246,51 +250,102 @@
     },
 
     /**
-     * Import raw records with deduplication. Returns counts.
-     * Workouts dedupe: by existing id, else by date+type+duration+calories.
-     * Measurements dedupe: by existing id, else by date+type+value(+unit).
+     * Plan an import without touching any state. Returns a plan object:
+     * { workouts: { added:[], updated:[{existing, norm}], skipped, invalid },
+     *   measurements: { ... }, totals: { added, updated, skipped, invalid } }
+     * Matching precedence: stable ID (with content diff -> update), else
+     * date+type+duration+calories (workouts) / date+type+value+unit (measurements).
      */
-    async importRecords(workoutRows, measurementRows) {
-      const result = { added: 0, updated: 0, skipped: 0, invalid: 0, workouts: [], measurements: [] };
-      const wByKey = new Map();
-      state.workouts.forEach((w) => wByKey.set(workoutKey(w), w));
+    planImport(workoutRows, measurementRows) {
+      const plan = {
+        workouts: { added: [], updated: [], skipped: 0, invalid: 0 },
+        measurements: { added: [], updated: [], skipped: 0, invalid: 0 }
+      };
 
-      const toAddW = [];
+      const wById = new Map(state.workouts.map((w) => [w.id, w]));
+      const wByKey = new Map(state.workouts.map((w) => [workoutKey(w), w]));
       for (const r of workoutRows) {
         const norm = normalizeWorkoutRow(r);
-        if (!norm) { result.invalid++; continue; }
-        if (norm.id && state.workouts.some((w) => w.id === norm.id)) { result.skipped++; continue; }
-        const key = workoutKey(norm);
-        const existing = wByKey.get(key);
-        if (existing) {
-          result.skipped++;
+        if (!norm) { plan.workouts.invalid++; continue; }
+        if (norm.id && wById.has(norm.id)) {
+          const existing = wById.get(norm.id);
+          if (workoutDiffers(existing, norm)) plan.workouts.updated.push({ existing, norm });
+          else plan.workouts.skipped++;
           continue;
         }
-        toAddW.push(makeWorkout(norm));
-        wByKey.set(key, toAddW[toAddW.length - 1]);
-        result.added++;
+        if (wByKey.has(workoutKey(norm))) { plan.workouts.skipped++; continue; }
+        plan.workouts.added.push(norm);
+        wById.set(norm.id || "new-" + plan.workouts.added.length, {});
+        wByKey.set(workoutKey(norm), { exists: true });
       }
-      const mByKey = new Map();
-      state.measurements.forEach((m) => mByKey.set(measKey(m), m));
-      const toAddM = [];
+
+      const mById = new Map(state.measurements.map((m) => [m.id, m]));
+      const mByKey = new Map(state.measurements.map((m) => [measKey(m), m]));
       for (const r of measurementRows) {
         const norm = normalizeMeasurementRow(r);
-        if (!norm) { result.invalid++; continue; }
-        if (norm.id && state.measurements.some((m) => m.id === norm.id)) { result.skipped++; continue; }
-        const key = measKey(norm);
-        if (mByKey.has(key)) { result.skipped++; continue; }
-        toAddM.push(makeMeasurement(norm));
-        mByKey.set(key, toAddM[toAddM.length - 1]);
-        result.added++;
+        if (!norm) { plan.measurements.invalid++; continue; }
+        if (norm.id && mById.has(norm.id)) {
+          const existing = mById.get(norm.id);
+          if (measDiffers(existing, norm)) plan.measurements.updated.push({ existing, norm });
+          else plan.measurements.skipped++;
+          continue;
+        }
+        if (mByKey.has(measKey(norm))) { plan.measurements.skipped++; continue; }
+        plan.measurements.added.push(norm);
+        mById.set(norm.id || "new-" + plan.measurements.added.length, {});
+        mByKey.set(measKey(norm), { exists: true });
       }
-      if (toAddW.length || toAddM.length) {
-        await bulkPut("workouts", toAddW);
-        await bulkPut("measurements", toAddM);
-        state.workouts = state.workouts.concat(toAddW).sort(byDateThenId);
-        state.measurements = state.measurements.concat(toAddM).sort(byDateThenId);
+
+      plan.totals = {
+        added: plan.workouts.added.length + plan.measurements.added.length,
+        updated: plan.workouts.updated.length + plan.measurements.updated.length,
+        skipped: plan.workouts.skipped + plan.measurements.skipped,
+        invalid: plan.workouts.invalid + plan.measurements.invalid
+      };
+      return plan;
+    },
+
+    /**
+     * Execute a planned import (or re-plan + execute from raw rows).
+     * Never destroys data: identical records are skipped, ID-matched records
+     * with different content are updated, everything else is added.
+     */
+    async importRecords(workoutRows, measurementRows) {
+      const plan = this.planImport(workoutRows, measurementRows);
+      const result = { added: 0, updated: 0, skipped: 0, invalid: 0, workouts: [], measurements: [] };
+
+      const addedW = plan.workouts.added.map((n) => makeWorkout(n));
+      const addedM = plan.measurements.added.map((n) => makeMeasurement(n));
+
+      // Persist first, then touch memory, so a storage failure never leaves
+      // the two out of sync.
+      if (addedW.length) await bulkPut("workouts", addedW);
+      if (addedM.length) await bulkPut("measurements", addedM);
+
+      if (plan.workouts.updated.length) {
+        plan.workouts.updated.forEach(({ existing, norm }) => {
+          Object.assign(existing, pickWorkout(norm), { updatedAt: nowIso() });
+        });
+        await bulkPut("workouts", plan.workouts.updated.map((u) => u.existing));
       }
-      result.workouts = toAddW;
-      result.measurements = toAddM;
+      if (plan.measurements.updated.length) {
+        plan.measurements.updated.forEach(({ existing, norm }) => {
+          Object.assign(existing, pickMeasurement(norm), { updatedAt: nowIso() });
+        });
+        await bulkPut("measurements", plan.measurements.updated.map((u) => u.existing));
+      }
+
+      if (addedW.length || addedM.length) {
+        state.workouts = state.workouts.concat(addedW).sort(byDateThenId);
+        state.measurements = state.measurements.concat(addedM).sort(byDateThenId);
+      }
+
+      result.added = addedW.length + addedM.length;
+      result.updated = plan.workouts.updated.length + plan.measurements.updated.length;
+      result.skipped = plan.totals.skipped;
+      result.invalid = plan.totals.invalid;
+      result.workouts = addedW;
+      result.measurements = addedM;
       this.notify();
       return result;
     },
@@ -337,6 +392,27 @@
   }
   function measKey(m) {
     return [m.date || "", m.type || "", Number(m.value), m.unit || ""].join("|");
+  }
+
+  function workoutDiffers(existing, norm) {
+    return existing.date !== norm.date ||
+      (existing.type || "") !== (norm.type || "") ||
+      (existing.duration ?? null) !== (norm.duration ?? null) ||
+      (existing.calories ?? null) !== (norm.calories ?? null) ||
+      (existing.notes || "") !== (norm.notes || "");
+  }
+  function measDiffers(existing, norm) {
+    return existing.date !== norm.date ||
+      (existing.type || "") !== (norm.type || "") ||
+      Number(existing.value) !== Number(norm.value) ||
+      (existing.unit || "") !== (norm.unit || "") ||
+      (existing.notes || "") !== (norm.notes || "");
+  }
+  function pickWorkout(norm) {
+    return { date: norm.date, type: norm.type, duration: norm.duration, calories: norm.calories, notes: norm.notes };
+  }
+  function pickMeasurement(norm) {
+    return { date: norm.date, type: norm.type, value: norm.value, unit: norm.unit, notes: norm.notes };
   }
 
   /** Validate + normalize a raw workout row (from import or seed). */
@@ -399,10 +475,15 @@
     if (m) return pad(m[1], m[2], m[3]);
     m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
     if (m) {
-      let [a, b, y] = [m[1], m[2], m[3]];
+      let a = Number(m[1]), b = Number(m[2]), y = m[3];
       if (y.length === 2) y = (Number(y) > 40 ? "19" : "20") + y;
-      if (Number(a) > 12) return pad(y, m[2], m[1]);   // d/m/y
-      return pad(y, m[1], m[2]);                        // m/d/y
+      // First value > 12 -> it must be the day (d/m/y); second value > 12
+      // -> the first is the month (m/d/y); when both are ambiguous, default
+      // to day-first (d/m/y), the international convention. The app's own
+      // exports always use YYYY-MM-DD, so round-trips are never ambiguous.
+      if (a > 12) return pad(y, String(b), String(a));
+      if (b > 12) return pad(y, String(a), String(b));
+      return pad(y, String(b), String(a));
     }
     m = s.match(/^(\d{1,2})[-\s](\w{3,9})[-\s](\d{2,4})$/i);
     if (m) {

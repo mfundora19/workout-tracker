@@ -31,10 +31,11 @@ That's it. There is no server, no build step, no terminal, no install.
 
 > **About opening from `file://`** — everything works when opening `index.html`
 > directly, including storage, charts and Excel import/export. One browser note:
-> data is stored in the browser **per folder location**. If you move or rename the
-> folder, the browser treats it as a new app and starts empty — so pick a permanent
-> home for the folder, and use **Export JSON backup** before moving it, then import
-> on the other side (or simply re-import the Excel export).
+> storage lives in your browser's IndexedDB and is tied to how the browser treats
+> the `file://` location — behavior varies (Chrome/Edge may keep data even if the
+> folder moves; Firefox/Safari may tie it to the exact path). To be safe: keep the
+> folder in a permanent spot, and before moving machines or clearing browser data,
+> use **Export JSON backup** and import it on the other side.
 
 ---
 
@@ -82,10 +83,17 @@ Google Sheets → download as .xlsx → Import Excel in the app
   `Monthly Stats`, `Yearly Stats`, `Summary`) that read perfectly in Sheets.
 - **To bring data back:** In Google Sheets, *File → Download → Microsoft Excel
   (.xlsx)*, then **Data → Import Excel** in the app.
-- Import shows a **preview** (added / skipped / invalid counts) before committing,
-  and never duplicates existing records. Matching is by stable ID when present,
-  otherwise by **date + type + duration + calories** (workouts) or
+- Import shows a **preview** (will add / will update / unchanged / invalid) before
+  committing, and never duplicates existing records. Matching is by stable ID
+  when present, otherwise by **date + type + duration + calories** (workouts) or
   **date + type + value + unit** (measurements).
+- Records that match an existing ID but have **different content** (e.g. you
+  edited a Notes cell in Google Sheets) are reported as **updates** — confirm the
+  preview and your edits sync back into the app.
+- Dates: the app exports `YYYY-MM-DD`, so app→Sheets→app round-trips are never
+  ambiguous. When reading other files, common formats are accepted and ambiguous
+  `dd/mm` dates default to **day-first** (international / dd-mm-yyyy convention) —
+  always visible in the import preview before you confirm.
 
 ---
 

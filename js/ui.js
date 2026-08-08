@@ -16,7 +16,6 @@
   const state = {
     calMode: "year",
     calMonth: new Date().getMonth() + 1,
-    calYear: new Date().getFullYear(),
     calDay: null,
     wkYear: "all",
     wkMonth: "all",
@@ -236,6 +235,10 @@
           const duration = f.duration.value === "" ? null : Number(f.duration.value);
           const calories = f.calories.value === "" ? null : Number(f.calories.value);
           if (!date || !type) { toast("Date and type are required", "warn"); return; }
+          if ((duration != null && (!isFinite(duration) || duration < 0)) || (calories != null && (!isFinite(calories) || calories < 0))) {
+            toast("Numbers must be positive", "warn");
+            return;
+          }
           Store().addWorkout({ date, type, duration, calories, notes: f.notes.value.trim() }).then(() => {
             toast("Workout added — keep going 🔥");
             f.duration.value = ""; f.calories.value = ""; f.notes.value = "";
@@ -336,6 +339,8 @@
     const mStats = St().monthlyStats(all, year)[month - 1];
     const { current: streak, longest } = St().streaks(all);
 
+    const curYear = Number(today.slice(0, 4));
+    const highlightLimit = year < curYear ? 12 : year > curYear ? 0 : month;
     const greeting = document.getElementById("dashGreeting");
     const h = new Date().getHours();
     const greet = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -431,7 +436,7 @@
     const ms = St().monthlyStats(all, year);
     C().barChart(document.getElementById("dashChartMonthly"), ms.map((m) => m.label), [{
       name: "Workouts", values: ms.map((m) => m.workouts), color: "var(--accent)"
-    }], { height: 210, valueFmt: (v) => v + " workouts", highlight: ms.map((m, i) => i).filter((i) => i <= month - 1) });
+    }], { height: 210, valueFmt: (v) => v + " workouts", highlight: ms.map((m, i) => i).filter((i) => i < highlightLimit) });
     C().lineChart(document.getElementById("dashChartCumulative"), ms.map((m) => m.label), [{
       name: "kcal", values: ms.map((m, i) => ms.slice(0, i + 1).reduce((s, x) => s + x.calories, 0)), color: "var(--success)"
     }], { height: 210, valueFmt: (v) => St().fmtNum(v) + " kcal", area: true });
@@ -542,7 +547,7 @@
         cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""}" ${info ? `data-day="${year}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
       return `
-        <div class="card month-card" data-action="openmonth" data-month="${i + 1}">
+        <div class="card month-card" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
           <div class="month-head"><strong>${m.label}</strong><span>${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
           <div class="heat">${cells.join("")}</div>
         </div>`;
@@ -1037,7 +1042,7 @@
             toast("No recognizable workout or measurement rows found in this file.", "error", 5000);
             return;
           }
-          showImportPreview(parsed);
+          showImportPreview(parsed.workouts, parsed.measurements, parsed.errors);
         } catch (e) {
           toast(e.message || "Could not read this Excel file.", "error", 5000);
         }
@@ -1048,9 +1053,11 @@
       reader.onload = () => {
         try {
           const obj = JSON.parse(reader.result);
-          const preview = previewBackup(obj);
-          if (!preview) { toast("This file is not a valid Pulse backup.", "error", 5000); return; }
-          showImportPreview(preview);
+          if (!obj || obj.app !== "pulse" || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
+            toast("This file is not a valid Pulse backup.", "error", 5000);
+            return;
+          }
+          showImportPreview(obj.workouts, obj.measurements, []);
         } catch (e) {
           toast("Invalid JSON: " + e.message, "error", 5000);
         }
@@ -1071,78 +1078,41 @@
     });
   }
 
-  /** Dry-run a JSON backup to show what would happen. */
-  function previewBackup(obj) {
-    if (!obj || obj.app !== "pulse" || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) return null;
-    const N = Pulse.Store;
-    const result = { workouts: [], measurements: [], errors: [] };
-    const existingW = new Set(Pulse.Store.workouts.map((w) => N.workoutKey(w)));
-    const existingM = new Set(Pulse.Store.measurements.map((m) => N.measKey(m)));
-    let added = 0, invalid = 0;
-    obj.workouts.forEach((r) => {
-      const norm = N.normalizeWorkoutRow(r);
-      if (!norm) { invalid++; return; }
-      if (norm.id && Pulse.Store.workouts.some((w) => w.id === norm.id)) return;
-      if (existingW.has(N.workoutKey(norm))) return;
-      existingW.add(N.workoutKey(norm));
-      added++; result.workouts.push(norm);
-    });
-    obj.measurements.forEach((r) => {
-      const norm = N.normalizeMeasurementRow(r);
-      if (!norm) { invalid++; return; }
-      if (norm.id && Pulse.Store.measurements.some((m) => m.id === norm.id)) return;
-      if (existingM.has(N.measKey(norm))) return;
-      existingM.add(N.measKey(norm));
-      added++; result.measurements.push(norm);
-    });
-    result.previewCounts = { added, skipped: obj.workouts.length + obj.measurements.length - added - invalid, invalid };
-    result.kind = "backup";
-    return result;
-  }
-
   /**
    * Show the import preview modal with counts and a sample table.
-   * parsed: { workouts: [...], measurements: [...], errors: [...] } or preview result.
+   * Rows are run through Pulse.Store.planImport so the preview matches
+   * exactly what the import will do (added / updated / skipped / invalid).
    */
-  function showImportPreview(parsed) {
+  function showImportPreview(workoutRows, measurementRows, errors = []) {
     const N = Pulse.Store;
-    const existingW = new Set(Pulse.Store.workouts.map((w) => N.workoutKey(w)));
-    const existingM = new Set(Pulse.Store.measurements.map((m) => N.measKey(m)));
-    let added = 0, skipped = 0, invalid = 0;
-    const willAdd = [];
-    parsed.workouts.forEach((r) => {
-      const norm = N.normalizeWorkoutRow(r);
-      if (!norm) { invalid++; return; }
-      if (norm.id && Pulse.Store.workouts.some((w) => w.id === norm.id)) { skipped++; return; }
-      if (existingW.has(N.workoutKey(norm))) { skipped++; return; }
-      existingW.add(N.workoutKey(norm)); added++; willAdd.push({ ...norm, kind: "workout" });
-    });
-    parsed.measurements.forEach((r) => {
-      const norm = N.normalizeMeasurementRow(r);
-      if (!norm) { invalid++; return; }
-      if (norm.id && Pulse.Store.measurements.some((m) => m.id === norm.id)) { skipped++; return; }
-      if (existingM.has(N.measKey(norm))) { skipped++; return; }
-      existingM.add(N.measKey(norm)); added++; willAdd.push({ ...norm, kind: "measurement" });
-    });
-    if (!added && !invalid) { toast("Nothing new to import — all records already exist.", "warn"); return; }
+    const plan = N.planImport(workoutRows, measurementRows);
+    const t = plan.totals;
+    if (!t.added && !t.updated && !t.invalid) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
 
-    const sample = willAdd.slice(0, 12);
+    const sample = [
+      ...plan.workouts.added.slice(0, 5).map((r) => ({ ...r, kind: "workout", state: "new" })),
+      ...plan.measurements.added.slice(0, 5).map((r) => ({ ...r, kind: "measurement", state: "new" })),
+      ...plan.workouts.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "workout", state: "update" })),
+      ...plan.measurements.updated.slice(0, 4).map((u) => ({ ...u.norm, kind: "measurement", state: "update" }))
+    ].slice(0, 12);
+
     openModal(`
       <h2>Import preview</h2>
-      <p class="modal-sub">Review what will be imported. Duplicate records are skipped automatically.</p>
+      <p class="modal-sub">Review what will happen. Nothing is changed until you confirm.</p>
       <div class="imp-report">
-        <div class="r added"><b>${added}</b><span>Will add</span></div>
-        <div class="r updated"><b>0</b><span>Updated</span></div>
-        <div class="r skipped"><b>${skipped}</b><span>Skipped</span></div>
-        <div class="r invalid"><b>${invalid}</b><span>Invalid</span></div>
+        <div class="r added"><b>${t.added}</b><span>Will add</span></div>
+        <div class="r updated"><b>${t.updated}</b><span>Will update</span></div>
+        <div class="r skipped"><b>${t.skipped}</b><span>Unchanged</span></div>
+        <div class="r invalid"><b>${t.invalid}</b><span>Invalid</span></div>
       </div>
-      ${parsed.errors && parsed.errors.length ? `<p style="color:var(--warn);font-size:12.5px">${esc(parsed.errors.slice(0, 5).join("<br>"))}</p>` : ""}
+      ${errors.length ? `<p style="color:var(--warn);font-size:12.5px">${errors.slice(0, 5).map(esc).join("<br>")}</p>` : ""}
       ${sample.length ? `
         <div class="preview-scroll">
           <table class="data-table">
-            <thead><tr><th>Type</th><th>Date</th><th>Detail</th></tr></thead>
+            <thead><tr><th></th><th>Type</th><th>Date</th><th>Detail</th></tr></thead>
             <tbody>${sample.map((r) => `
               <tr>
+                <td>${r.state === "update" ? "↻" : "+"}</td>
                 <td>${r.kind === "workout" ? "🏋️ Workout" : "📏 " + esc(r.type)}</td>
                 <td>${r.date}</td>
                 <td>${r.kind === "workout" ? esc(r.type) + (r.calories != null ? " · " + r.calories + " kcal" : "") : esc(r.value) + " " + esc(r.unit || "")}</td>
@@ -1152,14 +1122,18 @@
         </div>` : `<p class="modal-sub">(Nothing to preview)</p>`}
       <div class="modal-actions">
         <button class="btn btn-ghost" data-close>Cancel</button>
-        <button class="btn btn-primary" id="confirmImport">Import ${added} record${added === 1 ? "" : "s"}</button>
+        <button class="btn btn-primary" id="confirmImport">Import ${t.added + t.updated} record${t.added + t.updated === 1 ? "" : "s"}</button>
       </div>`, {
       onOpen: (m) => {
         m.querySelector("#confirmImport").addEventListener("click", async () => {
           closeModal();
-          const res = await N.importRecords(parsed.workouts, parsed.measurements);
-          Pulse.App.setSetting("lastBackupAt", null);
-          toast(`Imported ${res.added} new record${res.added === 1 ? "" : "s"} (${res.skipped} duplicates skipped, ${res.invalid} invalid)`, "success", 4500);
+          try {
+            const res = await N.importRecords(workoutRows, measurementRows);
+            const bits = [`${res.added} added`, `${res.updated} updated`, `${res.skipped} unchanged`, `${res.invalid} invalid`];
+            toast("Import complete: " + bits.join(", "), "success", 5000);
+          } catch (e) {
+            toast("Import failed: " + e.message, "error", 5000);
+          }
         });
       }
     });

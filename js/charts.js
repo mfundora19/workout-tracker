@@ -187,13 +187,14 @@
     const yOf = (v) => pad.t + plotH - (v / nice) * plotH;
 
     const defs = el("defs", {});
+    const hasNull = series.some((s) => s.values.some((v) => v == null));
     series.forEach((s, si) => {
       const gid = "grad-" + (opts.fillId || "chart") + "-" + si;
       const g = el("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
       g.appendChild(el("stop", { offset: "0%", "stop-color": colors[si], "stop-opacity": 0.28 }));
       g.appendChild(el("stop", { offset: "100%", "stop-color": colors[si], "stop-opacity": 0.01 }));
       defs.appendChild(g);
-      if (opts.area !== false) {
+      if (opts.area !== false && !hasNull) {
         const pts = s.values.map((v, i) => `${xOf(i)},${yOf(v)}`);
         const area = el("path", {
           d: `M${xOf(0)},${pad.t + plotH}L${pts.join("L")}L${xOf(n - 1)},${pad.t + plotH}Z`,
@@ -205,14 +206,25 @@
     svg.appendChild(defs);
 
     series.forEach((s, si) => {
-      const pts = s.values.map((v, i) => [xOf(i), yOf(v)]);
-      if (pts.length === 1) {
-        svg.appendChild(el("circle", { cx: pts[0][0], cy: pts[0][1], r: 4, fill: colors[si] }));
-      } else {
-        const path = smoothPath(pts);
-        svg.appendChild(el("path", { d: path, fill: "none", stroke: colors[si], "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round" }));
-      }
-      // hover nodes
+      // Split the series at null values so missing data shows a gap,
+      // not a NaN path or a misleading dip to zero.
+      let seg = [];
+      const flush = () => {
+        if (!seg.length) return;
+        if (seg.length === 1) {
+          svg.appendChild(el("circle", { cx: seg[0][0], cy: seg[0][1], r: 4, fill: colors[si] }));
+        } else {
+          svg.appendChild(el("path", { d: smoothPath(seg), fill: "none", stroke: colors[si], "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+        }
+        seg = [];
+      };
+      s.values.forEach((v, i) => {
+        if (v == null) { flush(); return; }
+        seg.push([xOf(i), yOf(v)]);
+      });
+      flush();
+
+      // hover nodes (only where a value exists)
       s.values.forEach((v, i) => {
         if (v == null) return;
         const hit = el("circle", { cx: xOf(i), cy: yOf(v), r: 11, fill: "transparent" });

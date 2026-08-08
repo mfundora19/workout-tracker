@@ -87,7 +87,10 @@
     const aoa = [header];
     years.forEach((y) => {
       S.monthlyStats(Pulse.Store.workouts, y).forEach((m) => {
-        aoa.push([y, m.label, m.workouts, m.days, m.restDays, m.calories, m.duration, +m.avgCal.toFixed(1), +m.avgDur.toFixed(1), m.bestStreak]);
+        aoa.push([y, m.label, m.workouts, m.days, m.restDays, m.calories, m.duration,
+          m.avgCal == null ? "" : +m.avgCal.toFixed(1),
+          m.avgDur == null ? "" : +m.avgDur.toFixed(1),
+          m.bestStreak]);
       });
     });
     const ws = window.XLSX.utils.aoa_to_sheet(aoa);
@@ -102,7 +105,10 @@
     const aoa = [header];
     years.forEach((y) => {
       const st = S.yearlyStats(Pulse.Store.workouts, y);
-      aoa.push([y, st.workouts, st.days, st.calories, st.duration, +st.avgCal.toFixed(1), +st.avgWorkoutsPerMonth.toFixed(1), st.bestMonth ? st.bestMonth.label : "", st.longestStreak]);
+      aoa.push([y, st.workouts, st.days, st.calories, st.duration,
+        st.workouts ? +st.avgCal.toFixed(1) : "",
+        +st.avgWorkoutsPerMonth.toFixed(1),
+        st.bestMonth ? st.bestMonth.label : "", st.longestStreak]);
     });
     const ws = window.XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"] = header.map((h, i) => ({ wch: [6, 10, 12, 10, 14, 20, 19, 12, 14][i] }));

@@ -124,8 +124,12 @@
         restDays: daysInMonth(year, m) - wd,
         calories,
         duration,
-        avgCal: wd ? calories / wd : 0,
-        avgDur: wd ? duration / wd : 0,
+        // Averages are per WORKOUT (not per workout day) and null when a
+        // month has no workouts, so charts can show gaps instead of 0 dips.
+        avgCal: workoutsN ? calories / workoutsN : null,
+        avgDur: workoutsN ? duration / workoutsN : null,
+        avgCalPerDay: wd ? calories / wd : null,
+        avgDurPerDay: wd ? duration / wd : null,
         bestStreak: longestStreakInSet(new Set(monthDays))
       });
     }

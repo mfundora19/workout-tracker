@@ -104,8 +104,26 @@ function dump() {
     const backup = Pulse.Store.exportBackup();
     const json = JSON.stringify(backup);
     const restored = await Pulse.Store.importBackup(JSON.parse(json));
-    ok("backup re-import: 0 added (all dupes)", restored.added === 0, "added=" + restored.added);
+    ok("backup re-import: 0 added (all dupes)", restored.added === 0 && restored.updated === 0, "added=" + restored.added + " updated=" + restored.updated);
     ok("backup has settings + timestamps", !!backup.exportedAt && !!backup.settings);
+
+    // --- ID-based update on re-import (Google Sheets edit round-trip) ---
+    const target = Pulse.Store.workouts[0]; // id "id-...", date 2026-01-07
+    const edited = JSON.parse(JSON.stringify(backup.workouts.find((w) => w.id === target.id)));
+    edited.notes = "Edited in Google Sheets";
+    const plan = Pulse.Store.planImport([edited], []);
+    ok("planImport flags ID edit as update", plan.workouts.updated.length === 1 && plan.totals.updated === 1, JSON.stringify(plan.totals));
+    const upd = await Pulse.Store.importRecords([edited], []);
+    ok("import applies the edit (notes synced back)", upd.updated === 1 && Pulse.Store.workouts.find((w) => w.id === target.id).notes === "Edited in Google Sheets", "updated=" + upd.updated);
+    const plan2 = Pulse.Store.planImport([edited], []);
+    ok("re-importing same content is skipped", plan2.totals.updated === 0 && plan2.totals.skipped === 1, JSON.stringify(plan2.totals));
+    // restore original notes
+    await Pulse.Store.updateWorkout(target.id, { notes: "" });
+
+    // --- per-workout averages ---
+    const mstats4 = S.monthlyStats(Pulse.Store.workouts, 2026)[3]; // April
+    ok("monthly avgCal is per workout (16404/24)", Math.abs(mstats4.avgCal - 16404 / 24) < 0.001, "avgCal=" + mstats4.avgCal);
+    ok("empty month avgCal is null (no misleading 0)", S.monthlyStats(Pulse.Store.workouts, 2026)[8].avgCal === null);
 
     // --- charts render without throwing ---
     const ms = S.monthlyStats(Pulse.Store.workouts, 2026);
