@@ -91,6 +91,31 @@
     return { current, longest };
   }
 
+  /* ---------------- weekly ---------------- */
+
+  /**
+   * Stats for the current ISO week (Monday–Sunday) vs the previous week.
+   * Returns { cur, prev, start, end } where each week has
+   * { workouts, days, calories, duration }.
+   */
+  function weeklyStats(workouts, refDateISO) {
+    const ref = refDateISO || todayISO();
+    const d = parse(ref);
+    const dow = (d.getDay() + 6) % 7; // 0 = Monday
+    const monday = addDays(ref, -dow);
+    const week = (start) => {
+      const end = addDays(start, 6);
+      const rows = workouts.filter((w) => w.date >= start && w.date <= end);
+      return {
+        workouts: rows.length,
+        days: new Set(rows.map((w) => w.date)).size,
+        calories: rows.reduce((s, w) => s + (w.calories || 0), 0),
+        duration: rows.reduce((s, w) => s + (w.duration || 0), 0)
+      };
+    };
+    return { cur: week(monday), prev: week(addDays(monday, -7)), start: monday, end: addDays(monday, 6) };
+  }
+
   /* ---------------- monthly / yearly ---------------- */
 
   /**
@@ -346,7 +371,7 @@
   window.Focus.Stats = {
     MONTHS_SHORT, MONTHS_LONG,
     parse, toISO, addDays, todayISO, yearOf, monthOf, dayOf, dayOfYear, daysInMonth, weekdayOf,
-    dayAggregates, workoutDays, streaks, monthlyStats, yearlyStats, compareYears,
+    dayAggregates, workoutDays, streaks, weeklyStats, monthlyStats, yearlyStats, compareYears,
     typeBreakdown, measurementStats, measurementSeries, intensityForCalories,
     monthDayMap, availableYears, longestStreakInSet,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName

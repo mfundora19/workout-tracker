@@ -333,7 +333,6 @@
     const year = Focus.App.year();
     const today = St().todayISO();
     const all = Store().workouts;
-    const inYear = all.filter((w) => St().yearOf(w.date) === year);
     const yStats = St().yearlyStats(all, year);
     const month = Number(today.slice(5, 7));
     const mStats = St().monthlyStats(all, year)[month - 1];
@@ -357,73 +356,82 @@
     // --- Quick add card ---
     parts.push(quickAddCardHTML());
 
-    // --- This month ---
-    parts.push(statCard({
-      title: "This month", icon: "calendar", cls: "green",
-      rows: [
-        { label: "Workouts", value: St().fmtNum(mStats.workouts) },
-        { label: "Calories", value: mStats.calories ? St().fmtNum(mStats.calories) : "0" },
-        { label: "Duration", value: mStats.duration ? St().fmtDuration(mStats.duration) : "—" },
-        { label: "Avg kcal / workout", value: mStats.avgCal ? St().fmtNum(mStats.avgCal, 0) : "—" },
-        { label: "Workout days", value: St().fmtNum(mStats.days) + " / " + St().daysInMonth(year, month) },
-        { label: "Best streak", value: mStats.bestStreak ? mStats.bestStreak + " days" : "—" }
-      ]
-    }));
-
-    // --- This year ---
+    // --- Stat cards (5, evenly spaced with side margins) ---
+    // "This week" is scoped to the selected year, matching "This month".
+    const wk = St().weeklyStats(all.filter((w) => St().yearOf(w.date) === year), today);
     const best = yStats.bestMonth;
-    parts.push(statCard({
-      title: year + " totals", icon: "trophy", cls: "",
-      rows: [
-        { label: "Workouts", value: St().fmtNum(yStats.workouts) },
-        { label: "Workout days", value: St().fmtNum(yStats.days) },
-        { label: "Calories", value: yStats.calories ? St().fmtNum(yStats.calories) : "0" },
-        { label: "Duration", value: yStats.duration ? St().fmtDuration(yStats.duration) : "—" },
-        { label: "Avg workouts / month", value: St().fmtNum(yStats.avgWorkoutsPerMonth, 1) },
-        { label: "Best month", value: best ? best.label + " (" + St().fmtNum(best.days) + "d)" : "—" }
-      ]
-    }));
-
-    // --- Streaks ---
-    parts.push(statCard({
-      title: "Streaks", icon: "flame", cls: "amber",
-      rows: [
-        { label: "Current streak", value: streak ? streak + " days" : "0 days", emoji: streak ? "🔥" : "" },
-        { label: "Longest streak", value: longest ? longest + " days" : "—" },
-        { label: "Year best", value: yStats.longestStreak ? yStats.longestStreak + " days" : "—" },
-        { label: "Frequency (YTD)", value: yStats.days ? Math.round((yStats.days / St().dayOfYear(today)) * 100) + "% of days" : "—" }
-      ]
-    }));
-
-    // --- Year vs previous year ---
     const prevYear = year - 1;
     const prev = St().yearlyStats(all, prevYear);
-    if (prev.workouts > 0 || yStats.workouts > 0) {
-      const d = yStats.workouts - prev.workouts;
-      parts.push(statCard({
+    const cmpDelta = yStats.workouts - prev.workouts;
+
+    parts.push(`<div class="dash-stats">
+      ${statCard({
+        title: "This week", icon: "activity", cls: "",
+        rows: [
+          { label: "Workouts", value: St().fmtNum(wk.cur.workouts), delta: wk.cur.workouts - wk.prev.workouts },
+          { label: "Workout days", value: St().fmtNum(wk.cur.days) },
+          { label: "Calories", value: wk.cur.calories ? St().fmtNum(wk.cur.calories) : "0" },
+          { label: "Duration", value: wk.cur.duration ? St().fmtDuration(wk.cur.duration) : "—" },
+          { label: "Avg kcal / workout", value: wk.cur.workouts ? St().fmtNum(Math.round(wk.cur.calories / wk.cur.workouts)) : "—" }
+        ]
+      })}
+      ${statCard({
+        title: "This month", icon: "calendar", cls: "green",
+        rows: [
+          { label: "Workouts", value: St().fmtNum(mStats.workouts) },
+          { label: "Calories", value: mStats.calories ? St().fmtNum(mStats.calories) : "0" },
+          { label: "Duration", value: mStats.duration ? St().fmtDuration(mStats.duration) : "—" },
+          { label: "Avg kcal / workout", value: mStats.avgCal ? St().fmtNum(mStats.avgCal, 0) : "—" },
+          { label: "Workout days", value: St().fmtNum(mStats.days) + " / " + St().daysInMonth(year, month) },
+          { label: "Best streak", value: mStats.bestStreak ? mStats.bestStreak + " days" : "—" }
+        ]
+      })}
+      ${statCard({
+        title: year + " totals", icon: "trophy", cls: "",
+        rows: [
+          { label: "Workouts", value: St().fmtNum(yStats.workouts) },
+          { label: "Workout days", value: St().fmtNum(yStats.days) },
+          { label: "Calories", value: yStats.calories ? St().fmtNum(yStats.calories) : "0" },
+          { label: "Duration", value: yStats.duration ? St().fmtDuration(yStats.duration) : "—" },
+          { label: "Avg workouts / month", value: St().fmtNum(yStats.avgWorkoutsPerMonth, 1) },
+          { label: "Best month", value: best ? best.label + " (" + St().fmtNum(best.days) + "d)" : "—" }
+        ]
+      })}
+      ${statCard({
+        title: "Streaks", icon: "flame", cls: "amber",
+        rows: [
+          { label: "Current streak", value: streak ? streak + " days" : "0 days", emoji: streak ? "🔥" : "" },
+          { label: "Longest streak", value: longest ? longest + " days" : "—" },
+          { label: "Year best", value: yStats.longestStreak ? yStats.longestStreak + " days" : "—" },
+          { label: "Frequency (YTD)", value: yStats.days ? Math.round((yStats.days / St().dayOfYear(today)) * 100) + "% of days" : "—" }
+        ]
+      })}
+      ${statCard({
         title: year + " vs " + prevYear, icon: "activity", cls: "",
         rows: [
-          { label: "Workouts", value: St().fmtNum(yStats.workouts) + " vs " + St().fmtNum(prev.workouts), delta: d },
+          { label: "Workouts", value: St().fmtNum(yStats.workouts) + " vs " + St().fmtNum(prev.workouts), delta: cmpDelta },
           { label: "Calories", value: St().fmtNum(yStats.calories) + " vs " + St().fmtNum(prev.calories), delta: yStats.calories - prev.calories },
           { label: "Workout days", value: St().fmtNum(yStats.days) + " vs " + St().fmtNum(prev.days), delta: yStats.days - prev.days },
           { label: "Longest streak", value: yStats.longestStreak + " vs " + prev.longestStreak }
         ]
-      }));
-    }
+      })}
+    </div>`);
 
-    // --- Charts row ---
+    // --- Charts (side by side) ---
     parts.push(`
-      <div class="card big-card">
-        <div class="card-title"><h3>Workouts per month · ${year}</h3><span class="sub">Click Analytics for more</span></div>
-        <div class="chart-wrap" id="dashChartMonthly"></div>
-      </div>
-      <div class="card big-card">
-        <div class="card-title"><h3>Cumulative calories · ${year}</h3><span class="sub">YTD total</span></div>
-        <div class="chart-wrap" id="dashChartCumulative"></div>
+      <div class="dash-charts">
+        <div class="card">
+          <div class="card-title"><h3>Workouts per month · ${year}</h3><span class="sub">Click Analytics for more</span></div>
+          <div class="chart-wrap" id="dashChartMonthly"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>Cumulative calories · ${year}</h3><span class="sub">YTD total</span></div>
+          <div class="chart-wrap" id="dashChartCumulative"></div>
+        </div>
       </div>`);
 
-    // --- Recent activity ---
-    const recent = all.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+    // --- Recent activity (3 most recent workout days) ---
+    const recent = recentDays(all, 3);
     parts.push(`
       <div class="card big-card">
         <div class="card-title"><h3>Recent activity</h3><button class="btn btn-sm btn-ghost" data-action="goto" data-view="workouts">View all</button></div>
@@ -436,10 +444,10 @@
     const ms = St().monthlyStats(all, year);
     C().barChart(document.getElementById("dashChartMonthly"), ms.map((m) => m.label), [{
       name: "Workouts", values: ms.map((m) => m.workouts), color: "var(--accent)"
-    }], { height: 210, valueFmt: (v) => v + " workouts", highlight: ms.map((m, i) => i).filter((i) => i < highlightLimit) });
+    }], { height: 190, valueFmt: (v) => v + " workouts", highlight: ms.map((m, i) => i).filter((i) => i < highlightLimit) });
     C().lineChart(document.getElementById("dashChartCumulative"), ms.map((m) => m.label), [{
       name: "kcal", values: ms.map((m, i) => ms.slice(0, i + 1).reduce((s, x) => s + x.calories, 0)), color: "var(--success)"
-    }], { height: 210, valueFmt: (v) => St().fmtNum(v) + " kcal", area: true });
+    }], { height: 190, valueFmt: (v) => St().fmtNum(v) + " kcal", area: true });
   }
 
   function quickAddCardHTML() {
@@ -496,6 +504,17 @@
     if (v === 0) return `<span class="delta flat">±0</span>`;
     const cls = v > 0 ? "up" : "down";
     return `<span class="delta ${cls}">${v > 0 ? "▲" : "▼"} ${St().fmtNum(Math.abs(v))}</span>`;
+  }
+
+  /** Workouts from the most recent N distinct workout days (all workouts on those days). */
+  function recentDays(all, n) {
+    const seen = new Set();
+    const sorted = all.slice().sort((a, b) => b.date.localeCompare(a.date));
+    for (const w of sorted) {
+      seen.add(w.date);
+      if (seen.size >= n) break;
+    }
+    return sorted.filter((w) => seen.has(w.date));
   }
 
   function recentRows(list) {
