@@ -176,6 +176,12 @@
         const custom = document.getElementById("qaCustomType");
         if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
       }
+      if (e.target.id === "qmType") {
+        const custom = document.getElementById("qmCustomType");
+        if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
+        const unit = document.getElementById("qmUnit");
+        if (unit) unit.value = Focus.UI.unitDefault(e.target.value);
+      }
       if (e.target.id === "wfYear") { Focus.UI.state.wkYear = e.target.value; renderCurrent(); }
       if (e.target.id === "wfMonth") { Focus.UI.state.wkMonth = e.target.value; renderCurrent(); }
       if (e.target.id === "wfType") { Focus.UI.state.wkType = e.target.value; renderCurrent(); }
@@ -188,6 +194,37 @@
         Focus.UI.state.wkSearch = e.target.value;
         debounce(() => renderCurrent(), 180)();
       }
+    });
+
+    // quick add: switch between workout and measurement modes (persisted so
+    // re-renders keep the same tab active)
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-qamode]");
+      if (!btn) return;
+      Focus.UI.state.qaMode = btn.dataset.qamode;
+      document.querySelectorAll("[data-qamode]").forEach((b) => b.classList.toggle("is-active", b.dataset.qamode === Focus.UI.state.qaMode));
+      const wf = document.getElementById("quickAddForm");
+      const mf = document.getElementById("quickMeasForm");
+      if (wf) wf.hidden = Focus.UI.state.qaMode !== "workout";
+      if (mf) mf.hidden = Focus.UI.state.qaMode !== "measurement";
+    });
+
+    // quick add: measurement form submit
+    document.addEventListener("submit", (e) => {
+      if (e.target.id !== "quickMeasForm") return;
+      e.preventDefault();
+      const f = e.target;
+      const date = f.date.value || S().todayISO();
+      const type = f.type.value === "__custom__" ? (f.customType.value || "").trim() : f.type.value;
+      const value = f.value.value === "" ? NaN : Number(f.value.value);
+      if (!date) { Focus.UI.toast("Pick a date", "warn"); return; }
+      if (!type) { Focus.UI.toast("Choose a measurement type", "warn"); return; }
+      if (!isFinite(value) || value < 0) { Focus.UI.toast("Value must be a positive number", "warn"); return; }
+      Focus.Store.addMeasurement({ date, type, value, unit: f.unit.value, notes: "" }).then(() => {
+        Focus.UI.toast("Measurement added 📏");
+        f.value.value = "";
+        f.value.focus();
+      });
     });
   }
 
@@ -234,7 +271,7 @@
           break;
         }
         case "add-measurement":
-          Focus.UI.openMeasurementForm({ date: S().todayISO() });
+          Focus.UI.openMeasurementForm({ date: target.dataset.date || S().todayISO() });
           break;
         case "edit-measurement": {
           const m = Focus.Store.measurements.find((x) => x.id === id);

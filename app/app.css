@@ -347,6 +347,8 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 /* Day popover */
 .day-panel { display: flex; flex-direction: column; gap: 10px; }
 .day-panel h3 { margin: 0 0 2px; font-size: 16px; }
+.day-actions { display: flex; gap: 10px; margin-top: 12px; }
+.day-actions .btn { flex: 1; }
 .day-total { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .day-total .t { background: var(--surface-2); border-radius: 11px; padding: 9px; text-align: center; }
 .day-total .t b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -554,6 +556,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
   .topbar { flex-wrap: wrap; }
   .quick-add .form-grid { grid-template-columns: 1fr 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .day-actions { flex-direction: column; }
   .data-stats { grid-template-columns: repeat(2, 1fr); }
   .imp-report { grid-template-columns: repeat(2, 1fr); }
   .month-grid { grid-template-columns: repeat(2, 1fr); }

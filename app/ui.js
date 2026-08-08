@@ -24,7 +24,8 @@
     progType: null,
     anaA: null,
     anaB: null,
-    importPending: null
+    importPending: null,
+    qaMode: "workout"
   };
 
   /* ---------------- type styles ---------------- */
@@ -252,11 +253,27 @@
   /* ---------------- measurement form ---------------- */
 
   const UNITS = ["", "kg", "lb", "g", "cm", "in", "%", "mm", "m"];
+  const UNIT_DEFAULTS = { Weight: "lb", "Body Fat %": "%", Waist: "cm", Chest: "cm", Hips: "cm", Arm: "cm", Thigh: "cm" };
+
+  /** Sensible default unit for a measurement type ('' when unknown). */
+  function unitDefault(type) {
+    return UNIT_DEFAULTS[type] || "";
+  }
+
+  const MEAS_TYPE_OPTIONS = ["Weight", "Body Fat %", "Waist", "Chest", "Hips", "Arm", "Thigh"];
+  function measurementTypes() {
+    return Array.from(new Set([...MEAS_TYPE_OPTIONS, ...existingMeasTypes()]));
+  }
+
+  function unitOptsHTML(selected) {
+    return UNITS.map((u) => `<option value="${esc(u)}" ${u === selected ? "selected" : ""}>${u === "" ? "None" : esc(u)}</option>`).join("");
+  }
 
   function measurementFormHTML(values = {}) {
-    const types = Array.from(new Set(["Weight", "Body Fat %", "Chest", "Waist", "Hips", "Arm", "Thigh", ...existingMeasTypes()]));
+    const types = measurementTypes();
     const typeOpts = types.map((t) => `<option value="${esc(t)}" ${t === (values.type || "Weight") ? "selected" : ""}>${t}</option>`).join("");
-    const unitOpts = UNITS.map((u) => `<option value="${esc(u)}" ${u === (values.unit || "") ? "selected" : ""}>${u === "" ? "None" : esc(u)}</option>`).join("");
+    // new records default to the sensible unit for the chosen type (e.g. Weight -> lb)
+    const unitOpts = unitOptsHTML(values.unit || (!values.id ? unitDefault(values.type || "Weight") : ""));
     return `
       <h2>${values.id ? "Edit measurement" : "Add measurement"}</h2>
       <p class="modal-sub">Measurements can be recorded at any frequency — daily, weekly, monthly.</p>
@@ -317,9 +334,11 @@
       onOpen: (m) => {
         const sel = m.querySelector("#mfType");
         const custom = m.querySelector("#mfCustomType");
+        const unit = m.querySelector("#mfUnit");
         sel.addEventListener("change", () => {
           custom.style.display = sel.value === "__custom__" ? "" : "none";
           if (sel.value === "__custom__") custom.focus();
+          if (unit) unit.value = unitDefault(sel.value);
         });
       }
     });
@@ -453,10 +472,19 @@
   function quickAddCardHTML() {
     const types = Array.from(new Set([...TYPE_OPTIONS, ...existingTypes()]));
     const opts = types.map((t) => `<option value="${esc(t)}">${t}</option>`).join("");
+    const mOpts = measurementTypes().map((t) => `<option value="${esc(t)}" ${t === "Weight" ? "selected" : ""}>${t}</option>`).join("");
+    const mUnitOpts = unitOptsHTML(unitDefault("Weight"));
+    const mode = state.qaMode;
     return `
       <div class="card quick-add big-card">
-        <div class="card-title"><h3>⚡ Quick add</h3><span class="sub">Date &amp; type are enough</span></div>
-        <form id="quickAddForm">
+        <div class="card-title">
+          <h3>⚡ Quick add</h3>
+          <div class="seg" role="group" aria-label="Quick add type">
+            <button type="button" class="seg-btn ${mode === "workout" ? "is-active" : ""}" data-qamode="workout">💪 Workout</button>
+            <button type="button" class="seg-btn ${mode === "measurement" ? "is-active" : ""}" data-qamode="measurement">📏 Measurement</button>
+          </div>
+        </div>
+        <form id="quickAddForm" ${mode === "workout" ? "" : "hidden"}>
           <div class="form-grid">
             <div class="field">
               <label for="qaDate">Date</label>
@@ -480,6 +508,32 @@
           </div>
           <div class="quick-actions">
             <button type="submit" class="btn btn-primary">${ICONS.plus} Add workout</button>
+          </div>
+        </form>
+        <form id="quickMeasForm" ${mode === "measurement" ? "" : "hidden"}>
+          <div class="form-grid">
+            <div class="field">
+              <label for="qmDate">Date</label>
+              <input class="input" id="qmDate" name="date" type="date" value="${St().todayISO()}">
+            </div>
+            <div class="field">
+              <label for="qmType">Measurement</label>
+              <select class="select" id="qmType" name="type">${mOpts}
+                <option value="__custom__">➕ Custom…</option>
+              </select>
+              <input class="input" id="qmCustomType" name="customType" type="text" placeholder="Custom type" style="margin-top:8px;display:none">
+            </div>
+            <div class="field">
+              <label for="qmValue">Value</label>
+              <input class="input" id="qmValue" name="value" type="number" step="any" min="0" placeholder="e.g. 149.2">
+            </div>
+            <div class="field">
+              <label for="qmUnit">Unit</label>
+              <select class="select" id="qmUnit" name="unit">${mUnitOpts}</select>
+            </div>
+          </div>
+          <div class="quick-actions">
+            <button type="submit" class="btn btn-primary">${ICONS.plus} Add measurement</button>
           </div>
         </form>
       </div>`;
@@ -622,8 +676,11 @@
           <div class="t"><b>${St().fmtNum(mStats.calories)}</b><span>kcal</span></div>
           <div class="t"><b>${mStats.days}</b><span>days</span></div>
         </div>
-        <div style="font-size:13px;color:var(--text-dim)">Click a day to see its workouts.</div>
-        <button class="btn btn-primary" style="margin-top:14px;width:100%" data-action="quick-add">${ICONS.plus} Add workout</button>
+        <div style="font-size:13px;color:var(--text-dim)">Click a day to see its workouts and add records.</div>
+        <div class="day-actions">
+          <button class="btn btn-primary" data-action="quick-add">${ICONS.plus} Add workout</button>
+          <button class="btn btn-ghost" data-action="add-measurement">${ICONS.scale} Add measurement</button>
+        </div>
       </div>`;
 
     body.innerHTML = `
@@ -676,7 +733,10 @@
             </div>`;
           }).join("") || `<div class="chart-empty">No workouts on this day.</div>`}
         </div>
-        <button class="btn btn-primary" data-action="quick-add" data-date="${iso}">${ICONS.plus} Add workout</button>
+        <div class="day-actions">
+          <button class="btn btn-primary" data-action="quick-add" data-date="${iso}">${ICONS.plus} Add workout</button>
+          <button class="btn btn-ghost" data-action="add-measurement" data-date="${iso}">${ICONS.scale} Add measurement</button>
+        </div>
       </div>`;
   }
 
@@ -1165,7 +1225,7 @@
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog,
-    openWorkoutForm, openMeasurementForm,
+    openWorkoutForm, openMeasurementForm, unitDefault,
     renderDashboard, renderCalendar, renderWorkouts, renderProgress, renderAnalytics, renderData,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, wireDrop, cssColor
   };

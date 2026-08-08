@@ -187,6 +187,37 @@ function dump() {
       }
     });
 
+    // --- dashboard quick add: measurement mode ---
+    Focus.UI.renderDashboard();
+    const qmf = document.getElementById("quickMeasForm");
+    const qaf = document.getElementById("quickAddForm");
+    ok("quick add has workout + measurement forms", !!qmf && !!qaf, "meas=" + !!qmf);
+    ok("quick meas form hidden by default (workout mode)", !!qmf && qmf.hidden === true, "hidden=" + (qmf && qmf.hidden));
+    const qmUnit = document.getElementById("qmUnit");
+    ok("quick meas defaults Weight / lb", qmUnit && qmUnit.value === "lb", "unit=" + (qmUnit && qmUnit.value));
+    ok("unitDefault: Waist -> cm", Focus.UI.unitDefault("Waist") === "cm" && Focus.UI.unitDefault("Custom X") === "", "waist=" + Focus.UI.unitDefault("Waist"));
+    // mode persistence across re-renders
+    Focus.UI.state.qaMode = "measurement";
+    Focus.UI.renderDashboard();
+    ok("qaMode persists across re-render", !document.getElementById("quickMeasForm").hidden && document.getElementById("quickAddForm").hidden, "measHidden=" + document.getElementById("quickMeasForm").hidden);
+    Focus.UI.state.qaMode = "workout";
+    Focus.UI.renderDashboard();
+    // modal new-record unit defaults to the type's unit
+    Focus.UI.openMeasurementForm({ date: "2026-08-11" });
+    ok("modal new record defaults Weight/lb", document.getElementById("mfUnit") && document.getElementById("mfUnit").value === "lb", "unit=" + (document.getElementById("mfUnit") || {}).value);
+    Focus.UI.closeModal();
+
+    // --- calendar day panel: add measurement with the selected date ---
+    Focus.UI.state.calMode = "month";
+    Focus.UI.state.calMonth = 8;
+    Focus.UI.state.calDay = "2026-08-07";
+    Focus.UI.renderCalendar();
+    const measBtn = document.querySelector("#dayPanel [data-action='add-measurement']");
+    ok("day panel has add-measurement button", !!measBtn, "found=" + !!measBtn);
+    ok("day panel add-measurement carries the date", measBtn && measBtn.dataset.date === "2026-08-07", "date=" + (measBtn && measBtn.dataset.date));
+    Focus.UI.state.calMode = "year";
+    Focus.UI.state.calDay = null;
+
   } catch (e) {
     fail++;
     lines.push("FATAL " + e.message + "\n" + (e.stack || "").split("\n").slice(0, 4).join("\n"));

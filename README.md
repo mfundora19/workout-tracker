@@ -107,8 +107,11 @@ Google Sheets → download as .xlsx → Import Excel in the app
   today has no workout yet (the streak is still alive until today ends).
 - Entry requires only **date + type**. Duration, calories and notes are optional —
   e.g. `Aug 7 · Walking · 250 kcal` with no duration is perfectly fine.
-- Use **⚡ Quick add** on the Dashboard, the **+ Add Workout** button anywhere,
-  or click a day on the calendar to add for that exact date.
+- Use **⚡ Quick add** on the Dashboard (switch to the 📏 Measurement tab to
+  log weight/waist/etc.), the **+ Add Workout** button anywhere, or click a
+  day on the calendar to add for that exact date.
+- The measurement quick-add and the day panel also offer **+ Add measurement**,
+  prefilled with the date you picked.
 - Negative values and invalid dates are rejected; optional fields stay blank.
 
 ## How measurements work
