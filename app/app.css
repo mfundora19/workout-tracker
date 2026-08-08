@@ -291,10 +291,14 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 }
 .month-card { cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; }
 .month-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow-md); }
-.month-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-.month-head strong { font-size: 13.5px; }
-.month-head span { font-size: 12px; color: var(--accent); font-weight: 700; }
+.month-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.month-head strong { font-size: 13.5px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.month-head span { font-size: 12px; color: var(--accent); font-weight: 700; white-space: nowrap; }
 .month-head span.rest { color: var(--text-faint); font-weight: 600; }
+/* Status emojis pinned to the bottom-right of each month card. */
+.month-foot { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 8px; min-height: 20px; }
+.best-chip { font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; }
+.act-chip { font-size: 14px; line-height: 1; opacity: .68; }
 .heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .heat .day {
   aspect-ratio: 1; border-radius: 4px;
@@ -341,9 +345,8 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 /* Daily-goal days get a gold ring + a small check badge. */
 .day-cell.goal-hit { border-color: var(--warn); }
 .day-cell .goal-check { position: absolute; top: 4px; right: 4px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #fff; font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center; box-shadow: 0 1px 4px rgba(0, 0, 0, .28); }
-.goal-chip { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; margin-left: 6px; }
-.cur-chip { display: inline-block; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 8px; margin-left: 6px; text-transform: uppercase; letter-spacing: .4px; }
-/* Current month in the year heat-grid gets an accent ring + glow. */
+.goal-chip { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; }
+/* Current month in the year heat-grid gets a colored border + glow only. */
 .month-card.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 22px -10px var(--accent); }
 .goal-summary { margin: 4px 0 10px; font-size: 12.5px; }
 .goal-hit-count { color: var(--warn); font-weight: 700; }

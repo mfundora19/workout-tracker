@@ -216,6 +216,10 @@ function dump() {
     Focus.UI.renderCalendar();
     ok("year view shows goal chips", document.querySelectorAll(".month-card .goal-chip").length > 0, "chips=" + document.querySelectorAll(".month-card .goal-chip").length);
     ok("year view highlights the current month", document.querySelectorAll("#calendarBody .month-card.is-current").length === 1 && document.querySelector("#calendarBody .month-card.is-current").dataset.month === String(new Date().getMonth() + 1), "cur=" + document.querySelectorAll("#calendarBody .month-card.is-current").length);
+    ok("current month has a colored border but no This-month label", document.querySelectorAll(".cur-chip").length === 0);
+    ok("heatmap month cards show status emojis bottom-right", document.querySelectorAll("#acHeat .month-foot .act-chip, #acHeat .month-foot .best-chip").length > 0, "emoji chips=" + document.querySelectorAll("#acHeat .month-foot .act-chip, #acHeat .month-foot .best-chip").length);
+    ok("best month gets a Best chip (heatmap)", document.querySelectorAll("#acHeat .month-foot .best-chip").length === 1 && document.querySelector("#acHeat .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
+    ok("calendar year view keeps status emojis out", document.querySelectorAll("#calendarBody .month-foot .act-chip, #calendarBody .month-foot .best-chip").length === 0);
     await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
     // --- dashboard quick add: measurement mode ---

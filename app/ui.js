@@ -643,6 +643,8 @@
   function yearHeatGrid(all, year, interactive) {
     const ms = St().monthlyStats(all, year);
     const g = Store().settings.goals || {};
+    // Index of the year's most consistent month (most workout days) for the 🔥 badge.
+    const bestIdx = ms.reduce((bi, m, i2) => (m.days > ms[bi].days ? i2 : bi), 0);
     const cards = ms.map((m, i) => {
       const map = St().monthDayMap(all, year, i + 1);
       let goalCnt = 0;
@@ -654,13 +656,20 @@
         const today = year === St().yearOf(St().todayISO()) && d === St().dayOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
         cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""}" ${info ? `data-day="${year}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
-      // Only interactive grids (the real calendar) highlight the current month;
-      // the analytics heatmap reuses this renderer but shouldn't.
+      // Interactive grids (the real calendar) highlight the current month with
+      // a colored border only; the analytics heatmap reuses this renderer.
       const isCur = interactive && year === St().yearOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
+      // The 💪/🔥 status emojis are a heatmap flourish — analytics only.
+      const isBest = !interactive && m.days > 0 && i === bestIdx;
+      const foot = [
+        !interactive && m.days ? (isBest ? `<span class="best-chip" title="Most consistent month">🔥 Best</span>` : `<span class="act-chip" title="Active month">💪</span>`) : "",
+        goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""
+      ].filter(Boolean).join("");
       return `
         <div class="card month-card ${isCur ? "is-current" : ""}" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
-          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}${goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""}${isCur ? `<span class="cur-chip">This month</span>` : ""}</span></div>
+          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
           <div class="heat">${cells.join("")}</div>
+          <div class="month-foot">${foot}</div>
         </div>`;
     });
     const total = ms.reduce((s, m) => s + m.days, 0);
