@@ -465,6 +465,47 @@ function dump() {
     await Focus.Store.deleteWorkout(yogaW.id);
     ok("cleanup back to 92 after picker tests", Focus.Store.workouts.length === 92);
 
+    // --- workout identity: emoji legacy types never create a second record ---
+    ok("normalizeTypes strips leading emoji (🚶➡️ Walk -> Walk)", Focus.Store.normalizeTypes("🚶\u200d➡️ Walk") === "Walk", JSON.stringify(Focus.Store.normalizeTypes("🚶\u200d➡️ Walk")));
+    ok("normalizeTypes leaves plain names untouched", Focus.Store.normalizeTypes("Abs, Back, Triceps, Walk") === "Abs, Back, Triceps, Walk", Focus.Store.normalizeTypes("Abs, Back, Triceps, Walk"));
+    const emojiImp = await Focus.Store.importRecords([{ date: "2026-09-17", type: "🚶\u200d➡️ Walk", duration: 30, calories: 500 }], []);
+    const emojiRec = Focus.Store.workouts.find((x) => x.date === "2026-09-17");
+    ok("import normalizes emoji type to Walk (1 record)", emojiRec && emojiRec.type === "Walk" && Focus.Store.workouts.filter((x) => x.date === "2026-09-17").length === 1, JSON.stringify(emojiRec));
+
+    // --- edit updates the existing record in place (Walk -> Cardio) ---
+    const w12 = await Focus.Store.addWorkout({ date: "2026-09-20", type: "Walk", duration: 30, calories: 500 });
+    const w12id = w12.id;
+    await Focus.Store.updateWorkout(w12id, { type: "Cardio", duration: 30, calories: 500 });
+    const afterEdit = Focus.Store.workouts.filter((x) => x.date === "2026-09-20");
+    ok("edit type keeps one record with the same id", afterEdit.length === 1 && afterEdit[0].id === w12id, JSON.stringify(afterEdit));
+    ok("edited type is Cardio, not Walk", afterEdit[0].type === "Cardio" && !afterEdit[0].type.includes("Walk"), afterEdit[0].type);
+
+    // --- changing to Other keeps the same id (no Walk + Other pair) ---
+    await Focus.Store.updateWorkout(w12id, { type: "Other" });
+    const afterOther = Focus.Store.workouts.filter((x) => x.date === "2026-09-20");
+    ok("Walk -> Other: one record, same id, type Other", afterOther.length === 1 && afterOther[0].id === w12id && afterOther[0].type === "Other", JSON.stringify(afterOther));
+    ok("no stray Walk record remains anywhere", !Focus.Store.workouts.some((x) => x.type.includes("Walk") && x.date === "2026-09-20"));
+
+    // --- delete removes it from the store (persisted path) ---
+    const beforeDel = Focus.Store.workouts.length;
+    await Focus.Store.deleteWorkout(w12id);
+    const diagAfterDel = Focus.Store.diagnostics();
+    ok("delete removes the workout", Focus.Store.workouts.length === beforeDel - 1 && !Focus.Store.workouts.some((x) => x.id === w12id), "len=" + Focus.Store.workouts.length);
+    ok("diagnostics healthy after edit/delete", diagAfterDel.healthy === true && diagAfterDel.dupIds.length === 0 && diagAfterDel.missingIds === 0, JSON.stringify(diagAfterDel));
+
+    // --- two legitimately identical workouts are both preserved ---
+    const sA = await Focus.Store.addWorkout({ date: "2026-09-18", type: "Walk", duration: 30, calories: 500 });
+    const sB = await Focus.Store.addWorkout({ date: "2026-09-18", type: "Walk", duration: 30, calories: 500 });
+    const identicalDay = Focus.Store.workouts.filter((x) => x.date === "2026-09-18");
+    ok("two identical-looking workouts stay separate (2 records, distinct ids)", identicalDay.length === 2 && sA.id !== sB.id, JSON.stringify(identicalDay));
+    const diagNear = Focus.Store.diagnostics();
+    ok("near-duplicates reported but not deleted", diagNear.nearDuplicates >= 1 && diagNear.workouts === Focus.Store.workouts.length, JSON.stringify(diagNear));
+    await Focus.Store.deleteWorkout(sA.id);
+    await Focus.Store.deleteWorkout(sB.id);
+    await Focus.Store.deleteWorkout(emojiRec.id);
+    ok("cleanup back to 92 after identity tests", Focus.Store.workouts.length === 92);
+    ok("diagnostics healthy at end", Focus.Store.diagnostics().healthy === true, JSON.stringify(Focus.Store.diagnostics()));
+
     ["renderDashboard", "renderCalendar", "renderTools", "renderProgress", "renderAnalytics", "renderData", "renderSettings"].forEach((fn) => {
       try {
         Focus.UI[fn]();

@@ -313,6 +313,9 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .type-chip .tcdot { width: 7px; height: 7px; border-radius: 50%; background: var(--tc, var(--accent)); opacity: .45; transition: opacity .15s; }
 .type-chip.is-on { background: color-mix(in srgb, var(--tc, var(--accent)) 16%, transparent); border-color: var(--tc, var(--accent)); color: var(--text); }
 .type-chip.is-on .tcdot { opacity: 1; }
+/* ✕ only appears on unselected custom chips — it manages the picker list, so
+   it must never look like it can remove a type from the workout being edited. */
+.type-chip.is-on .type-chip-x { display: none; }
 .type-chip-x {
   display: inline-flex; align-items: center; justify-content: center;
   width: 15px; height: 15px; margin-left: 4px; border-radius: 50%;

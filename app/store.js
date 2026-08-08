@@ -28,6 +28,16 @@
 
   function nowIso() { return new Date().toISOString(); }
 
+  /** Strip a leading decorative emoji sequence from a type name
+   *  (e.g. "🚶\u200d➡️ Walk" → "Walk"). Covers pictographs, ZWJ chains,
+   *  variation selectors, keycaps and arrows. Idempotent and safe for
+   *  plain names — a missing/legacy emoji must never create a second,
+   *  near-duplicate workout type. */
+  const EMOJI_LEAD = /^[\s\ufe00-\ufe0f\u200d\u20e3\u2190-\u2bff\p{Extended_Pictographic}]+/u;
+  function stripTypeEmoji(t) {
+    return String(t == null ? "" : t).replace(EMOJI_LEAD, "").trim();
+  }
+
   function makeWorkout(data) {
     const t = nowIso();
     return {
@@ -161,7 +171,81 @@
       const defaults = { theme: null, selectedYear: null, lastBackupAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } };
       state.settings = Object.assign({}, defaults, s);
       state.settings.goals = Object.assign({}, defaults.goals, s.goals || {});
+
+      // ----- one-time integrity pass over stored data -----
+      // IDs are structurally unique in IndexedDB (keyPath "id"), but this
+      // migration is a belt-and-braces guarantee: assign a stable ID to any
+      // legacy record that lacks one, normalize legacy type strings (e.g.
+      // an emoji embedded in a custom type → "🚶➡️ Walk" → "Walk"), drop
+      // duplicate IDs, then persist only what actually changed.
+      let touched = 0;
+      const seen = new Set();
+      state.workouts = state.workouts.map((rec) => {
+        let changed = false;
+        if (!rec.id) { rec.id = uid(); changed = true; }
+        const nt = normalizeTypes(rec.type);
+        if (nt !== (rec.type || "")) { rec.type = nt; changed = true; }
+        if (changed) { touched++; rec.updatedAt = nowIso(); }
+        return rec;
+      }).filter((rec) => {
+        if (seen.has(rec.id)) { console.warn("[Focus] duplicate workout id dropped on boot:", rec.id); touched++; return false; }
+        seen.add(rec.id);
+        return true;
+      });
+      const mSeen = new Set();
+      state.measurements = state.measurements.map((rec) => {
+        if (!rec.id) { rec.id = uid(); touched++; }
+        return rec;
+      }).filter((rec) => {
+        if (mSeen.has(rec.id)) { console.warn("[Focus] duplicate measurement id dropped on boot:", rec.id); touched++; return false; }
+        mSeen.add(rec.id);
+        return true;
+      });
+      const customTypes = (state.settings.customTypes || []).map(stripTypeEmoji).filter(Boolean);
+      const removedTypes = (state.settings.removedTypes || []).map(stripTypeEmoji).filter(Boolean);
+      if (customTypes.join("\u0000") !== (state.settings.customTypes || []).join("\u0000") ||
+          removedTypes.join("\u0000") !== (state.settings.removedTypes || []).join("\u0000")) {
+        state.settings.customTypes = customTypes;
+        state.settings.removedTypes = removedTypes;
+        touched++;
+      }
+      if (touched) {
+        await bulkPut("workouts", state.workouts);
+        await bulkPut("measurements", state.measurements);
+        await saveSettings();
+      }
+      const diag = this.diagnostics();
+      if (!diag.healthy || diag.nearDuplicates) {
+        console.info("[Focus] data integrity check", diag);
+      }
       state.ready = true;
+    },
+
+    /** Dev/QA diagnostic: duplicate IDs, missing IDs, near-duplicate records.
+     *  Near-duplicates (same date+type+duration+calories) are *not* merged or
+     *  deleted — two identical workouts can be legitimate — they are only
+     *  reported so persistence bugs are visible. */
+    diagnostics() {
+      const ids = new Set();
+      const dupIds = [];
+      let missing = 0;
+      const seen = new Map();
+      let near = 0;
+      for (const w of state.workouts) {
+        if (!w.id) { missing++; continue; }
+        if (ids.has(w.id)) dupIds.push(w.id);
+        ids.add(w.id);
+        const k = [w.date, w.type, w.duration, w.calories].join("|");
+        if (seen.has(k)) near++; else seen.set(k, true);
+      }
+      return {
+        workouts: state.workouts.length,
+        measurements: state.measurements.length,
+        dupIds,
+        missingIds: missing,
+        nearDuplicates: near,
+        healthy: dupIds.length === 0 && missing === 0
+      };
     },
 
     /** Register a callback invoked after any data mutation. */
@@ -475,7 +559,7 @@
   function normalizeTypes(v) {
     const seen = [];
     String(v == null ? "" : v).split(",").forEach((p) => {
-      const t = p.trim();
+      const t = stripTypeEmoji(p);
       if (t && seen.indexOf(t) === -1) seen.push(t);
     });
     return seen.sort().join(", ");

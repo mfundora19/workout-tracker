@@ -281,7 +281,11 @@
           break;
         }
         case "remove-type": {
-          // Remove a custom (non-default) type from the picker everywhere.
+          // Manage the picker list ONLY — hide a custom type everywhere.
+          // This must never touch the current workout's selection: removing
+          // a chip from the list is not the same as removing the type from
+          // this workout (and silently emptying the selection would turn the
+          // workout into "Other" on save).
           const picker = target.dataset.picker;
           const t = target.dataset.type;
           const stg = Focus.Store.settings;
@@ -290,15 +294,6 @@
           Focus.Store.setSettings({ customTypes, removedTypes });
           const container = document.getElementById(picker + "Picker");
           if (container) container.querySelectorAll(".type-chip").forEach((c) => { if (c.dataset.type === t) c.remove(); });
-          const hidden = document.getElementById(picker + "Type");
-          if (hidden) {
-            const cur = new Set((hidden.value || "").split(",").map((s2) => s2.trim()).filter(Boolean));
-            if (cur.has(t)) {
-              cur.delete(t);
-              hidden.value = Focus.Store.normalizeTypes(Array.from(cur).join(", "));
-            }
-          }
-          updateTypeSummary(picker);
           break;
         }
         case "add-type": {
@@ -333,6 +328,8 @@
             dot.className = "tcdot";
             chip.appendChild(dot);
             chip.appendChild(document.createTextNode(" " + st.emoji + " " + name));
+            // Always attach the ✕ (CSS hides it while the chip is selected,
+            // so it can only be used to manage the list, not the workout).
             const x = document.createElement("span");
             x.className = "type-chip-x";
             x.dataset.action = "remove-type";
