@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse.Store — persistence layer (IndexedDB + in-memory cache)
+ * Focus.Store — persistence layer (IndexedDB + in-memory cache)
  * -------------------------------------------------------------------------
  * Everything is loaded into memory once on boot. All reads are synchronous
  * off the cache; every mutation is written through to IndexedDB so changes
@@ -8,7 +8,7 @@
 (function () {
   "use strict";
 
-  const DB_NAME = "pulse-tracker";
+  const DB_NAME = "focus-tracker";
   const DB_VERSION = 1;
 
   let db = null;
@@ -236,12 +236,12 @@
     /* ----- seed ----- */
     /** Load built-in historical data once (idempotent, dedup-safe). */
     async seedIfNeeded() {
-      const v = window.PulseSeed && PulseSeed.version ? PulseSeed.version : 0;
+      const v = window.FocusSeed && FocusSeed.version ? FocusSeed.version : 0;
       if (state.settings.seedVersion >= v) return { loaded: false, reason: "already-seeded" };
-      if (!window.PulseSeed) return { loaded: false, reason: "no-seed" };
+      if (!window.FocusSeed) return { loaded: false, reason: "no-seed" };
       const res = await this.importRecords(
-        PulseSeed.workouts.map((w) => ({ ...w, type: w.type || "Other" })),
-        PulseSeed.measurements || []
+        FocusSeed.workouts.map((w) => ({ ...w, type: w.type || "Other" })),
+        FocusSeed.measurements || []
       );
       state.settings.seedVersion = v;
       await saveSettings();
@@ -353,7 +353,7 @@
     /* ----- backup ----- */
     exportBackup() {
       return {
-        app: "pulse",
+        app: "focus",
         kind: "backup",
         version: 1,
         exportedAt: nowIso(),
@@ -365,8 +365,8 @@
 
     /** Import a JSON backup blob (object). Never destroys data. */
     async importBackup(obj) {
-      if (!obj || obj.app !== "pulse" || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
-        throw new Error("This file is not a valid Pulse backup.");
+      if (!obj || (obj.app !== "focus" && obj.app !== "pulse") || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
+        throw new Error("This file is not a valid Focus backup.");
       }
       return this.importRecords(obj.workouts, obj.measurements);
     },
@@ -519,6 +519,6 @@
   Store.workoutKey = workoutKey;
   Store.measKey = measKey;
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.Store = Store;
+  window.Focus = window.Focus || {};
+  window.Focus.Store = Store;
 })();

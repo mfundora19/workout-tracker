@@ -1,4 +1,4 @@
-# Pulse — Workout & Fitness Tracker
+# Focus — Workout & Fitness Tracker
 
 A **private, 100% offline** web application for tracking workouts, calories, body
 measurements and yearly fitness statistics. It replaces the `Workout Calendar.xlsx`
@@ -60,7 +60,7 @@ Export JSON backup        Import JSON backup
 USB / Google Drive / cloud storage
 ```
 
-1. **Data → Export JSON backup** (`pulse-backup-YYYY-MM-DD.json`).
+1. **Data → Export JSON backup** (`focus-backup-YYYY-MM-DD.json`).
    This is a complete snapshot: workouts, measurements, settings.
 2. Move the file to the other computer.
 3. Open the app there → **Data → Import JSON backup**.
@@ -197,7 +197,7 @@ The workbook stores calories by overwriting a day cell in a yearly grid, so:
 
 ## Privacy
 
-**Pulse never sends data anywhere.** There are no analytics, no telemetry, no
+**Focus never sends data anywhere.** There are no analytics, no telemetry, no
 external requests — the entire app (including the Excel library and every chart)
 is bundled in this folder and runs from your own files. You can disconnect the
 internet completely and everything keeps working.
@@ -220,8 +220,10 @@ internet completely and everything keeps working.
 - [x] Close the browser, reopen `index.html` → data is still there
 - [x] Works with the network cable unplugged
 
-A repeatable automated smoke test lives at `dev/smoke-test.html` — open it in a
-browser and it prints pass/fail for 45 checks against the core logic.
+A repeatable automated smoke test lives at `app/smoke-test.html` — open it in a
+browser and it prints pass/fail for dozens of checks against the core logic.
+
+Exports and imports live in the **`data/`** folder — see `data/README.md`.
 
 ---
 
@@ -231,18 +233,16 @@ browser and it prints pass/fail for 45 checks against the core logic.
 WorkoutTracker/
 ├── index.html            ← open this
 ├── README.md
-├── assets/
-│   └── xlsx.full.min.js  ← SheetJS, bundled locally (no CDN)
-├── css/
-│   └── app.css           ← design system, light + dark themes
-├── js/
-│   ├── seed-data.js      ← your historical data, embedded
-│   ├── store.js          ← IndexedDB persistence + dedup
-│   ├── stats.js          ← streaks, monthly/yearly, comparisons
+├── app/                  ← everything the app needs, in one folder
+│   ├── app.css           ← design system, light + dark themes
+│   ├── app.js            ← bootstrap & wiring
 │   ├── charts.js         ← SVG charts (zero dependencies)
 │   ├── excel.js          ← .xlsx/.csv import & export
+│   ├── seed-data.js      ← your historical data, embedded
+│   ├── stats.js          ← streaks, monthly/yearly, comparisons
+│   ├── store.js          ← IndexedDB persistence + dedup
 │   ├── ui.js             ← all views & dialogs
-│   └── app.js            ← bootstrap & wiring
-└── dev/
-    └── smoke-test.html   ← optional automated checks
+│   ├── smoke-test.html   ← optional automated checks
+│   └── xlsx.full.min.js  ← SheetJS, bundled locally (no CDN)
+└── data/                 ← keep your Excel/JSON exports & imports here
 ```

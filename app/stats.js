@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse.Stats — pure calculation engine
+ * Focus.Stats — pure calculation engine
  * -------------------------------------------------------------------------
  * All functions are pure over arrays of {date:"YYYY-MM-DD", ...} records so
  * they can be unit-tested mentally and recomputed on every render.
@@ -342,8 +342,8 @@
     return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][parse(iso).getDay()];
   }
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.Stats = {
+  window.Focus = window.Focus || {};
+  window.Focus.Stats = {
     MONTHS_SHORT, MONTHS_LONG,
     parse, toISO, addDays, todayISO, yearOf, monthOf, dayOf, dayOfYear, daysInMonth, weekdayOf,
     dayAggregates, workoutDays, streaks, monthlyStats, yearlyStats, compareYears,

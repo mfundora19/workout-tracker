@@ -1,10 +1,10 @@
 /* =========================================================================
- * Pulse.App — bootstrap, navigation, wiring
+ * Focus.App — bootstrap, navigation, wiring
  * ========================================================================= */
 (function () {
   "use strict";
-  const S = () => Pulse.Stats;
-  const U = () => Pulse.UI;
+  const S = () => Focus.Stats;
+  const U = () => Focus.UI;
 
   const VIEW_META = {
     dashboard: ["Dashboard", "Your year at a glance"],
@@ -19,19 +19,19 @@
     currentView: "dashboard",
 
     year() {
-      return Number(Pulse.Store.settings.selectedYear) || new Date().getFullYear();
+      return Number(Focus.Store.settings.selectedYear) || new Date().getFullYear();
     },
 
     async setYear(y) {
       y = Number(y);
-      Pulse.Store.settings.selectedYear = y;
-      await Pulse.Store.setSetting("selectedYear", y);
+      Focus.Store.settings.selectedYear = y;
+      await Focus.Store.setSetting("selectedYear", y);
       populateYearSelect(y);
       renderCurrent();
     },
 
     async setSetting(key, value) {
-      await Pulse.Store.setSetting(key, value);
+      await Focus.Store.setSetting(key, value);
     }
   };
 
@@ -39,15 +39,15 @@
 
   async function boot() {
     try {
-      await Pulse.Store.init();
+      await Focus.Store.init();
     } catch (e) {
       document.getElementById("pageSubtitle").textContent = "Storage unavailable: " + e.message;
       return;
     }
 
-    const seeded = await Pulse.Store.seedIfNeeded();
+    const seeded = await Focus.Store.seedIfNeeded();
     if (seeded && seeded.added) {
-      Pulse.UI.toast("📊 Imported your historical data from Workout Calendar.xlsx", "success", 5000);
+      Focus.UI.toast("📊 Imported your historical data from Workout Calendar.xlsx", "success", 5000);
     }
 
     initTheme();
@@ -57,24 +57,24 @@
     initGlobalDelegation();
 
     // default year: last one in settings, else latest year with data, else this year
-    const years = S().availableYears(Pulse.Store.workouts, Pulse.Store.measurements);
-    let y = Pulse.Store.settings.selectedYear;
+    const years = S().availableYears(Focus.Store.workouts, Focus.Store.measurements);
+    let y = Focus.Store.settings.selectedYear;
     if (!y || !years.includes(Number(y))) y = years[0] || new Date().getFullYear();
     populateYearSelect(y);
-    Pulse.Store.settings.selectedYear = y;
+    Focus.Store.settings.selectedYear = y;
 
     // view from hash
     const v = location.hash.replace("#/", "");
     showView(VIEW_META[v] ? v : "dashboard");
 
-    Pulse.Store.onChange(() => {
+    Focus.Store.onChange(() => {
       if (!document.getElementById("modalBackdrop").hidden) return;
       renderCurrent();
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !document.getElementById("modalBackdrop").hidden) Pulse.UI.closeModal();
-      if (e.key === "Escape" && !document.getElementById("chartTooltip").hidden) Pulse.Charts.hideTip();
+      if (e.key === "Escape" && !document.getElementById("modalBackdrop").hidden) Focus.UI.closeModal();
+      if (e.key === "Escape" && !document.getElementById("chartTooltip").hidden) Focus.Charts.hideTip();
     });
 
     window.addEventListener("hashchange", () => {
@@ -86,15 +86,15 @@
   /* ---------------- theme ---------------- */
 
   function initTheme() {
-    const saved = Pulse.Store.settings.theme;
+    const saved = Focus.Store.settings.theme;
     const pref = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     const theme = saved === "light" || saved === "dark" ? saved : pref;
     document.documentElement.setAttribute("data-theme", theme);
-    if (!saved) Pulse.Store.setSetting("theme", theme);
+    if (!saved) Focus.Store.setSetting("theme", theme);
     document.getElementById("themeToggle").addEventListener("click", () => {
       const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
-      Pulse.Store.setSetting("theme", next);
+      Focus.Store.setSetting("theme", next);
       renderCurrent();
     });
   }
@@ -105,7 +105,7 @@
     document.querySelectorAll(".nav-item").forEach((btn) => {
       btn.addEventListener("click", () => showView(btn.dataset.view));
     });
-    document.getElementById("quickAddBtn").addEventListener("click", () => Pulse.UI.openWorkoutForm({ date: S().todayISO() }));
+    document.getElementById("quickAddBtn").addEventListener("click", () => Focus.UI.openWorkoutForm({ date: S().todayISO() }));
   }
 
   function showView(name) {
@@ -122,19 +122,19 @@
 
   function renderCurrent() {
     const v = App.currentView;
-    if (v === "dashboard") Pulse.UI.renderDashboard();
-    else if (v === "calendar") Pulse.UI.renderCalendar();
-    else if (v === "workouts") Pulse.UI.renderWorkouts();
-    else if (v === "progress") Pulse.UI.renderProgress();
-    else if (v === "analytics") Pulse.UI.renderAnalytics();
-    else if (v === "data") Pulse.UI.renderData();
+    if (v === "dashboard") Focus.UI.renderDashboard();
+    else if (v === "calendar") Focus.UI.renderCalendar();
+    else if (v === "workouts") Focus.UI.renderWorkouts();
+    else if (v === "progress") Focus.UI.renderProgress();
+    else if (v === "analytics") Focus.UI.renderAnalytics();
+    else if (v === "data") Focus.UI.renderData();
   }
 
   /* ---------------- year control ---------------- */
 
   function populateYearSelect(current) {
     const sel = document.getElementById("yearSelect");
-    const years = S().availableYears(Pulse.Store.workouts, Pulse.Store.measurements);
+    const years = S().availableYears(Focus.Store.workouts, Focus.Store.measurements);
     if (!years.includes(Number(current))) years.push(Number(current));
     years.sort((a, b) => b - a);
     sel.innerHTML = years.map((y) => `<option value="${y}" ${Number(y) === Number(current) ? "selected" : ""}>${y}</option>`).join("");
@@ -158,13 +158,13 @@
       const type = f.type.value === "__custom__" ? (f.customType.value || "").trim() : f.type.value;
       const duration = f.duration.value === "" ? null : Number(f.duration.value);
       const calories = f.calories.value === "" ? null : Number(f.calories.value);
-      if (!type) { Pulse.UI.toast("Choose a workout type", "warn"); return; }
+      if (!type) { Focus.UI.toast("Choose a workout type", "warn"); return; }
       if ((duration != null && (!isFinite(duration) || duration < 0)) || (calories != null && (!isFinite(calories) || calories < 0))) {
-        Pulse.UI.toast("Numbers must be positive", "warn");
+        Focus.UI.toast("Numbers must be positive", "warn");
         return;
       }
-      Pulse.Store.addWorkout({ date, type, duration, calories, notes: "" }).then(() => {
-        Pulse.UI.toast("Workout added 💪");
+      Focus.Store.addWorkout({ date, type, duration, calories, notes: "" }).then(() => {
+        Focus.UI.toast("Workout added 💪");
         f.duration.value = "";
         f.calories.value = "";
         f.calories.focus();
@@ -176,16 +176,16 @@
         const custom = document.getElementById("qaCustomType");
         if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
       }
-      if (e.target.id === "wfYear") { Pulse.UI.state.wkYear = e.target.value; renderCurrent(); }
-      if (e.target.id === "wfMonth") { Pulse.UI.state.wkMonth = e.target.value; renderCurrent(); }
-      if (e.target.id === "wfType") { Pulse.UI.state.wkType = e.target.value; renderCurrent(); }
-      if (e.target.id === "anaA") { Pulse.UI.state.anaA = Number(e.target.value); renderCurrent(); }
-      if (e.target.id === "anaB") { Pulse.UI.state.anaB = Number(e.target.value); renderCurrent(); }
+      if (e.target.id === "wfYear") { Focus.UI.state.wkYear = e.target.value; renderCurrent(); }
+      if (e.target.id === "wfMonth") { Focus.UI.state.wkMonth = e.target.value; renderCurrent(); }
+      if (e.target.id === "wfType") { Focus.UI.state.wkType = e.target.value; renderCurrent(); }
+      if (e.target.id === "anaA") { Focus.UI.state.anaA = Number(e.target.value); renderCurrent(); }
+      if (e.target.id === "anaB") { Focus.UI.state.anaB = Number(e.target.value); renderCurrent(); }
     });
 
     document.addEventListener("input", (e) => {
       if (e.target.id === "wfSearch") {
-        Pulse.UI.state.wkSearch = e.target.value;
+        Focus.UI.state.wkSearch = e.target.value;
         debounce(() => renderCurrent(), 180)();
       }
     });
@@ -214,88 +214,88 @@
           break;
         case "quick-add": {
           const date = target.dataset.date || S().todayISO();
-          Pulse.UI.openWorkoutForm({ date });
+          Focus.UI.openWorkoutForm({ date });
           break;
         }
         case "edit-workout": {
-          const w = Pulse.Store.workouts.find((x) => x.id === id);
-          if (w) Pulse.UI.openWorkoutForm(w);
+          const w = Focus.Store.workouts.find((x) => x.id === id);
+          if (w) Focus.UI.openWorkoutForm(w);
           break;
         }
         case "delete-workout": {
-          const w = Pulse.Store.workouts.find((x) => x.id === id);
+          const w = Focus.Store.workouts.find((x) => x.id === id);
           if (!w) break;
-          Pulse.UI.confirmDialog({
+          Focus.UI.confirmDialog({
             title: "Delete workout?",
             message: `This will permanently remove the ${w.type} workout on ${S().prettyDate(w.date)}.`,
-            onConfirm: () => Pulse.Store.deleteWorkout(id).then(() => Pulse.UI.toast("Workout deleted")),
+            onConfirm: () => Focus.Store.deleteWorkout(id).then(() => Focus.UI.toast("Workout deleted")),
             confirmLabel: "Delete"
           });
           break;
         }
         case "add-measurement":
-          Pulse.UI.openMeasurementForm({ date: S().todayISO() });
+          Focus.UI.openMeasurementForm({ date: S().todayISO() });
           break;
         case "edit-measurement": {
-          const m = Pulse.Store.measurements.find((x) => x.id === id);
-          if (m) Pulse.UI.openMeasurementForm(m);
+          const m = Focus.Store.measurements.find((x) => x.id === id);
+          if (m) Focus.UI.openMeasurementForm(m);
           break;
         }
         case "delete-measurement": {
-          const m = Pulse.Store.measurements.find((x) => x.id === id);
+          const m = Focus.Store.measurements.find((x) => x.id === id);
           if (!m) break;
-          Pulse.UI.confirmDialog({
+          Focus.UI.confirmDialog({
             title: "Delete measurement?",
             message: `This will permanently remove the ${m.type} measurement from ${S().prettyDate(m.date)}.`,
-            onConfirm: () => Pulse.Store.deleteMeasurement(id).then(() => Pulse.UI.toast("Measurement deleted")),
+            onConfirm: () => Focus.Store.deleteMeasurement(id).then(() => Focus.UI.toast("Measurement deleted")),
             confirmLabel: "Delete"
           });
           break;
         }
         case "prog-type":
-          Pulse.UI.state.progType = target.dataset.type;
+          Focus.UI.state.progType = target.dataset.type;
           renderCurrent();
           break;
         case "openmonth":
-          Pulse.UI.state.calMode = "month";
-          Pulse.UI.state.calMonth = Number(target.dataset.month);
-          Pulse.UI.state.calDay = null;
+          Focus.UI.state.calMode = "month";
+          Focus.UI.state.calMonth = Number(target.dataset.month);
+          Focus.UI.state.calDay = null;
           renderCurrent();
           break;
         case "cal-year":
-          Pulse.UI.state.calMode = "year";
-          Pulse.UI.state.calDay = null;
+          Focus.UI.state.calMode = "year";
+          Focus.UI.state.calDay = null;
           renderCurrent();
           break;
         case "export-excel": {
-          const blob = Pulse.Excel.exportExcel();
-          downloadBlob(blob, "pulse-export-" + S().todayISO() + ".xlsx");
-          Pulse.UI.toast("Excel workbook downloaded");
+          const blob = Focus.Excel.exportExcel();
+          downloadBlob(blob, "focus-export-" + S().todayISO() + ".xlsx");
+          Focus.UI.toast("Excel workbook downloaded");
           break;
         }
         case "export-backup": {
-          const blob = new Blob([JSON.stringify(Pulse.Store.exportBackup(), null, 2)], { type: "application/json" });
-          downloadBlob(blob, "pulse-backup-" + S().todayISO() + ".json");
-          Pulse.App.setSetting("lastBackupAt", new Date().toISOString());
-          Pulse.UI.toast("Full backup downloaded — keep it safe 🗄️");
+          const blob = new Blob([JSON.stringify(Focus.Store.exportBackup(), null, 2)], { type: "application/json" });
+          downloadBlob(blob, "focus-backup-" + S().todayISO() + ".json");
+          Focus.App.setSetting("lastBackupAt", new Date().toISOString());
+          Focus.UI.toast("Full backup downloaded — keep it safe 🗄️");
           break;
         }
         case "export-csv": {
-          const blob = Pulse.Excel.exportCsv();
-          downloadBlob(blob, "pulse-workouts-" + S().todayISO() + ".csv");
-          Pulse.UI.toast("CSV downloaded");
+          const blob = Focus.Excel.exportCsv();
+          downloadBlob(blob, "focus-workouts-" + S().todayISO() + ".csv");
+          Focus.UI.toast("CSV downloaded");
           break;
         }
         case "restore-seed":
           restoreSeed();
           break;
         case "reset-all":
-          Pulse.UI.confirmDialog({
+          Focus.UI.confirmDialog({
             title: "Delete ALL local data?",
             message: "Every workout and measurement stored in this browser will be permanently deleted. Export a backup first if you're not sure.",
             confirmLabel: "Delete everything",
-            onConfirm: () => Pulse.Store.resetAll().then(() => {
-              Pulse.UI.toast("All data deleted. The app is now empty.", "warn", 5000);
+            onConfirm: () => Focus.Store.resetAll().then(() => {
+              Focus.UI.toast("All data deleted. The app is now empty.", "warn", 5000);
               populateYearSelect(new Date().getFullYear());
             })
           });
@@ -307,8 +307,8 @@
     document.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-cal-mode]");
       if (btn) {
-        Pulse.UI.state.calMode = btn.dataset.calMode;
-        Pulse.UI.state.calDay = null;
+        Focus.UI.state.calMode = btn.dataset.calMode;
+        Focus.UI.state.calDay = null;
         renderCurrent();
       }
     });
@@ -317,16 +317,16 @@
     document.addEventListener("click", (e) => {
       const day = e.target.closest("[data-calday]");
       if (day) {
-        Pulse.UI.state.calDay = day.dataset.day;
-        Pulse.UI.renderCalendar();
+        Focus.UI.state.calDay = day.dataset.day;
+        Focus.UI.renderCalendar();
       }
     });
     document.addEventListener("keydown", (e) => {
       const day = e.target.closest && e.target.closest("[data-calday]");
       if (day && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
-        Pulse.UI.state.calDay = day.dataset.day;
-        Pulse.UI.renderCalendar();
+        Focus.UI.state.calDay = day.dataset.day;
+        Focus.UI.renderCalendar();
       }
     });
     // heat cell click -> jump to that day in month view
@@ -334,24 +334,24 @@
       const cell = e.target.closest("[data-calinfo]");
       if (cell) {
         const iso = cell.dataset.day;
-        Pulse.UI.state.calMode = "month";
-        Pulse.UI.state.calMonth = Number(iso.slice(5, 7));
-        Pulse.UI.state.calDay = iso;
+        Focus.UI.state.calMode = "month";
+        Focus.UI.state.calMonth = Number(iso.slice(5, 7));
+        Focus.UI.state.calDay = iso;
         renderCurrent();
       }
     });
   }
 
   function restoreSeed() {
-    const seed = window.PulseSeed;
-    if (!seed) { Pulse.UI.toast("No built-in data available", "warn"); return; }
-    Pulse.UI.confirmDialog({
+    const seed = window.FocusSeed;
+    if (!seed) { Focus.UI.toast("No built-in data available", "warn"); return; }
+    Focus.UI.confirmDialog({
       title: "Restore built-in historical data?",
       message: "This re-imports the workouts and measurements extracted from your Workout Calendar.xlsx. Existing identical records are skipped — nothing is duplicated or deleted.",
       confirmLabel: "Restore data",
       danger: false,
-      onConfirm: () => Pulse.Store.importRecords(seed.workouts, seed.measurements).then((res) => {
-        Pulse.UI.toast(`Restored: ${res.added} new (${res.skipped} duplicates skipped)`, "success", 4500);
+      onConfirm: () => Focus.Store.importRecords(seed.workouts, seed.measurements).then((res) => {
+        Focus.UI.toast(`Restored: ${res.added} new (${res.skipped} duplicates skipped)`, "success", 4500);
       })
     });
   }
@@ -368,8 +368,8 @@
 
   /* ---------------- go ---------------- */
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.App = App;
+  window.Focus = window.Focus || {};
+  window.Focus.App = App;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();

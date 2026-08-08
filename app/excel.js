@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse.Excel — .xlsx / .csv import & export (SheetJS bundled locally)
+ * Focus.Excel — .xlsx / .csv import & export (SheetJS bundled locally)
  * -------------------------------------------------------------------------
  * Export produces a Google-Sheets-friendly workbook:
  *   Summary | Workouts | Measurements | Monthly Stats | Yearly Stats
@@ -8,14 +8,14 @@
  * ========================================================================= */
 (function () {
   "use strict";
-  const S = window.Pulse.Stats;
+  const S = window.Focus.Stats;
 
   /* ---------------- export ---------------- */
 
   function exportExcel() {
     const wb = window.XLSX.utils.book_new();
-    const wsWorkouts = sheetFromWorkouts(Pulse.Store.workouts);
-    const wsMeas = sheetFromMeasurements(Pulse.Store.measurements);
+    const wsWorkouts = sheetFromWorkouts(Focus.Store.workouts);
+    const wsMeas = sheetFromMeasurements(Focus.Store.measurements);
     const wsMonthly = sheetFromMonthly();
     const wsYearly = sheetFromYearly();
 
@@ -26,22 +26,22 @@
 
     // Summary sheet first
     const sum = [];
-    sum.push(["Pulse — Workout & Fitness Tracker"]);
+    sum.push(["Focus — Workout & Fitness Tracker"]);
     sum.push(["Exported", new Date().toISOString()]);
     sum.push([]);
     sum.push(["Metric", "Value"]);
-    sum.push(["Total workouts", Pulse.Store.workouts.length]);
-    sum.push(["Total workout days", new Set(Pulse.Store.workouts.map((w) => w.date)).size]);
-    sum.push(["Total calories", Pulse.Store.workouts.reduce((s, w) => s + (w.calories || 0), 0)]);
-    sum.push(["Total duration (min)", Pulse.Store.workouts.reduce((s, w) => s + (w.duration || 0), 0)]);
-    sum.push(["Total measurements", Pulse.Store.measurements.length]);
-    sum.push(["Years with data", new Set(Pulse.Store.workouts.map((w) => w.date.slice(0, 4))).size]);
+    sum.push(["Total workouts", Focus.Store.workouts.length]);
+    sum.push(["Total workout days", new Set(Focus.Store.workouts.map((w) => w.date)).size]);
+    sum.push(["Total calories", Focus.Store.workouts.reduce((s, w) => s + (w.calories || 0), 0)]);
+    sum.push(["Total duration (min)", Focus.Store.workouts.reduce((s, w) => s + (w.duration || 0), 0)]);
+    sum.push(["Total measurements", Focus.Store.measurements.length]);
+    sum.push(["Years with data", new Set(Focus.Store.workouts.map((w) => w.date.slice(0, 4))).size]);
     sum.push([]);
     sum.push(["Per-year summary"]);
     sum.push(["Year", "Workouts", "Workout Days", "Calories", "Duration (min)"]);
-    const years = S.availableYears(Pulse.Store.workouts, Pulse.Store.measurements);
+    const years = S.availableYears(Focus.Store.workouts, Focus.Store.measurements);
     years.slice().reverse().forEach((y) => {
-      const st = S.yearlyStats(Pulse.Store.workouts, y);
+      const st = S.yearlyStats(Focus.Store.workouts, y);
       sum.push([y, st.workouts, st.days, st.calories, st.duration]);
     });
     const wsSummary = window.XLSX.utils.aoa_to_sheet(sum);
@@ -82,11 +82,11 @@
   }
 
   function sheetFromMonthly() {
-    const years = S.availableYears(Pulse.Store.workouts, Pulse.Store.measurements);
+    const years = S.availableYears(Focus.Store.workouts, Focus.Store.measurements);
     const header = ["Year", "Month", "Workouts", "Workout Days", "Rest Days", "Calories", "Duration (min)", "Avg Calories/Workout", "Avg Duration/Workout", "Longest Streak"];
     const aoa = [header];
     years.forEach((y) => {
-      S.monthlyStats(Pulse.Store.workouts, y).forEach((m) => {
+      S.monthlyStats(Focus.Store.workouts, y).forEach((m) => {
         aoa.push([y, m.label, m.workouts, m.days, m.restDays, m.calories, m.duration,
           m.avgCal == null ? "" : +m.avgCal.toFixed(1),
           m.avgDur == null ? "" : +m.avgDur.toFixed(1),
@@ -100,11 +100,11 @@
   }
 
   function sheetFromYearly() {
-    const years = S.availableYears(Pulse.Store.workouts, Pulse.Store.measurements);
+    const years = S.availableYears(Focus.Store.workouts, Focus.Store.measurements);
     const header = ["Year", "Workouts", "Workout Days", "Calories", "Duration (min)", "Avg Calories/Workout", "Avg Workouts/Month", "Best Month", "Longest Streak"];
     const aoa = [header];
     years.forEach((y) => {
-      const st = S.yearlyStats(Pulse.Store.workouts, y);
+      const st = S.yearlyStats(Focus.Store.workouts, y);
       aoa.push([y, st.workouts, st.days, st.calories, st.duration,
         st.workouts ? +st.avgCal.toFixed(1) : "",
         +st.avgWorkoutsPerMonth.toFixed(1),
@@ -128,7 +128,7 @@
     }
     const header = ["Date", "Workout Type", "Duration (min)", "Calories", "Notes"];
     const aoa = [header];
-    Pulse.Store.workouts.forEach((w) => aoa.push([w.date, w.type, w.duration != null ? w.duration : "", w.calories != null ? w.calories : "", w.notes || ""]));
+    Focus.Store.workouts.forEach((w) => aoa.push([w.date, w.type, w.duration != null ? w.duration : "", w.calories != null ? w.calories : "", w.notes || ""]));
     return new Blob(["\ufeff" + toCsv(aoa)], { type: "text/csv;charset=utf-8" });
   }
 
@@ -209,7 +209,7 @@
     const id = get(["id"]);
     const obj = { date, type, duration, calories, notes };
     if (id) obj.id = String(id);
-    return Pulse.Store.normalizeWorkoutRow(obj);
+    return Focus.Store.normalizeWorkoutRow(obj);
   }
 
   function mapMeasurementRow(r) {
@@ -229,6 +229,6 @@
     return { date, type, value, unit, notes };
   }
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.Excel = { exportExcel, exportCsv, parseWorkbook, mapWorkoutRow, mapMeasurementRow };
+  window.Focus = window.Focus || {};
+  window.Focus.Excel = { exportExcel, exportCsv, parseWorkbook, mapWorkoutRow, mapMeasurementRow };
 })();

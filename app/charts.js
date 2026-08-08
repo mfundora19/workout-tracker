@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse.Charts — dependency-free SVG chart library
+ * Focus.Charts — dependency-free SVG chart library
  * -------------------------------------------------------------------------
  * Charts read their colors from CSS custom properties so light/dark themes
  * need no chart re-configuration. All charts are responsive (viewBox) and
@@ -345,6 +345,6 @@
     container.appendChild(wrap);
   }
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.Charts = { barChart, lineChart, donut, compareBars, hideTip, compact };
+  window.Focus = window.Focus || {};
+  window.Focus.Charts = { barChart, lineChart, donut, compareBars, hideTip, compact };
 })();

@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse — Built-in historical seed data
+ * Focus — Built-in historical seed data
  * -------------------------------------------------------------------------
  * Extracted from the user's "Workout Calendar.xlsx" workbook (2026 sheet)
  * and embedded so the app works 100% offline with no external files.
@@ -15,7 +15,7 @@
  *    the 1st, 8th, 15th, 22nd of each month (the 1st of each month for the
  *    first week of that month).
  * ========================================================================= */
-window.PulseSeed = {
+window.FocusSeed = {
   version: 1,
   workouts: [
     { date: "2026-01-07", type: "Other", calories: 651 },

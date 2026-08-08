@@ -1,5 +1,5 @@
 /* =========================================================================
- * Pulse.UI — rendering layer
+ * Focus.UI — rendering layer
  * -------------------------------------------------------------------------
  * Every renderer reads the current data + selected year and repaints its
  * view container. Forms, dialogs and toasts are built here; event wiring
@@ -7,9 +7,9 @@
  * ========================================================================= */
 (function () {
   "use strict";
-  const Store = () => Pulse.Store;
-  const St = () => Pulse.Stats;
-  const C = () => Pulse.Charts;
+  const Store = () => Focus.Store;
+  const St = () => Focus.Stats;
+  const C = () => Focus.Charts;
 
   /* ---------------- shared state ---------------- */
 
@@ -330,7 +330,7 @@
    * =================================================================== */
 
   function renderDashboard() {
-    const year = Pulse.App.year();
+    const year = Focus.App.year();
     const today = St().todayISO();
     const all = Store().workouts;
     const inYear = all.filter((w) => St().yearOf(w.date) === year);
@@ -518,7 +518,7 @@
    * =================================================================== */
 
   function renderCalendar() {
-    const year = Pulse.App.year();
+    const year = Focus.App.year();
     const all = Store().workouts;
     const seg = document.querySelectorAll("#calModeSeg .seg-btn");
     seg.forEach((b) => b.classList.toggle("is-active", b.dataset.calMode === state.calMode));
@@ -548,7 +548,7 @@
       }
       return `
         <div class="card month-card" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
-          <div class="month-head"><strong>${m.label}</strong><span>${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
+          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
           <div class="heat">${cells.join("")}</div>
         </div>`;
     });
@@ -565,7 +565,7 @@
   }
 
   function renderMonthView() {
-    const year = Pulse.App.year();
+    const year = Focus.App.year();
     const month = state.calMonth;
     const all = Store().workouts;
     const body = document.getElementById("calendarBody");
@@ -584,7 +584,7 @@
       const isToday = iso === today;
       const isSel = iso === sel;
       cells += `
-        <div class="day-cell ${info ? "has-wk" : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
+        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
           <span class="dnum">${d}</span>
           ${info ? `<span class="kcal">${St().fmtNum(info.calories)} kcal</span><span class="mini-bar" style="background:var(--heat-${info.level});width:${20 + info.level * 20}%"></span>` : ""}
         </div>`;
@@ -624,8 +624,8 @@
         <div id="dayPanel">${dayPanel}</div>
       </div>`;
 
-    body.querySelector("#calMonthPrev").onclick = () => { state.calMonth = prevM; if (month === 1) Pulse.App.setYear(prevY); state.calDay = null; renderCalendar(); };
-    body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Pulse.App.setYear(nextY); state.calDay = null; renderCalendar(); };
+    body.querySelector("#calMonthPrev").onclick = () => { state.calMonth = prevM; if (month === 1) Focus.App.setYear(prevY); state.calDay = null; renderCalendar(); };
+    body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
   }
 
   function dayPanelHTML(iso) {
@@ -859,7 +859,7 @@
       state.anaB = years.find((y) => y !== state.anaA) || state.anaA;
     }
     const a = state.anaA, b = state.anaB;
-    const year = Pulse.App.year();
+    const year = Focus.App.year();
     const ms = St().monthlyStats(all, year);
     const cmp = St().compareYears(all, a, b);
 
@@ -1037,7 +1037,7 @@
     wireDrop(document.getElementById("dropExcel"), document.getElementById("fileExcel"), (file) => {
       file.arrayBuffer().then((buf) => {
         try {
-          const parsed = Pulse.Excel.parseWorkbook(buf);
+          const parsed = Focus.Excel.parseWorkbook(buf);
           if (!parsed.workouts.length && !parsed.measurements.length) {
             toast("No recognizable workout or measurement rows found in this file.", "error", 5000);
             return;
@@ -1053,8 +1053,8 @@
       reader.onload = () => {
         try {
           const obj = JSON.parse(reader.result);
-          if (!obj || obj.app !== "pulse" || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
-            toast("This file is not a valid Pulse backup.", "error", 5000);
+          if (!obj || (obj.app !== "focus" && obj.app !== "pulse") || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
+            toast("This file is not a valid Focus backup.", "error", 5000);
             return;
           }
           showImportPreview(obj.workouts, obj.measurements, []);
@@ -1080,11 +1080,11 @@
 
   /**
    * Show the import preview modal with counts and a sample table.
-   * Rows are run through Pulse.Store.planImport so the preview matches
+   * Rows are run through Focus.Store.planImport so the preview matches
    * exactly what the import will do (added / updated / skipped / invalid).
    */
   function showImportPreview(workoutRows, measurementRows, errors = []) {
-    const N = Pulse.Store;
+    const N = Focus.Store;
     const plan = N.planImport(workoutRows, measurementRows);
     const t = plan.totals;
     if (!t.added && !t.updated && !t.invalid) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
@@ -1141,8 +1141,8 @@
 
   /* ---------------- public ---------------- */
 
-  window.Pulse = window.Pulse || {};
-  window.Pulse.UI = {
+  window.Focus = window.Focus || {};
+  window.Focus.UI = {
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog,
