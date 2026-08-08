@@ -117,6 +117,7 @@
 
   function showView(name) {
     App.currentView = name;
+    Focus.UI.closeInfoPopover(); // drop any open ⓘ popover when leaving the view
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("is-active", b.dataset.view === name));
     document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + name));
     document.getElementById("pageTitle").textContent = VIEW_META[name][0];
@@ -369,6 +370,15 @@
           if (next === "kg" || next === "lb") {
             Focus.Store.setSetting("weightUnit", next);
             Focus.UI.toast("New weight entries will default to " + next);
+            renderCurrent();
+          }
+          break;
+        }
+        case "set-sex": {
+          const next = target.dataset.setSex;
+          if (next === "male" || next === "female") {
+            Focus.Store.setSetting("sex", next);
+            Focus.UI.toast("Body profile saved — body-fat estimates use " + (next === "female" ? "women" : "men") + " ranges");
             renderCurrent();
           }
           break;

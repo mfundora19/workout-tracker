@@ -70,6 +70,34 @@ function dump() {
     ok("weight first=158.5 latest=149.2 change=-9.3", weight.first.value === 158.5 && weight.latest.value === 149.2 && Math.abs(weight.change - (-9.3)) < 0.001, JSON.stringify({f: weight.first.value, l: weight.latest.value, c: weight.change}));
     ok("waist trend down", mstats.find((m) => m.type === "Waist").trend === "down");
 
+    // --- body composition engine ---
+    ok("calcBMI 175cm/70kg", Math.abs(S.calcBMI(175, 70) - 22.857) < 0.01, "got " + S.calcBMI(175, 70));
+    ok("calcBMI null when height missing", S.calcBMI(null, 70) === null && S.calcBMI(175, 0) === null);
+    ok("bmiCategory 22.9 = Normal weight", S.bmiCategory(22.857).label === "Normal weight" && S.bmiCategory(22.857).cls === "ok");
+    ok("bmiCategory 32.7 = Obesity class I", S.bmiCategory(32.65).label === "Obesity class I" && S.bmiCategory(32.65).desc.includes("30 – 35"));
+    // U.S. Navy known examples (all in inches: 70/15/32 male -> ~13.4%, 64/12/27/36 female -> ~23.8%)
+    const navyMale = S.calcNavyBodyFat("male", 70 * 2.54, 15 * 2.54, 32 * 2.54);
+    ok("navy male 70-15-32in ≈ 13.4%", navyMale != null && Math.abs(navyMale - 13.35) < 0.1, "got " + navyMale);
+    const navyFemale = S.calcNavyBodyFat("female", 64 * 2.54, 12 * 2.54, 27 * 2.54, 36 * 2.54);
+    ok("navy female 64-12-27-36in ≈ 23.8%", navyFemale != null && Math.abs(navyFemale - 23.85) < 0.1, "got " + navyFemale);
+    ok("navy male needs Neck+Waist", JSON.stringify(S.navyNeeds("male")) === JSON.stringify(["Neck", "Waist"]));
+    ok("navy female needs Neck+Waist+Hips", JSON.stringify(S.navyNeeds("female")) === JSON.stringify(["Neck", "Waist", "Hips"]));
+    ok("navy rejects waist <= neck", S.calcNavyBodyFat("male", 175, 40, 35) === null);
+    ok("navy rejects missing hips (female)", S.calcNavyBodyFat("female", 163, 33, 71, null) === null);
+    ok("navy rejects implausible height", S.calcNavyBodyFat("male", 1750, 38, 80) === null);
+    ok("unit conversions in/cm and kg/lb", S.toCm(1, "in") === 2.54 && S.toCm(1, "m") === 100 && S.toCm(1, "mm") === 0.1 && Math.abs(S.toKg(1, "lb") - 0.45359237) < 1e-9 && Math.abs(S.convertTo(1, "lb", "kg") - 0.45359237) < 1e-9 && Math.abs(S.convertTo(2.54, "cm", "in") - 1) < 1e-9);
+    ok("latestOfType picks newest by date", S.latestOfType(Focus.Store.measurements, "Weight").value === 149.2, "got " + S.latestOfType(Focus.Store.measurements, "Weight").value);
+    ok("bodyComp: 22.3/12% male = Athletic / Lean", S.bodyCompClass("male", 22.3, 12).label === "Athletic / Lean", S.bodyCompClass("male", 22.3, 12).label);
+    ok("bodyComp: 27.1/13% male = Very Athletic / Muscular", S.bodyCompClass("male", 27.1, 13).label === "Very Athletic / Muscular", S.bodyCompClass("male", 27.1, 13).label);
+    ok("bodyComp: 22/15% male = Fit / Fitness", S.bodyCompClass("male", 22, 15).label === "Fit / Fitness");
+    ok("bodyComp: 24/28% female = Normal / Healthy", S.bodyCompClass("female", 24, 28).label === "Normal / Healthy");
+    ok("bodyComp: 32/25% male = Slightly High", S.bodyCompClass("male", 32, 25).label === "Slightly High");
+    ok("bodyComp: 32/33% male = High", S.bodyCompClass("male", 32, 33).label === "High");
+    ok("bodyComp: 30/40% male = Very High", S.bodyCompClass("male", 30, 40).label === "Very High");
+    ok("bodyComp: 26/40% female = High", S.bodyCompClass("female", 26, 40).label === "High");
+    ok("bfInfoRanges male starts with Essential fat 2-5%", S.bfInfoRanges("male")[0].label === "Essential fat" && S.bfInfoRanges("male")[0].range === "2 – 5%");
+    ok("bfInfoRanges female has 7 rows", S.bfInfoRanges("female").length === 7);
+
     // --- CRUD ---
     const w = await Focus.Store.addWorkout({ date: "2026-08-08", type: "Walking", duration: 30, calories: 150 });
     ok("addWorkout returns id", !!w.id && Focus.Store.workouts.length === 93);
@@ -329,7 +357,7 @@ function dump() {
       <div id="calLegend"></div>
       <div id="calendarBody"></div>
       <div id="toolsBody"></div>
-      <div id="progressHead"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
+      <div id="progressHead"></div><div id="progressCompCard"></div><div id="progressChartCard"></div><div id="progressStatsCard"></div><div id="progressTable"></div>
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
       <div id="dataBody"></div>
       <div id="settingsBody"></div>
@@ -417,7 +445,9 @@ function dump() {
     // --- tools view ---
     Focus.Store.settings.weightUnit = "lb";
     Focus.UI.renderTools();
-    ok("BMI weight default matches lb setting", document.getElementById("bmiWeight").value === "154" && document.getElementById("bmiWeightUnit").value === "lb" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiWeight").value + " / " + document.getElementById("bmiCat").textContent);
+    // No Height/Neck/Waist records exist yet: weight prefills from the latest
+    // Weight measurement (converted to lb), height falls back to the default.
+    ok("BMI weight prefills latest Weight measurement in lb", document.getElementById("bmiWeight").value === "149.2" && document.getElementById("bmiWeightUnit").value === "lb" && document.getElementById("bmiHeight").value === "175" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiWeight").value + " / " + document.getElementById("bmiHeight").value + " / " + document.getElementById("bmiCat").textContent);
     const fire = (id) => document.getElementById(id).dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("bmiHeight").value = "175";
     document.getElementById("bmiWeight").value = "70";
@@ -439,6 +469,48 @@ function dump() {
     document.getElementById("bmiWeight").value = "";
     fire("bmiWeight");
     ok("BMI empty weight shows prompt", document.getElementById("bmiCat").textContent === "Enter your height and weight");
+    // --- body-fat estimate: progressive, never broken ---
+    document.getElementById("bmiHeight").value = "175";
+    document.getElementById("bmiHeightUnit").value = "cm";
+    document.getElementById("bmiWeight").value = "70";
+    document.getElementById("bmiWeightUnit").value = "kg";
+    document.getElementById("bmiNeck").value = "";
+    document.getElementById("bmiWaist").value = "";
+    fire("bmiWeight");
+    ok("no BF with height+weight only (hint asks Neck + Waist)", document.getElementById("bfResult").hidden && !document.getElementById("bfHint").hidden && document.getElementById("bfHint").textContent.includes("Neck + Waist"), document.getElementById("bfHint").textContent);
+    document.getElementById("bmiNeck").value = "38";
+    fire("bmiNeck");
+    ok("hint narrows to Waist", document.getElementById("bfHint").textContent.includes("Waist") && !document.getElementById("bfHint").textContent.includes("Neck"), document.getElementById("bfHint").textContent);
+    document.getElementById("bmiWaist").value = "80";
+    fire("bmiWaist");
+    ok("BF male 175/70/38/80 = 12.8% Athletic/Lean", !document.getElementById("bfResult").hidden && document.getElementById("bfValue").textContent === "12.8" && document.getElementById("bfCat").textContent === "Athletic / Lean", document.getElementById("bfValue").textContent + " / " + document.getElementById("bfCat").textContent);
+    document.getElementById("bmiWeight").value = "80";
+    fire("bmiWeight");
+    ok("muscular: BMI 26.1 + BF 12.8 = Very Athletic / Muscular", document.getElementById("bmiValue").textContent === "26.1" && document.getElementById("bfCat").textContent === "Very Athletic / Muscular", document.getElementById("bmiValue").textContent + " / " + document.getElementById("bfCat").textContent);
+    document.querySelector('[data-bmi-sex="female"]').click();
+    ok("female profile reveals hips field", document.getElementById("bmiHipsField").style.display !== "none");
+    document.getElementById("bmiHeight").value = "163";
+    document.getElementById("bmiWeight").value = "60";
+    document.getElementById("bmiNeck").value = "33";
+    document.getElementById("bmiWaist").value = "71";
+    document.getElementById("bmiHips").value = "95";
+    fire("bmiHips");
+    ok("BF female 163/60/33/71/95 = 25.6% Normal/Healthy", document.getElementById("bfValue").textContent === "25.6" && document.getElementById("bfCat").textContent === "Normal / Healthy", document.getElementById("bfValue").textContent + " / " + document.getElementById("bfCat").textContent);
+    document.querySelector('[data-bmi-sex="male"]').click();
+    document.getElementById("bmiWeight").value = "70";
+    document.getElementById("bmiNeck").value = "38";
+    document.getElementById("bmiWaist").value = "80";
+    fire("bmiWaist");
+    document.getElementById("bfInfoBtn").click();
+    const popTxt = (document.querySelector(".info-pop") || {}).textContent || "";
+    ok("info popover shows male body-fat ranges", !!document.querySelector(".info-pop") && popTxt.includes("Essential fat") && popTxt.includes("2 – 5%") && popTxt.includes("U.S. Navy"), popTxt.slice(0, 80));
+    Focus.UI.closeInfoPopover();
+    ok("info popover closes", !document.querySelector(".info-pop"));
+    document.getElementById("bmiHeight").value = "175";
+    document.getElementById("bmiHeightUnit").value = "cm";
+    document.getElementById("bmiWeight").value = "70";
+    document.getElementById("bmiWeightUnit").value = "kg";
+    fire("bmiWeight");
     // weight converter
     document.getElementById("convValue").value = "1";
     document.getElementById("convUnit").value = "lb";
@@ -449,6 +521,23 @@ function dump() {
     document.getElementById("convUnit").value = "kg";
     fire("convValue");
     ok("100 kg -> 220.46 lb", document.getElementById("convResults").textContent.includes("220.46"), document.getElementById("convResults").textContent);
+
+    // --- progress view: body-composition card ---
+    Focus.UI.renderProgress();
+    ok("comp card incomplete without Height", document.getElementById("progressCompCard").textContent.includes("Height") && document.getElementById("progressCompCard").textContent.includes("Weight"), document.getElementById("progressCompCard").textContent.slice(0, 100));
+    // add Height + Neck records -> BMI + BF% computed from stored measurements
+    await Focus.Store.addMeasurement({ date: "2026-08-01", type: "Height", value: 175, unit: "cm" });
+    await Focus.Store.addMeasurement({ date: "2026-08-01", type: "Neck", value: 38, unit: "cm" });
+    Focus.UI.renderProgress();
+    const compTxt = document.getElementById("progressCompCard").textContent;
+    ok("comp card shows BMI 22.1 from records", compTxt.includes("Current BMI") && compTxt.includes("22.1"), compTxt.slice(0, 140));
+    ok("comp card shows BF 21.5 + combined class", compTxt.includes("Est. body fat") && compTxt.includes("21.5") && compTxt.includes("Normal / Healthy"), compTxt.slice(0, 160));
+    const hRec2 = Focus.Store.measurements.find((m) => m.type === "Height");
+    const nRec2 = Focus.Store.measurements.find((m) => m.type === "Neck");
+    await Focus.Store.deleteMeasurement(hRec2.id);
+    await Focus.Store.deleteMeasurement(nRec2.id);
+    Focus.UI.renderProgress();
+    ok("comp card returns to incomplete state after cleanup", document.getElementById("progressCompCard").textContent.includes("Height"));
 
     // --- progress view: last-5 table, analysis tiles, view-all modal ---
     Focus.UI.renderProgress();

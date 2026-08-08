@@ -286,7 +286,7 @@
   /* ---------------- measurement form ---------------- */
 
   const UNITS = ["", "kg", "lb", "g", "cm", "in", "%", "mm", "m"];
-  const UNIT_DEFAULTS = { Weight: "lb", "Body Fat %": "%", Waist: "cm", Chest: "cm", Hips: "cm", Arm: "cm", Thigh: "cm" };
+  const UNIT_DEFAULTS = { Weight: "lb", "Body Fat %": "%", Height: "cm", Waist: "cm", Neck: "cm", Chest: "cm", Hips: "cm", Arm: "cm", Thigh: "cm" };
 
   /** Sensible default unit for a measurement type ('' when unknown). Weight honours the user's preferred unit in Settings. */
   function unitDefault(type) {
@@ -294,7 +294,7 @@
     return UNIT_DEFAULTS[type] || "";
   }
 
-  const MEAS_TYPE_OPTIONS = ["Weight", "Body Fat %", "Waist", "Chest", "Hips", "Arm", "Thigh"];
+  const MEAS_TYPE_OPTIONS = ["Weight", "Body Fat %", "Height", "Neck", "Waist", "Chest", "Hips", "Arm", "Thigh"];
   function measurementTypes() {
     return Array.from(new Set([...MEAS_TYPE_OPTIONS, ...existingMeasTypes()]));
   }
@@ -865,54 +865,137 @@
   const KG_PER_LB = 0.45359237;
   const G_PER_OZ = 28.349523125;
 
-  const BMI_CATS = [
-    { max: 16, label: "Severe thinness", desc: "below 16 · underweight", cls: "bad" },
-    { max: 17, label: "Moderate thinness", desc: "16 – 17 · underweight", cls: "bad" },
-    { max: 18.5, label: "Mild thinness", desc: "17 – 18.5 · underweight", cls: "warn" },
-    { max: 25, label: "Normal weight", desc: "18.5 – 25 · healthy range", cls: "ok" },
-    { max: 30, label: "Overweight", desc: "25 – 30 · pre-obese", cls: "warn" },
-    { max: 35, label: "Obesity class I", desc: "30 – 35 · moderate", cls: "bad" },
-    { max: 40, label: "Obesity class II", desc: "35 – 40 · severe", cls: "bad" },
-    { max: Infinity, label: "Obesity class III", desc: "40+ · extreme", cls: "bad" }
-  ];
+  /* Compact ⓘ popover explaining the body-fat reference ranges. */
+  let infoPopEl = null;
+  function closeInfoPopover() {
+    if (infoPopEl) {
+      infoPopEl.remove();
+      infoPopEl = null;
+    }
+    document.removeEventListener("click", onInfoDocClick);
+    document.removeEventListener("keydown", onInfoEsc);
+  }
+  function onInfoDocClick(e) {
+    if (infoPopEl && !infoPopEl.contains(e.target)) closeInfoPopover();
+  }
+  function onInfoEsc(e) {
+    if (e.key === "Escape") closeInfoPopover();
+  }
+  function openInfoPopover(anchor, sex) {
+    closeInfoPopover();
+    const ranges = St().bfInfoRanges(sex);
+    infoPopEl = document.createElement("div");
+    infoPopEl.className = "info-pop";
+    infoPopEl.setAttribute("role", "tooltip");
+    infoPopEl.innerHTML = `
+      <b>Body-fat reference ranges — ${sex === "female" ? "women" : "men"}</b>
+      <div class="info-rows">
+        ${ranges.map((r) => `<div class="info-row"><span>${esc(r.label)}</span><b>${r.range}</b></div>`).join("")}
+      </div>
+      <p>U.S. Navy circumference method · estimates, not a medical diagnosis.</p>`;
+    document.body.appendChild(infoPopEl);
+    const r = anchor.getBoundingClientRect();
+    const w = infoPopEl.offsetWidth;
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
+    infoPopEl.style.left = left + "px";
+    infoPopEl.style.top = (r.bottom + 8) + "px";
+    infoPopEl.classList.add("show");
+    setTimeout(() => document.addEventListener("click", onInfoDocClick), 0);
+    document.addEventListener("keydown", onInfoEsc);
+  }
 
   function renderTools() {
     const wt = Store().settings.weightUnit || "lb";
+    const sex = Store().settings.sex || "male";
+    // Prefill from the user's latest recorded measurements (the same data the
+    // Progress view uses) so nothing has to be typed twice. Falls back to the
+    // classic example defaults when there are no records yet.
+    const ms = Store().measurements;
+    const latestCm = (t) => {
+      const r = St().latestOfType(ms, t);
+      return r ? St().toCm(r.value, r.unit) : null;
+    };
+    const wRec = St().latestOfType(ms, "Weight");
+    const wKg = wRec ? St().toKg(wRec.value, wRec.unit) : null;
+    const hCm = latestCm("Height");
+    const nCm = latestCm("Neck");
+    const wstCm = latestCm("Waist");
+    const hipCm = latestCm("Hips");
+    const r1 = (x) => x == null ? null : Math.round(x * 10) / 10;
+    const hVal = r1(hCm) != null ? r1(hCm) : 175;
+    const wVal = wKg != null ? r1(wt === "lb" ? wKg / KG_PER_LB : wKg) : (wt === "lb" ? 154 : 70);
+    const nVal = r1(nCm) != null ? r1(nCm) : "";
+    const wstVal = r1(wstCm) != null ? r1(wstCm) : "";
+    const hipVal = r1(hipCm) != null ? r1(hipCm) : "";
+    const lenUnitOpts = `<option value="cm" selected>cm</option><option value="in">in</option>`;
     document.getElementById("toolsBody").innerHTML = `
       <div class="tools-grid">
         <div class="card data-card">
-          <h3>BMI calculator</h3>
-          <p class="desc">Body Mass Index from height and weight. A rough guide, not a diagnosis.</p>
+          <h3>BMI + body-fat calculator</h3>
+          <p class="desc">Body Mass Index from height and weight, plus an estimated body fat % (U.S. Navy method) once you add your neck and waist${sex === "female" ? " and hips" : ""} measurements. Estimates — not a diagnosis.</p>
+          <div class="bmi-sex" role="group" aria-label="Body profile">
+            <span class="bmi-sex-lbl">Body profile</span>
+            <button type="button" class="chip ${sex === "male" ? "is-active" : ""}" data-bmi-sex="male">Male</button>
+            <button type="button" class="chip ${sex === "female" ? "is-active" : ""}" data-bmi-sex="female">Female</button>
+          </div>
           <div class="form-grid">
             <div class="field">
               <label for="bmiHeight">Height</label>
               <div class="input-with-unit">
-                <input class="input" id="bmiHeight" type="number" step="any" min="0" placeholder="175" value="175">
+                <input class="input" id="bmiHeight" type="number" step="any" min="0" placeholder="175" value="${hVal}">
                 <select class="select" id="bmiHeightUnit" aria-label="Height unit">
-                  <option value="cm" selected>cm</option>
-                  <option value="in">in</option>
+                  ${lenUnitOpts}
                 </select>
               </div>
             </div>
             <div class="field">
               <label for="bmiWeight">Weight</label>
               <div class="input-with-unit">
-                <input class="input" id="bmiWeight" type="number" step="any" min="0" placeholder="70" value="${wt === "lb" ? "154" : "70"}">
+                <input class="input" id="bmiWeight" type="number" step="any" min="0" placeholder="70" value="${wVal}">
                 <select class="select" id="bmiWeightUnit" aria-label="Weight unit">
                   <option value="kg">kg</option>
                   <option value="lb" ${wt === "lb" ? "selected" : ""}>lb</option>
                 </select>
               </div>
             </div>
-          </div>
-          <div class="bmi-result" aria-live="polite">
-            <div class="bmi-value"><b id="bmiValue">22.9</b><span>BMI</span></div>
-            <div class="bmi-cat-wrap">
-              <div class="bmi-cat ok" id="bmiCat">Normal weight</div>
-              <div class="bmi-desc" id="bmiDesc">18.5 – 25 · healthy range</div>
+            <div class="field">
+              <label for="bmiNeck">Neck</label>
+              <div class="input-with-unit">
+                <input class="input" id="bmiNeck" type="number" step="any" min="0" placeholder="38" value="${nVal}">
+                <select class="select" id="bmiNeckUnit" aria-label="Neck unit">${lenUnitOpts}</select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="bmiWaist">Waist</label>
+              <div class="input-with-unit">
+                <input class="input" id="bmiWaist" type="number" step="any" min="0" placeholder="81" value="${wstVal}">
+                <select class="select" id="bmiWaistUnit" aria-label="Waist unit">${lenUnitOpts}</select>
+              </div>
+            </div>
+            <div class="field" id="bmiHipsField" ${sex === "female" ? "" : 'style="display:none"'}>
+              <label for="bmiHips">Hips <span class="req-tag">women only</span></label>
+              <div class="input-with-unit">
+                <input class="input" id="bmiHips" type="number" step="any" min="0" placeholder="96" value="${hipVal}">
+                <select class="select" id="bmiHipsUnit" aria-label="Hips unit">${lenUnitOpts}</select>
+              </div>
             </div>
           </div>
-          <p class="bmi-note">💪 Athletes: BMI doesn't measure muscle, so a very muscular build can read “overweight” at low body fat.</p>
+          <div class="bmi-result" aria-live="polite">
+            <div class="bmi-value"><b id="bmiValue">—</b><span>BMI</span></div>
+            <div class="bmi-cat-wrap">
+              <div class="bmi-cat neutral" id="bmiCat">Enter your height and weight</div>
+              <div class="bmi-desc" id="bmiDesc">both fields are needed</div>
+            </div>
+          </div>
+          <div class="bf-result" id="bfResult" hidden aria-live="polite">
+            <div class="bmi-value"><b id="bfValue">—</b><span>Est. body fat <button type="button" class="info-btn" id="bfInfoBtn" aria-label="About body-fat ranges">ⓘ</button></span></div>
+            <div class="bmi-cat-wrap">
+              <div class="bmi-cat neutral" id="bfCat">—</div>
+              <div class="bmi-desc" id="bfNote"></div>
+            </div>
+          </div>
+          <div class="bf-hint" id="bfHint" hidden></div>
+          <p class="bmi-note">💪 Body fat is estimated with the U.S. Navy circumference method (±3–4%). BMI doesn't measure muscle — a very muscular build can read “overweight” at low body fat.</p>
         </div>
 
         <div class="card data-card">
@@ -936,12 +1019,32 @@
     updateBMI();
     updateConverter();
     const refresh = () => { updateBMI(); updateConverter(); };
-    ["bmiHeight", "bmiHeightUnit", "bmiWeight", "bmiWeightUnit", "convValue", "convUnit"].forEach((id) => {
+    ["bmiHeight", "bmiHeightUnit", "bmiWeight", "bmiWeightUnit", "bmiNeck", "bmiNeckUnit", "bmiWaist", "bmiWaistUnit", "bmiHips", "bmiHipsUnit", "convValue", "convUnit"].forEach((id) => {
       const n = document.getElementById(id);
       if (!n) return;
       n.addEventListener("input", refresh);
       n.addEventListener("change", refresh);
     });
+    // Body-profile toggle: persists to settings (shared with Progress view),
+    // reveals the hips field for women and recomputes.
+    document.querySelectorAll("[data-bmi-sex]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const next = b.dataset.bmiSex;
+        if (next !== "male" && next !== "female") return;
+        Store().setSetting("sex", next);
+        document.querySelectorAll("[data-bmi-sex]").forEach((x) => x.classList.toggle("is-active", x === b));
+        const hips = document.getElementById("bmiHipsField");
+        if (hips) hips.style.display = next === "female" ? "" : "none";
+        updateBMI();
+      });
+    });
+    const infoBtn = document.getElementById("bfInfoBtn");
+    if (infoBtn) {
+      infoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openInfoPopover(infoBtn, Store().settings.sex || "male");
+      });
+    }
   }
 
   function updateBMI() {
@@ -962,6 +1065,7 @@
       cat.textContent = "Enter your height and weight";
       desc.textContent = "both fields are needed";
       cat.className = "bmi-cat neutral";
+      updateBF(null);
       return;
     }
     const bmi = kg / (meters * meters);
@@ -969,10 +1073,55 @@
     // matches the number on screen (e.g. 24.96 shows 25.0 · Overweight)
     const shown = Number(bmi.toFixed(1));
     v.textContent = shown;
-    const c = BMI_CATS.find((c2) => shown < c2.max) || BMI_CATS[BMI_CATS.length - 1];
+    const c = St().bmiCategory(bmi);
     cat.textContent = c.label;
     desc.textContent = c.desc;
     cat.className = "bmi-cat " + c.cls;
+    updateBF({ bmi });
+  }
+
+  /** Show/hide the body-fat section depending on which inputs are available. */
+  function updateBF(ctx) {
+    const bfEl = document.getElementById("bfResult");
+    const hint = document.getElementById("bfHint");
+    const bfVal = document.getElementById("bfValue");
+    const bfCat = document.getElementById("bfCat");
+    const bfNote = document.getElementById("bfNote");
+    if (!bfEl || !hint || !bfVal || !bfCat || !bfNote) return;
+    const sex = (Store().settings.sex || "male");
+    const readCm = (id, uid) => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const val = parseFloat(el.value);
+      if (!isFinite(val) || val <= 0) return null;
+      return document.getElementById(uid).value === "in" ? val * 2.54 : val;
+    };
+    const hCm = readCm("bmiHeight", "bmiHeightUnit");
+    const neckCm = readCm("bmiNeck", "bmiNeckUnit");
+    const waistCm = readCm("bmiWaist", "bmiWaistUnit");
+    const hipsCm = readCm("bmiHips", "bmiHipsUnit");
+    const missing = St().navyNeeds(sex).filter((t) =>
+      t === "Neck" ? neckCm == null : t === "Waist" ? waistCm == null : hipsCm == null);
+    if (ctx && ctx.bmi != null && missing.length === 0) {
+      const bf = St().calcNavyBodyFat(sex, hCm, neckCm, waistCm, hipsCm);
+      if (bf != null) {
+        const cls = St().bodyCompClass(sex, ctx.bmi, bf);
+        bfVal.textContent = Number(bf.toFixed(1));
+        bfCat.textContent = cls.label;
+        bfCat.className = "bmi-cat " + cls.cls;
+        bfNote.textContent = cls.note;
+        bfEl.hidden = false;
+        hint.hidden = true;
+        return;
+      }
+    }
+    bfEl.hidden = true;
+    if (ctx && ctx.bmi != null && missing.length > 0) {
+      hint.textContent = "➕ Add " + missing.join(" + ") + " to estimate body fat %";
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
   }
 
   function updateConverter() {
@@ -1016,6 +1165,7 @@
     const s = Store().settings;
     const theme = document.documentElement.getAttribute("data-theme") || "dark";
     const wt = s.weightUnit || "lb";
+    const sex = s.sex || "male";
     const g = s.goals || {};
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
@@ -1060,6 +1210,13 @@
             <div class="seg" role="group" aria-label="Weight unit">
               <button class="seg-btn ${wt === "kg" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="kg">kg</button>
               <button class="seg-btn ${wt === "lb" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="lb">lb</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Body profile</b><span>Used for the body-fat estimate (U.S. Navy method) in Tools and Progress.</span></div>
+            <div class="seg" role="group" aria-label="Body profile">
+              <button class="seg-btn ${sex === "male" ? "is-active" : ""}" data-action="set-sex" data-set-sex="male">Male</button>
+              <button class="seg-btn ${sex === "female" ? "is-active" : ""}" data-action="set-sex" data-set-sex="female">Female</button>
             </div>
           </div>
         </div>
@@ -1123,9 +1280,83 @@
    * PROGRESS (measurements)
    * =================================================================== */
 
+  /**
+   * Body-composition summary card: current BMI (and estimated body fat, when
+   * the Navy circumference measurements exist) computed from the user's latest
+   * recorded measurements — never entered twice.
+   */
+  function renderCompCard() {
+    const el = document.getElementById("progressCompCard");
+    if (!el) return;
+    const ms = Store().measurements;
+    const sex = Store().settings.sex || "male";
+    const hRec = St().latestOfType(ms, "Height");
+    const wRec = St().latestOfType(ms, "Weight");
+    const hCm = hRec ? St().toCm(hRec.value, hRec.unit) : null;
+    const wKg = wRec ? St().toKg(wRec.value, wRec.unit) : null;
+    const bmi = St().calcBMI(hCm, wKg);
+    const nCm = (() => { const r = St().latestOfType(ms, "Neck"); return r ? St().toCm(r.value, r.unit) : null; })();
+    const wstCm = (() => { const r = St().latestOfType(ms, "Waist"); return r ? St().toCm(r.value, r.unit) : null; })();
+    const hipCm = (() => { const r = St().latestOfType(ms, "Hips"); return r ? St().toCm(r.value, r.unit) : null; })();
+    const have = { Neck: nCm != null, Waist: wstCm != null, Hips: hipCm != null };
+    const missing = St().navyNeeds(sex).filter((t) => !have[t]);
+    const bf = bmi != null && missing.length === 0 ? St().calcNavyBodyFat(sex, hCm, nCm, wstCm, hipCm) : null;
+
+    if (bmi == null) {
+      el.innerHTML = `
+        <div class="card data-card comp-card">
+          <div class="card-title"><h3>Body composition</h3><span class="sub">Current BMI & body-fat estimate</span></div>
+          <div class="comp-empty">
+            <div class="es-icon">${ICONS.scale}</div>
+            <p>Record a <b>Height</b> and a <b>Weight</b> measurement to see your current BMI${sex === "female" ? " — add Neck + Waist + Hips for an estimated body fat %." : " — add Neck + Waist for an estimated body fat %."}</p>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const bCat = St().bmiCategory(bmi);
+    const wTxt = wRec ? St().fmtNum(wRec.value, 1) + " " + esc(wRec.unit) : null;
+    let bfHTML;
+    if (bf != null) {
+      const cls = St().bodyCompClass(sex, bmi, bf);
+      bfHTML = `
+        <div class="comp-tile">
+          <div class="comp-val"><b>${Number(bf.toFixed(1))}%</b><span>Est. body fat <button type="button" class="info-btn" data-info-btn aria-label="About body-fat ranges">ⓘ</button></span></div>
+          <div class="bmi-cat ${cls.cls}">${esc(cls.label)}</div>
+          <p class="comp-note">${esc(cls.note)}</p>
+        </div>`;
+    } else {
+      bfHTML = `
+        <div class="comp-tile comp-missing">
+          <div class="comp-val"><span>Est. body fat</span></div>
+          <p>Add <b>${missing.join("</b> + <b>")}</b> to estimate body fat %.</p>
+        </div>`;
+    }
+    el.innerHTML = `
+      <div class="card data-card comp-card">
+        <div class="card-title"><h3>Body composition</h3><span class="sub">from your latest measurements</span></div>
+        <div class="comp-grid">
+          <div class="comp-tile">
+            <div class="comp-val"><b>${Number(bmi.toFixed(1))}</b><span>Current BMI</span></div>
+            <div class="bmi-cat ${bCat.cls}">${esc(bCat.label)}</div>
+            <p class="comp-note">${wTxt ? "Latest weight: " + wTxt : "Based on your latest Height & Weight records."}</p>
+          </div>
+          ${bfHTML}
+        </div>
+      </div>`;
+    const infoBtn = el.querySelector("[data-info-btn]");
+    if (infoBtn) {
+      infoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openInfoPopover(infoBtn, sex);
+      });
+    }
+  }
+
   function renderProgress() {
     const all = Store().measurements;
     const types = existingMeasTypes();
+    renderCompCard();
     if (!state.progType || !types.includes(state.progType)) state.progType = types[0] || null;
 
     document.getElementById("progressHead").innerHTML = `
@@ -1669,7 +1900,7 @@
   window.Focus.UI = {
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes,
     esc, el, icon, ICONS,
-    openModal, closeModal, toast, confirmDialog,
+    openModal, closeModal, toast, confirmDialog, closeInfoPopover,
     openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
     renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor
