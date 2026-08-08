@@ -319,7 +319,7 @@
     for (let d = 1; d <= daysInMonth(year, month); d++) {
       const iso = year + "-" + String(month).padStart(2, "0") + "-" + String(d).padStart(2, "0");
       const a = agg.get(iso);
-      if (a) map.set(d, { level: intensityForCalories(a.calories), calories: a.calories, count: a.count });
+      if (a) map.set(d, { level: intensityForCalories(a.calories), calories: a.calories, count: a.count, duration: a.duration });
     }
     return map;
   }

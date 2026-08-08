@@ -14,11 +14,14 @@ Google Sheets archiving.
 - 📊 **Dashboard** — how am I doing right now (month, year, streaks, vs last year)
 - 📅 **Calendar** — GitHub-style heatmap of workout days with intensity levels
 - 📏 **Progress** — weight, body fat, waist, hips… any measurement, any frequency
-- 📈 **Analytics** — 10+ charts: monthly bars, cumulative lines, type mix,
-  consistency heatmap, and full **year-over-year comparison**
+- 📈 **Analytics** — 10+ compact charts: monthly bars, cumulative lines, type mix,
+  consistency heatmap, and **year-over-year comparison** (defaults to current vs
+  previous year; hidden until you have data in two years)
 - 💾 **Data** — Excel / JSON / CSV export, smart import, backup & restore
 - 🧰 **Tools** — BMI calculator and a kg/lb/g/oz weight converter
-- ⚙️ **Settings** — theme, default weight unit (kg/lb), privacy & about
+- 🎯 **Goals** — set daily calorie / duration and weekly workout targets in
+  Settings; watch them on the dashboard and calendar (gold ✓ on goal days)
+- ⚙️ **Settings** — theme, default weight unit (kg/lb), goals, privacy & about
 
 ---
 

@@ -435,6 +435,7 @@
           { label: "Longest streak", value: yStats.longestStreak + " vs " + prev.longestStreak }
         ]
       })}
+      ${goalsCardHTML()}
     </div>`);
 
     // --- Charts (side by side) ---
@@ -561,6 +562,36 @@
     return `<span class="delta ${cls}">${v > 0 ? "▲" : "▼"} ${St().fmtNum(Math.abs(v))}</span>`;
   }
 
+  /** Progress toward the user's goals (set in Settings). Shown as a stat card. */
+  function goalsCardHTML() {
+    const g = Store().settings.goals || {};
+    const has = g.calPerDay != null || g.durPerDay != null || g.workoutsPerWeek != null;
+    if (!has) {
+      return statCard({
+        title: "Goals", icon: "target", cls: "amber",
+        rows: [{ label: "No goals set — add them in Settings", value: "🎯", emoji: "" }]
+      });
+    }
+    const today = St().todayISO();
+    const agg = St().dayAggregates(Store().workouts).get(today);
+    const cal = agg ? agg.calories : 0;
+    const dur = agg ? agg.duration : 0;
+    const wk = St().weeklyStats(Store().workouts, today).cur.workouts;
+    const row = (label, cur, goal, unit) => {
+      if (goal == null) return null;
+      const met = cur >= goal;
+      return { label, value: `${St().fmtNum(cur)} / ${St().fmtNum(goal)} ${unit}`, emoji: met ? "✅" : "⏳" };
+    };
+    return statCard({
+      title: "Goals", icon: "target", cls: "amber",
+      rows: [
+        row("Calories (today)", cal, g.calPerDay, "kcal"),
+        row("Duration (today)", dur, g.durPerDay, "min"),
+        row("Workouts (this week)", wk, g.workoutsPerWeek, "")
+      ].filter(Boolean)
+    });
+  }
+
   /** Workouts from the most recent N distinct workout days (all workouts on those days). */
   function recentDays(all, n) {
     const seen = new Set();
@@ -611,18 +642,21 @@
 
   function yearHeatGrid(all, year, interactive) {
     const ms = St().monthlyStats(all, year);
+    const g = Store().settings.goals || {};
     const cards = ms.map((m, i) => {
       const map = St().monthDayMap(all, year, i + 1);
+      let goalCnt = 0;
       const cells = [];
       for (let d = 1; d <= St().daysInMonth(year, i + 1); d++) {
         const info = map.get(d);
         const lvl = info ? info.level : 0;
+        if (info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay))) goalCnt++;
         const today = year === St().yearOf(St().todayISO()) && d === St().dayOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
         cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""}" ${info ? `data-day="${year}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
       return `
         <div class="card month-card" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
-          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
+          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}${goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""}</span></div>
           <div class="heat">${cells.join("")}</div>
         </div>`;
     });
@@ -649,7 +683,9 @@
     const dim = St().daysInMonth(year, month);
     const today = St().todayISO();
     const sel = state.calDay;
+    const g = Store().settings.goals || {};
 
+    let goalHits = 0;
     let cells = "";
     for (let i = 0; i < firstWeekday; i++) cells += `<div class="day-cell empty"></div>`;
     for (let d = 1; d <= dim; d++) {
@@ -657,9 +693,12 @@
       const info = map.get(d);
       const isToday = iso === today;
       const isSel = iso === sel;
+      const gHit = !!info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay));
+      if (gHit) goalHits++;
       cells += `
-        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
+        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""} ${gHit ? "goal-hit" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
           <span class="dnum">${d}</span>
+          ${gHit ? `<span class="goal-check" title="Daily goal met">✓</span>` : ""}
           ${info ? `<span class="kcal">${St().fmtNum(info.calories)} kcal</span><span class="mini-bar" style="background:var(--heat-${info.level});width:${20 + info.level * 20}%"></span>` : ""}
         </div>`;
     }
@@ -669,6 +708,8 @@
     const prevY = month === 1 ? year - 1 : year;
     const nextY = month === 12 ? year + 1 : year;
 
+    const gLine = (g.calPerDay != null || g.durPerDay != null) ? `
+      <div class="goal-summary">${goalHits > 0 ? `<b class="goal-hit-count">🎯 ${goalHits} day${goalHits === 1 ? "" : "s"} hit your daily goal</b>` : `<span class="goal-miss">No days hit your daily goal yet</span>`}</div>` : "";
     const dayPanel = sel ? dayPanelHTML(sel) : `
       <div class="card">
         <h3 style="margin-top:0">${St().MONTHS_LONG[month - 1]} ${year}</h3>
@@ -677,6 +718,7 @@
           <div class="t"><b>${St().fmtNum(mStats.calories)}</b><span>kcal</span></div>
           <div class="t"><b>${mStats.days}</b><span>days</span></div>
         </div>
+        ${gLine}
         <div style="font-size:13px;color:var(--text-dim)">Click a day to see its workouts and add records.</div>
         <div class="day-actions">
           <button class="btn btn-primary" data-action="quick-add">${ICONS.plus} Add workout</button>
@@ -705,6 +747,21 @@
     body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
   }
 
+  /** Progress vs daily goals for a single day ('' when no goals are set). */
+  function dayGoalsHTML(calories, duration) {
+    const g = Store().settings.goals || {};
+    const rows = [];
+    if (g.calPerDay != null) {
+      const met = calories >= g.calPerDay;
+      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>🎯 Calories</span><b>${St().fmtNum(calories)} / ${St().fmtNum(g.calPerDay)} kcal ${met ? "✅" : "⏳"}</b></div>`);
+    }
+    if (g.durPerDay != null) {
+      const met = duration >= g.durPerDay;
+      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>🎯 Duration</span><b>${St().fmtNum(duration)} / ${St().fmtNum(g.durPerDay)} min ${met ? "✅" : "⏳"}</b></div>`);
+    }
+    return rows.length ? `<div class="goal-block">${rows.join("")}</div>` : "";
+  }
+
   function dayPanelHTML(iso) {
     const all = Store().workouts.filter((w) => w.date === iso);
     const cal = all.reduce((s, w) => ({ calories: s.calories + (w.calories || 0), duration: s.duration + (w.duration || 0) }), { calories: 0, duration: 0 });
@@ -719,6 +776,7 @@
           <div class="t"><b>${cal.calories ? St().fmtNum(cal.calories) : "—"}</b><span>kcal</span></div>
           <div class="t"><b>${cal.duration ? St().fmtDuration(cal.duration) : "—"}</b><span>time</span></div>
         </div>
+        ${dayGoalsHTML(cal.calories, cal.duration)}
         <div>
           ${all.map((w) => {
             const st = typeStyle(w.type);
@@ -891,6 +949,7 @@
     const s = Store().settings;
     const theme = document.documentElement.getAttribute("data-theme") || "dark";
     const wt = s.weightUnit || "lb";
+    const g = s.goals || {};
     const w = Store().workouts.length, m = Store().measurements.length;
     document.getElementById("settingsBody").innerHTML = `
       <div class="settings-grid">
@@ -914,6 +973,37 @@
             <div class="seg" role="group" aria-label="Weight unit">
               <button class="seg-btn ${wt === "kg" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="kg">kg</button>
               <button class="seg-btn ${wt === "lb" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="lb">lb</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card data-card">
+          <h3>🎯 Goals</h3>
+          <p class="desc">Set daily and weekly targets. Progress shows on the dashboard and lights up on the calendar when you beat them.</p>
+          <div class="goal-form">
+            <div class="goal-field">
+              <label for="goalCal">Daily calories</label>
+              <div class="input-with-unit">
+                <input class="input" id="goalCal" type="number" min="0" step="1" placeholder="e.g. 500" value="${g.calPerDay ?? ""}">
+                <span class="suffix">kcal</span>
+              </div>
+            </div>
+            <div class="goal-field">
+              <label for="goalDur">Daily duration</label>
+              <div class="input-with-unit">
+                <input class="input" id="goalDur" type="number" min="0" step="1" placeholder="e.g. 60" value="${g.durPerDay ?? ""}">
+                <span class="suffix">min</span>
+              </div>
+            </div>
+            <div class="goal-field">
+              <label for="goalWk">Weekly workouts</label>
+              <div class="input-with-unit">
+                <input class="input" id="goalWk" type="number" min="0" step="1" placeholder="e.g. 5" value="${g.workoutsPerWeek ?? ""}">
+                <span class="suffix">days</span>
+              </div>
+            </div>
+            <div class="goal-actions">
+              <button class="btn btn-primary" data-action="save-goals">${ICONS.check} Save goals</button>
             </div>
           </div>
         </div>
@@ -1099,14 +1189,15 @@
 
   /* =====================================================================
    * ANALYTICS
-   * =================================================================== */
-
-  function renderAnalytics() {
+   * =================================================================== */  function renderAnalytics() {
     const all = Store().workouts;
     const years = St().availableYears(all, Store().measurements);
-    if (state.anaA == null || !years.includes(state.anaA)) state.anaA = years[0];
+    const curYear = new Date().getFullYear();
+    // Default comparison: the current year vs the previous year (when present),
+    // otherwise the two most recent years with data.
+    if (state.anaA == null || !years.includes(state.anaA)) state.anaA = years.includes(curYear) ? curYear : years[0];
     if (state.anaB == null || state.anaB === state.anaA || !years.includes(state.anaB)) {
-      state.anaB = years.find((y) => y !== state.anaA) || state.anaA;
+      state.anaB = years.includes(curYear - 1) && curYear - 1 !== state.anaA ? curYear - 1 : years.find((y) => y !== state.anaA) || state.anaA;
     }
     const a = state.anaA, b = state.anaB;
     const year = Focus.App.year();
@@ -1129,6 +1220,12 @@
 
     const wrap = document.getElementById("analyticsCharts");
     const colorA = "var(--accent)", colorB = "var(--success)";
+    // Future months of the current year are dimmed so charts don't end in a
+    // wall of empty space — the eye reads only the months that have elapsed.
+    // (null means "no dimming" — an empty array would dim everything.)
+    const curYearNow = year === curYear;
+    const hl = curYearNow ? ms.map((m, i) => i).filter((i) => i >= new Date().getMonth() + 1) : null;
+    const hasCmp = a !== b && cmp.totals.workouts.a > 0 && cmp.totals.workouts.b > 0;
 
     wrap.innerHTML = `
       <div class="grid-2">
@@ -1153,8 +1250,8 @@
       <div class="grid-2" style="margin-top:16px">
         <div class="card">
           <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">mix</span></div>
-          <div style="display:grid;grid-template-columns:180px 1fr;gap:6px;align-items:center">
-            <div class="chart-wrap" id="acTypes" style="max-width:190px"></div>
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:6px;align-items:center">
+            <div class="chart-wrap" id="acTypes" style="max-width:170px"></div>
             <div id="acTypeLegend"></div>
           </div>
         </div>
@@ -1172,54 +1269,64 @@
         </div>
       </div>
 
-      <div class="card big-card" style="margin-top:16px">
-        <div class="card-title"><h3>${a} vs ${b} — monthly workouts</h3><span class="sub">${St().fmtNum(cmp.totals.workouts.a)} vs ${St().fmtNum(cmp.totals.workouts.b)} (${St().fmtDelta(cmp.totals.workouts.diff)})</span></div>
-        <div class="chart-wrap" id="acCompareWk"></div>
-      </div>
-      <div class="card big-card" style="margin-top:16px">
-        <div class="card-title"><h3>${a} vs ${b} — cumulative calories</h3><span class="sub">${St().fmtNum(cmp.totals.calories.a)} vs ${St().fmtNum(cmp.totals.calories.b)} (${St().fmtDelta(cmp.totals.calories.diff)})</span></div>
-        <div class="chart-wrap" id="acCompareCal"></div>
-      </div>
-      <div class="card big-card" style="margin-top:16px">
-        <div class="card-title"><h3>${a} vs ${b} — month by month</h3><span class="sub">who's ahead?</span></div>
-        <div id="acBlocks"></div>
-      </div>`;
+      ${hasCmp ? `
+      <div class="grid-2" style="margin-top:16px">
+        <div class="card">
+          <div class="card-title"><h3>${a} vs ${b} · monthly workouts</h3><span class="sub">${St().fmtNum(cmp.totals.workouts.a)} vs ${St().fmtNum(cmp.totals.workouts.b)} (${St().fmtDelta(cmp.totals.workouts.diff)})</span></div>
+          <div class="chart-wrap" id="acCompareWk"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>${a} vs ${b} · cumulative calories</h3><span class="sub">${St().fmtNum(cmp.totals.calories.a)} vs ${St().fmtNum(cmp.totals.calories.b)} (${St().fmtDelta(cmp.totals.calories.diff)})</span></div>
+          <div class="chart-wrap" id="acCompareCal"></div>
+        </div>
+        <div class="card span2">
+          <div class="card-title"><h3>${a} vs ${b} · month by month</h3><span class="sub">who's ahead?</span></div>
+          <div id="acBlocks"></div>
+        </div>
+      </div>` : `
+      <div class="card big-card cmp-hidden" style="margin-top:16px">
+        <div class="card-title"><h3>Year-over-year comparison</h3><span class="sub">needs data in two years</span></div>
+        <div class="chart-empty" style="padding:18px">No workouts recorded in these two years — pick two years with data above to compare them.</div>
+      </div>`}
+    `;
 
     const labels = ms.map((m) => m.label);
-    C().barChart(document.getElementById("acMonthly"), labels, [{ name: "Workouts", values: ms.map((m) => m.workouts) }], { height: 230, valueFmt: (v) => v + " workouts" });
-    C().barChart(document.getElementById("acCalories"), labels, [{ name: "kcal", values: ms.map((m) => m.calories), color: "var(--success)" }], { height: 230, valueFmt: (v) => St().fmtNum(v) + " kcal" });
-    C().barChart(document.getElementById("acDuration"), labels, [{ name: "min", values: ms.map((m) => m.duration), color: "var(--info)" }], { height: 230, valueFmt: (v) => St().fmtDuration(v) });
-    C().lineChart(document.getElementById("acAvgCal"), labels, [{ name: "kcal / workout", values: ms.map((m) => (m.avgCal ? Math.round(m.avgCal) : null)), color: "var(--warn)" }], { height: 230, valueFmt: (v) => St().fmtNum(v) + " kcal" });
+    C().barChart(document.getElementById("acMonthly"), labels, [{ name: "Workouts", values: ms.map((m) => m.workouts) }], { height: 180, valueFmt: (v) => v + " workouts", highlight: hl });
+    C().barChart(document.getElementById("acCalories"), labels, [{ name: "kcal", values: ms.map((m) => m.calories), color: "var(--success)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal", highlight: hl });
+    C().barChart(document.getElementById("acDuration"), labels, [{ name: "min", values: ms.map((m) => m.duration), color: "var(--info)" }], { height: 180, valueFmt: (v) => St().fmtDuration(v) });
+    C().lineChart(document.getElementById("acAvgCal"), labels, [{ name: "kcal / workout", values: ms.map((m) => (m.avgCal ? Math.round(m.avgCal) : null)), color: "var(--warn)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal" });
 
     // types donut
     const tb = St().typeBreakdown(all, year);
     C().donut(document.getElementById("acTypes"), tb.map((t) => ({ label: t.type, value: t.count, color: typeStyle(t.type).color })), {
-      size: 170, stroke: 20, centerLabel: "workouts", centerValue: tb.reduce((s, t) => s + t.count, 0)
+      size: 150, stroke: 18, centerLabel: "workouts", centerValue: tb.reduce((s, t) => s + t.count, 0)
     });
     document.getElementById("acTypeLegend").innerHTML = tb.map((t) => {
       const st = typeStyle(t.type);
-      return `<div class="row" style="margin-bottom:7px"><span class="sw" style="background:${st.color}"></span><span style="flex:1;font-size:13px">${st.emoji} ${esc(t.type)}</span><b style="font-variant-numeric:tabular-nums">${t.count}</b><span style="width:44px;text-align:right;color:var(--text-faint);font-size:12px;font-weight:700">${t.pct.toFixed(0)}%</span></div>`;
+      return `<div class="row" style="margin-bottom:7px"><span class="sw" style="background:${st.color}"></span><span style="flex:1;font-size:13px">${st.emoji} ${esc(t.type)}</span><b style="font-variant-numeric:tabular-nums">${t.count}</b><span style="width:40px;text-align:right;color:var(--text-faint);font-size:12px;font-weight:700">${t.pct.toFixed(0)}%</span></div>`;
     }).join("") || `<div class="chart-empty">No workouts in ${year}.</div>`;
 
     // cumulative
     const cumWk = ms.map((m, i) => ms.slice(0, i + 1).reduce((s, x) => s + x.workouts, 0));
     const cumCal = ms.map((m, i) => ms.slice(0, i + 1).reduce((s, x) => s + x.calories, 0));
-    C().lineChart(document.getElementById("acCumWk"), labels, [{ name: "Workouts", values: cumWk, color: "var(--accent)" }], { height: 230, area: true, valueFmt: (v) => v + " workouts" });
-    C().lineChart(document.getElementById("acCumCal"), labels, [{ name: "kcal", values: cumCal, color: "var(--success)" }], { height: 230, area: true, valueFmt: (v) => St().fmtNum(v) + " kcal" });
+    C().lineChart(document.getElementById("acCumWk"), labels, [{ name: "Workouts", values: cumWk, color: "var(--accent)" }], { height: 180, area: true, valueFmt: (v) => v + " workouts" });
+    C().lineChart(document.getElementById("acCumCal"), labels, [{ name: "kcal", values: cumCal, color: "var(--success)" }], { height: 180, area: true, valueFmt: (v) => St().fmtNum(v) + " kcal" });
 
-    // comparison
-    C().barChart(document.getElementById("acCompareWk"), cmp.months.map((m) => m.label), [
-      { name: String(a), values: cmp.months.map((m) => m.a.workouts) },
-      { name: String(b), values: cmp.months.map((m) => m.b.workouts), color: colorB }
-    ], { height: 250, valueFmt: (v) => v + " workouts" });
-    C().lineChart(document.getElementById("acCompareCal"), cmp.months.map((m) => m.label), [
-      { name: String(a) + " kcal", values: cmp.months.map((m) => m.cumA.calories) },
-      { name: String(b) + " kcal", values: cmp.months.map((m) => m.cumB.calories), color: colorB }
-    ], { height: 250, area: false, valueFmt: (v) => St().fmtNum(v) + " kcal" });
-    C().compareBars(document.getElementById("acBlocks"), cmp.months, {
-      a: String(a), b: String(b), colorA: cssColor("--accent"), colorB: cssColor("--success"),
-      valueFmt: (v) => v
-    });
+    // comparison (only rendered when both years actually have workouts)
+    if (hasCmp) {
+      C().barChart(document.getElementById("acCompareWk"), cmp.months.map((m) => m.label), [
+        { name: String(a), values: cmp.months.map((m) => m.a.workouts) },
+        { name: String(b), values: cmp.months.map((m) => m.b.workouts), color: colorB }
+      ], { height: 200, valueFmt: (v) => v + " workouts" });
+      C().lineChart(document.getElementById("acCompareCal"), cmp.months.map((m) => m.label), [
+        { name: String(a) + " kcal", values: cmp.months.map((m) => m.cumA.calories) },
+        { name: String(b) + " kcal", values: cmp.months.map((m) => m.cumB.calories), color: colorB }
+      ], { height: 200, area: false, valueFmt: (v) => St().fmtNum(v) + " kcal" });
+      C().compareBars(document.getElementById("acBlocks"), cmp.months.map((m) => ({ label: m.label, a: m.a.workouts, b: m.b.workouts })), {
+        a: String(a), b: String(b), colorA: cssColor("--accent"), colorB: cssColor("--success"),
+        valueFmt: (v) => v + " workouts"
+      });
+    }
   }
 
   function cssColor(name) {

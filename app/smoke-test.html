@@ -138,8 +138,9 @@ function dump() {
       Focus.Charts.donut(h3, [{ label: "A", value: 3 }, { label: "B", value: 1 }], { size: 100 });
       ok("donut renders svg", h3.querySelectorAll("svg").length === 1);
       const h4 = document.createElement("div"); document.body.appendChild(h4);
-      Focus.Charts.compareBars(h4, cmp.months, { a: "2026", b: "2025", colorA: "#6366f1", colorB: "#10b981" });
+      Focus.Charts.compareBars(h4, cmp.months.map((m) => ({ label: m.label, a: m.a.workouts, b: m.b.workouts })), { a: "2026", b: "2025", colorA: "#6366f1", colorB: "#10b981", valueFmt: (v) => v + " workouts" });
       ok("compareBars renders rows", h4.querySelectorAll(".bars-compare .bars-row").length === 12);
+      ok("compareBars shows numbers not [object Object]", !h4.textContent.includes("[object Object]") && h4.textContent.includes("workouts"), h4.textContent.slice(0, 80));
     } catch (e) {
       ok("charts render without throwing", false, e.message);
     }
@@ -187,6 +188,33 @@ function dump() {
         ok("UI " + fn + " renders", false, e.message + " @ " + e.stack.split("\n")[1]);
       }
     });
+
+    // --- analytics defaults: current year vs previous year ---
+    Focus.UI.state.anaA = null; Focus.UI.state.anaB = null;
+    Focus.UI.renderAnalytics();
+    const curY = new Date().getFullYear();
+    ok("analytics defaults to current vs previous year", Focus.UI.state.anaA === curY && Focus.UI.state.anaB === curY - 1, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
+    // seed has no workouts in the previous year -> comparison is hidden, not "vs empty"
+    ok("comparison hidden when a year has no data", !!document.querySelector(".cmp-hidden"), "cmp block present: " + !!document.querySelector("#acCompareWk"));
+    ok("month-by-month has no [object Object]", !document.getElementById("analyticsCharts").textContent.includes("[object Object]"));
+
+    // --- goals: settings card, dashboard card, calendar badges ---
+    Focus.UI.renderSettings();
+    ok("settings has goal inputs", !!document.getElementById("goalCal") && !!document.getElementById("goalDur") && !!document.getElementById("goalWk"));
+    await Focus.Store.setSettings({ goals: { calPerDay: 400, durPerDay: 60, workoutsPerWeek: 5 } });
+    Focus.UI.renderDashboard();
+    const goalCard = document.getElementById("dashGrid").querySelector(".stat");
+    ok("dashboard shows a goals card", document.getElementById("dashGrid").textContent.includes("Goals") && document.getElementById("dashGrid").textContent.includes("/ 400 kcal"), "has Goals card");
+    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8;
+    Focus.UI.renderCalendar();
+    ok("calendar month view marks goal-hit days", document.querySelectorAll(".day-cell.goal-hit").length > 0, "count=" + document.querySelectorAll(".day-cell.goal-hit").length);
+    Focus.UI.state.calDay = "2026-08-07";
+    Focus.UI.renderCalendar();
+    ok("day panel shows goal progress", document.getElementById("dayPanel").textContent.includes("/ 400 kcal"), document.getElementById("dayPanel").textContent.slice(0, 80));
+    Focus.UI.state.calDay = null; Focus.UI.state.calMode = "year";
+    Focus.UI.renderCalendar();
+    ok("year view shows goal chips", document.querySelectorAll(".month-card .goal-chip").length > 0, "chips=" + document.querySelectorAll(".month-card .goal-chip").length);
+    await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
     // --- dashboard quick add: measurement mode ---
     Focus.UI.renderDashboard();

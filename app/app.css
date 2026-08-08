@@ -319,7 +319,7 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .weekdays span { font-size: 11px; font-weight: 700; color: var(--text-faint); text-align: center; text-transform: uppercase; }
 .day-cell {
   min-height: 74px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--surface-2); padding: 7px; cursor: pointer;
+  background: var(--surface-2); padding: 7px; cursor: pointer; position: relative;
   display: flex; flex-direction: column; gap: 4px;
   transition: transform .12s, border-color .15s;
 }
@@ -338,6 +338,18 @@ html[data-theme="light"] #themeToggle .icon-moon { display: none; }
 .day-cell.lvl-3 .kcal, .day-cell.lvl-4 .kcal { color: #fff; }
 .day-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 .day-cell .mini-bar { height: 4px; border-radius: 3px; margin-top: auto; }
+/* Daily-goal days get a gold ring + a small check badge. */
+.day-cell.goal-hit { border-color: var(--warn); }
+.day-cell .goal-check { position: absolute; top: 4px; right: 4px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #fff; font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center; box-shadow: 0 1px 4px rgba(0, 0, 0, .28); }
+.goal-chip { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; margin-left: 6px; }
+.goal-summary { margin: 4px 0 10px; font-size: 12.5px; }
+.goal-hit-count { color: var(--warn); font-weight: 700; }
+.goal-miss { color: var(--text-faint); }
+.goal-block { display: flex; flex-direction: column; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.goal-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
+.goal-row span { color: var(--text-dim); }
+.goal-row b { font-variant-numeric: tabular-nums; }
+.goal-row.ok b { color: var(--success); }
 
 /* Day popover */
 .day-panel { display: flex; flex-direction: column; gap: 10px; }
@@ -491,6 +503,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .bars-compare { display: flex; flex-direction: column; gap: 7px; }
 .bars-row { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; }
 .bars-row .bl { font-size: 12px; font-weight: 700; color: var(--text-dim); text-align: right; }
+.span2 { grid-column: 1 / -1; }
 .bars-track { display: flex; gap: 6px; flex-direction: column; }
 .bars-track .bt { display: flex; align-items: center; gap: 8px; }
 .bars-track .bt .bw { flex: 1; background: var(--surface-2); border-radius: 5px; height: 12px; overflow: hidden; }
@@ -539,6 +552,10 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .conv-row.source { background: var(--accent-soft); }
 .conv-row.source span { color: var(--accent); font-weight: 700; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+.goal-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 16px; }
+.goal-form .goal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+.goal-actions { display: flex; align-items: flex-end; }
+.suffix { align-self: stretch; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; color: var(--text-faint); background: var(--surface-3); border-radius: 10px; padding: 0 12px; }
 .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px 0 2px; }
 .setting-label b { display: block; font-size: 14px; }
 .setting-label span { font-size: 12.5px; color: var(--text-dim); }
@@ -551,7 +568,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .dash-greeting p { margin: 3px 0 0; font-size: 13.5px; color: var(--text-dim); }
 #dashGrid { display: grid; gap: 16px; }
 .dash-stats {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px;
   max-width: 1320px; width: 100%; margin: 0 auto;
 }
 .dash-stats .stat { padding: 16px; }

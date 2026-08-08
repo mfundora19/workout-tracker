@@ -298,6 +298,19 @@
           }
           break;
         }
+        case "save-goals": {
+          const num = (v) => (v === "" || v == null || !isFinite(Number(v)) ? null : Math.max(0, Number(v)));
+          const goals = {
+            calPerDay: num(document.getElementById("goalCal") ? document.getElementById("goalCal").value : ""),
+            durPerDay: num(document.getElementById("goalDur") ? document.getElementById("goalDur").value : ""),
+            workoutsPerWeek: num(document.getElementById("goalWk") ? document.getElementById("goalWk").value : "")
+          };
+          Focus.Store.setSettings({ goals }).then(() => {
+            Focus.UI.toast("Goals saved 🎯 — check your dashboard and calendar");
+            renderCurrent();
+          });
+          break;
+        }
         case "openmonth":
           Focus.UI.state.calMode = "month";
           Focus.UI.state.calMonth = Number(target.dataset.month);

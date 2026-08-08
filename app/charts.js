@@ -316,14 +316,19 @@
 
   /* ---------------- HTML comparison bars (year A vs B per month) ---------------- */
 
+  /**
+   * HTML comparison bars — one pair of horizontal bars per month.
+   * months: [{ label, a, b }] with NUMERIC a/b values (year-over-year workout
+   * counts, etc.). opts: { a, b (legend labels), colorA, colorB, valueFmt }.
+   */
   function compareBars(container, months, { a, b, colorA, colorB, valueFmt }) {
+    const fmt = valueFmt || ((v) => v);
     const rows = months.map((m) => ({
       label: m.label,
-      a: m.a,
-      b: m.b,
-      max: Math.max(m.a, m.b, 1)
+      a: Number(m.a) || 0,
+      b: Number(m.b) || 0
     }));
-    const maxOverall = Math.max(1, ...rows.map((r) => r.max));
+    const maxOverall = Math.max(1, ...rows.map((r) => Math.max(r.a, r.b)));
     const wrap = document.createElement("div");
     wrap.className = "bars-compare";
     const swatch = `<div class="row" style="margin-bottom:10px;gap:14px"><div class="row"><span class="sw" style="background:${colorA}"></span>${a}</div><div class="row"><span class="sw" style="background:${colorB}"></span>${b}</div></div>`;
@@ -333,8 +338,8 @@
       row.className = "bars-row";
       row.innerHTML = `<div class="bl">${r.label}</div>
         <div class="bars-track">
-          <div class="bt"><div class="bw"><span style="background:${colorA};width:${(r.a / maxOverall) * 100}%" data-tip="${r.label} ${a}"></span></div><small>${r.a}</small></div>
-          <div class="bt"><div class="bw"><span style="background:${colorB};width:${(r.b / maxOverall) * 100}%" data-tip="${r.label} ${b}"></span></div><small>${r.b}</small></div>
+          <div class="bt"><div class="bw"><span style="background:${colorA};width:${(r.a / maxOverall) * 100}%" data-tip="${r.label} ${a}: ${fmt(r.a)}"></span></div><small>${fmt(r.a)}</small></div>
+          <div class="bt"><div class="bw"><span style="background:${colorB};width:${(r.b / maxOverall) * 100}%" data-tip="${r.label} ${b}: ${fmt(r.b)}"></span></div><small>${fmt(r.b)}</small></div>
         </div>`;
       const spans = row.querySelectorAll("span[data-tip]");
       spans.forEach((s) => {
