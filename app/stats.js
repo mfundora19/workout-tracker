@@ -723,11 +723,19 @@
         (maxGap > 0 ? ", with a longest break of " + plural(maxGap, "day") +
           " (" + shortDate(gapFrom) + " to " + shortDate(gapTo) + ")" : "") + ".",
       activePct >= 25 ? "positive" : activePct >= 10 ? "neutral" : "warn"));
-    const longest = longestStreakInSet(days);
-    if (longest >= 3) {
+    // Longest run of consecutive days, with its date range, for the narrative.
+    let best = { run: 0, from: null, to: null }, run = 0, runFrom = null, prevD = null;
+    for (const d of sorted) {
+      if (prevD !== null && addDays(prevD, 1) === d) run += 1;
+      else { run = 1; runFrom = d; }
+      if (run > best.run) best = { run, from: runFrom, to: d };
+      prevD = d;
+    }
+    if (best.run >= 3) {
       out.push(mkInsight("milestone", "streak",
-        "Longest streak: " + longest + " days",
-        "Your best run of consecutive training days inside " + year + ".",
+        "Longest streak: " + best.run + " days",
+        "Your best run of consecutive training days in " + year + " stretched from " +
+          shortDate(best.from) + " to " + shortDate(best.to) + ".",
         "positive"));
     }
     const cur = streaks(workouts, todayISO()).current;

@@ -47,15 +47,32 @@
     return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(Math.round(n));
   }
 
-  /** jsPDF's built-in fonts are WinAnsi — strip anything they cannot render. */
+  // Bundled Unicode font (DejaVu Sans) makes symbols/emoji-like glyphs and
+  // proper dashes/quotes render; without it we fall back to built-in helvetica.
+  const USE_FONT = !!(window.FocusFonts && window.FocusFonts.dejavu_sans && window.FocusFonts.dejavu_sans_bold);
+  const FONT = "FocusUI";
+  // Code points DejaVu Sans actually contains, beyond ASCII + Latin-1 basics.
+  const SAFE_POINTS = new Set([0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2190, 0x2191, 0x2192, 0x2193, 0x2605, 0x2713, 0x2717, 0x26A0, 0x2665, 0x25C6]);
+
+  /**
+   * Strip anything the active font cannot render (emoji without a glyph would
+   * print as a hollow box). Keeps ASCII + the Latin-1 basics + the safe symbol
+   * set; normalises curly quotes to straight ones when the font is unavailable.
+   */
   function pdfSafe(t) {
-    return String(t == null ? "" : t)
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2190\u2191\u2192\u2193\u2194]/g, "<->")
-      .replace(/[\u2022]/g, "-")
-      .replace(/[^\x20-\x7E\u00B7\u00A9\u00AE\u00B0]/g, "");
+    let s = String(t == null ? "" : t);
+    if (!USE_FONT) {
+      s = s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+    }
+    let out = "";
+    for (const ch of s) {
+      const c = ch.codePointAt(0);
+      if ((c >= 0x20 && c <= 0x7E) || c === 0xA9 || c === 0xAE || c === 0xB0 || c === 0xB7 ||
+          (USE_FONT && SAFE_POINTS.has(c))) {
+        out += ch;
+      }
+    }
+    return out;
   }
 
   function toneColor(tone) {
@@ -75,6 +92,17 @@
   function exportPdf(opts = {}) {
     const jsPDF = window.jspdf.jsPDF;
     const doc = new jsPDF({ unit: "pt", format: "a4" });
+    // Embed the bundled Unicode font when available (symbols, dashes, quotes).
+    if (USE_FONT) {
+      try {
+        doc.addFileToVFS("DejaVuSans.ttf", window.FocusFonts.dejavu_sans);
+        doc.addFont("DejaVuSans.ttf", FONT, "normal");
+        doc.addFileToVFS("DejaVuSans-Bold.ttf", window.FocusFonts.dejavu_sans_bold);
+        doc.addFont("DejaVuSans-Bold.ttf", FONT, "bold");
+      } catch (e) {
+        // fall back to the built-in helvetica family
+      }
+    }
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     const M = 44;
@@ -102,11 +130,11 @@
     function header(title, sub) {
       doc.setFillColor(...hexToRgb(INK.dark));
       doc.rect(0, 0, W, 62, "F");
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(17);
       doc.setTextColor(255, 255, 255);
       doc.text(pdfSafe(title), M, 38);
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(9);
       doc.setTextColor(185, 190, 210);
       doc.text(pdfSafe(sub), M, 52);
@@ -180,7 +208,7 @@
       ensure(60);
       doc.setFillColor(...hexToRgb(INK.accent));
       doc.roundedRect(M, y, 22, 22, 4, 4, "F");
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(11);
       doc.setTextColor(255, 255, 255);
       doc.text(String(num), M + 11, y + 15, { align: "center" });
@@ -188,7 +216,7 @@
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(pdfSafe(title), M + 32, y + 15);
       if (sub) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(pdfSafe(sub), M + 32, y + 28);
@@ -202,13 +230,13 @@
 
     function addText(text, o = {}) {
       const size = o.size || 9.5;
-      const leading = o.leading || 1.35;
+      const leading = o.leading || 1.45;
       const maxW = o.maxW || CW;
       const x = o.x == null ? M : o.x;
       const lines = wrap(text, maxW);
       const lh = size * leading;
       ensure(lines.length * lh + 4);
-      doc.setFont("helvetica", o.bold ? "bold" : o.italic ? "italic" : "normal");
+      doc.setFont(FONT, o.bold ? "bold" : "normal");
       doc.setFontSize(size);
       doc.setTextColor(...hexToRgb(o.color || INK.dark));
       doc.text(lines, x, y + size);
@@ -217,31 +245,43 @@
       return lines.length;
     }
 
-    /** A slim block: colored accent bar, bold title line, wrapped body. */
+    // Emoji-like glyphs (DejaVu) shown beside each insight, by tone.
+    const INS_ICON = { positive: "\u2713", warn: "\u26A0", negative: "\u2717", info: "\u2192", neutral: "\u2022", accent: "\u2605", accent2: "\u2605" };
+
+    /** A slim block: colored accent bar, tone icon, bold title line, wrapped body. */
     function addInsight(ins, o = {}) {
       const tc = toneColor(ins.tone);
       const titleSize = o.titleSize || 9;
       const bodySize = o.bodySize || 8.5;
-      const maxW = (o.maxW || CW) - 26;
+      const maxW = (o.maxW || CW) - 32;
       const bodyLines = wrap(ins.body, maxW);
-      const titleH = titleSize * 1.35;
-      const bodyH = bodyLines.length * bodySize * 1.35;
-      const h = 11 + titleH + bodyH + 8;
+      const titleH = titleSize * 1.4;
+      const bodyH = bodyLines.length * bodySize * 1.45;
+      const pad = 12;
+      const h = pad + titleH + bodyH + pad;
       ensure(h);
       doc.setFillColor(...hexToRgb(INK.light));
       doc.roundedRect(M, y, CW, h, 5, 5, "F");
       doc.setFillColor(...hexToRgb(tc));
       doc.roundedRect(M, y, 3.5, h, 1.75, 1.75, "F");
-      doc.setFont("helvetica", "bold");
+      const icon = USE_FONT ? (INS_ICON[ins.tone] || "") : "";
+      const titleBaseline = y + pad + titleSize * 0.9;
+      doc.setFont(FONT, "bold");
       doc.setFontSize(titleSize);
+      let tx = M + 14;
+      if (icon) {
+        doc.setTextColor(...hexToRgb(tc));
+        doc.text(icon, tx, titleBaseline);
+        tx += doc.getTextWidth(icon) + 5;
+      }
       doc.setTextColor(...hexToRgb(INK.dark));
-      doc.text(pdfSafe(String(ins.title)), M + 14, y + 11 + titleSize * 0.9);
-      doc.setFont("helvetica", "normal");
+      doc.text(pdfSafe(String(ins.title)), tx, titleBaseline);
+      doc.setFont(FONT, "normal");
       doc.setFontSize(bodySize);
       doc.setTextColor(...hexToRgb(INK.muted));
-      doc.text(bodyLines, M + 14, y + 11 + titleH + bodySize);
+      doc.text(bodyLines, M + 14, y + pad + titleH + bodySize);
       track(M, y, CW, h, "insight:" + ins.type + ":" + String(ins.metric));
-      y += h + 8;
+      y += h + 9;
       return h;
     }
 
@@ -252,14 +292,14 @@
       doc.setFillColor(...hexToRgb(it.tone ? toneColor(it.tone) : INK.accent));
       doc.roundedRect(x, yy, 3, h, 1.5, 1.5, "F");
       // value + unit on one line
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(13);
       doc.setTextColor(...hexToRgb(INK.dark));
       const vx = x + 12;
       doc.text(pdfSafe(String(it.value)), vx, yy + 21);
       let vw = doc.getTextWidth(pdfSafe(String(it.value)));
       if (it.unit) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(pdfSafe(String(it.unit)), vx + vw + 5, yy + 20);
@@ -267,13 +307,13 @@
       // delta (comparison) line
       if (it.delta) {
         const dcol = it.delta.tone === "pos" ? INK.success : it.delta.tone === "neg" ? INK.danger : INK.muted;
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(7);
         doc.setTextColor(...hexToRgb(dcol));
         doc.text(pdfSafe(it.delta.text), vx, yy + 33);
       }
       // label
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       doc.text(pdfSafe(String(it.label)), vx, yy + 47);
@@ -309,7 +349,7 @@
       const x = M + (CW - totalW) / 2;
       doc.setFillColor(...hexToRgb(INK.dark));
       doc.rect(x, y, totalW, rowH, "F");
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
       let cx = x;
@@ -324,7 +364,7 @@
           doc.setFillColor(...hexToRgb(INK.light));
           doc.rect(x, yy, totalW, rowH, "F");
         }
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(8);
         doc.setTextColor(...hexToRgb(INK.dark));
         cx = x;
@@ -350,18 +390,26 @@
      * own title inside the reserved block.
      */
     function addChart(render, height, caption) {
-      const capLines = caption ? wrap(caption, CW).length : 0;
-      const capH = capLines ? capLines * 10.5 + 8 : 0;
+      const capLines = caption ? wrap(caption, CW - 24).length : 0;
+      const capH = capLines ? capLines * 9.5 * 1.4 + 18 : 0;
       const total = 26 + height + capH;
       ensure(total);
       render(M, y + 26, CW, height);
       y += 26 + height + 6;
       if (caption) {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(8.5);
+        // The caption is presented as an "analyst note": a tinted box under the
+        // chart so the commentary never collides with the plot or the next block.
+        const lines = wrap(caption, CW - 24);
+        const boxH = lines.length * 9.5 * 1.4 + 16;
+        doc.setFillColor(...hexToRgb(INK.light));
+        doc.roundedRect(M, y, CW, boxH, 4, 4, "F");
+        doc.setFillColor(...hexToRgb(INK.accent));
+        doc.roundedRect(M, y, 2.5, boxH, 1.25, 1.25, "F");
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(8);
         doc.setTextColor(...hexToRgb(INK.muted));
-        doc.text(wrap(caption, CW), M, y + 8);
-        y += capH - 6;
+        doc.text(lines, M + 12, y + 13 + 8);
+        y += boxH + 8;
       }
       return total;
     }
@@ -378,18 +426,18 @@
       const barW = Math.max(2.5, Math.min(16, (groupW - 6) / series.length));
       const yBase = y + h;
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(10);
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(pdfSafe(title), x, y - 8);
       if (unit) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(pdfSafe(unit), x + w, y - 14, { align: "right" });
       }
       let lx = x + w;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(7.5);
       if (series.length > 1) series.slice().reverse().forEach((s) => {
         const tw = doc.getTextWidth(pdfSafe(s.name));
@@ -442,18 +490,18 @@
       const n = labels.length;
       const yBase = y + h;
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(10);
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(pdfSafe(title), x, y - 8);
       if (unit) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(pdfSafe(unit), x + w, y - 14, { align: "right" });
       }
       let lx = x + w;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(7.5);
       if (series.length > 1) series.slice().reverse().forEach((s) => {
         const tw = doc.getTextWidth(pdfSafe(s.name));
@@ -535,11 +583,11 @@
         doc.lines(segs, pts[0][0], pts[0][1], [1, 1], "F", true);
         a0 = a1;
       });
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(11);
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(String(total), x, cy - 2, { align: "center" });
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(7);
       doc.setTextColor(...hexToRgb(INK.muted));
       doc.text(pdfSafe(opts.centerLabel || "sessions"), x, cy + 8, { align: "center" });
@@ -549,7 +597,7 @@
       slices.forEach((sl) => {
         doc.setFillColor(...hexToRgb(sl.color));
         doc.rect(x + r + 18, ly - 5, 7, 7, "F");
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setTextColor(...hexToRgb(INK.dark));
         doc.text(pdfSafe(sl.label), x + r + 30, ly);
         const pct = Math.round((sl.value / total) * 100);
@@ -572,7 +620,7 @@
         [129, 140, 248],
         [99, 102, 241]
       ];
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(6.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       grid.monthAtWeek.forEach((m, wi) => {
@@ -589,7 +637,7 @@
           doc.roundedRect(cx, cyy, 6.8, 6.8, 1.2, 1.2, "F");
         });
       });
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(6.5);
       doc.setTextColor(...hexToRgb(INK.muted));
       const legendY = y + 7 * (cellH + 1.6) + 10;
@@ -637,14 +685,14 @@
     doc.rect(0, 0, W, 205, "F");
     doc.setFillColor(...hexToRgb(INK.accent));
     doc.rect(0, 205, W, 3, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont(FONT, "bold");
     doc.setFontSize(11);
     doc.setTextColor(165, 172, 205);
     doc.text("FOCUS  -  ANNUAL PROGRESS REPORT", M, 46);
     doc.setFontSize(30);
     doc.setTextColor(255, 255, 255);
     doc.text(String(year) + " Progress Report", M, 88);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(FONT, "normal");
     doc.setFontSize(10.5);
     doc.setTextColor(202, 207, 232);
     doc.text("Workout & Fitness Tracker  -  generated " + S.prettyDate(S.todayISO()), M, 110);
@@ -666,7 +714,7 @@
     y = 206;
 
     // Executive summary paragraphs
-    doc.setFont("helvetica", "bold");
+    doc.setFont(FONT, "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(...hexToRgb(INK.accent));
     doc.text("EXECUTIVE SUMMARY", M, y + 8);
@@ -676,11 +724,11 @@
       const bodyLines = wrap(p.body, CW);
       const h = 13 + bodyLines.length * 9.5 * 1.35;
       ensure(h);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(FONT, "bold");
       doc.setFontSize(9);
       doc.setTextColor(...hexToRgb(INK.dark));
       doc.text(pdfSafe(p.title), M, y + 9);
-      doc.setFont("helvetica", "normal");
+      doc.setFont(FONT, "normal");
       doc.setFontSize(9);
       doc.setTextColor(...hexToRgb(INK.muted));
       doc.text(bodyLines, M, y + 22);
@@ -706,7 +754,7 @@
       const take = S.keyTakeaways(workouts, measurements, year, compareYear).slice(0, 3);
       if (take.length) {
         y += 4;
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(9.5);
         doc.setTextColor(...hexToRgb(INK.accent));
         doc.text("KEY INSIGHTS", M, y + 8);
@@ -717,11 +765,11 @@
           ensure(h);
           doc.setFillColor(...hexToRgb(toneColor(ins.tone)));
           doc.circle(M + 4, y + 7, 3, "F");
-          doc.setFont("helvetica", "bold");
+          doc.setFont(FONT, "bold");
           doc.setFontSize(8.5);
           doc.setTextColor(...hexToRgb(INK.dark));
           doc.text(pdfSafe(String(ins.title)), M + 14, y + 9);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(FONT, "normal");
           doc.setFontSize(8);
           doc.setTextColor(...hexToRgb(INK.muted));
           doc.text(bodyLines, M + 14, y + 19);
@@ -830,7 +878,7 @@
         if (rest.length) slices.push({ label: "Other", value: rest.reduce((s, t) => s + t.count, 0), color: INK.muted });
         const donutH = 130;
         ensure(donutH);
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(10);
         doc.setTextColor(...hexToRgb(INK.dark));
         doc.text("Training mix by session count", M, y + 8);
@@ -963,11 +1011,11 @@
           const sx = M + si * (statW + 12);
           doc.setFillColor(...hexToRgb(INK.light));
           doc.roundedRect(sx, yBefore, statW, 40, 5, 5, "F");
-          doc.setFont("helvetica", "bold");
+          doc.setFont(FONT, "bold");
           doc.setFontSize(10.5);
           doc.setTextColor(...hexToRgb(INK.dark));
           doc.text(pdfSafe(sd.v), sx + 10, yBefore + 17);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(FONT, "normal");
           doc.setFontSize(7);
           doc.setTextColor(...hexToRgb(INK.muted));
           doc.text(sd.k, sx + 10, yBefore + 30);
@@ -1014,11 +1062,11 @@
         const sx = M + si * (statW + 12);
         doc.setFillColor(...hexToRgb(INK.light));
         doc.roundedRect(sx, y, statW, 44, 5, 5, "F");
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(11);
         doc.setTextColor(...hexToRgb(INK.dark));
         doc.text(pdfSafe(sd.v), sx + 10, y + 18);
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(7);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(sd.k, sx + 10, y + 32);
@@ -1040,17 +1088,17 @@
         ensure(46);
         doc.setFillColor(...hexToRgb(toneColor(ins.tone)));
         doc.circle(M + 8, y + 12, 7, "F");
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(10);
         doc.setTextColor(255, 255, 255);
         doc.text(String(i + 1), M + 8, y + 15, { align: "center" });
         const bodyLines = wrap(ins.body, CW - 40);
         const h = 12 + bodyLines.length * 8.5 * 1.3;
-        doc.setFont("helvetica", "bold");
+        doc.setFont(FONT, "bold");
         doc.setFontSize(9);
         doc.setTextColor(...hexToRgb(INK.dark));
         doc.text(pdfSafe(String(ins.title)), M + 26, y + 12);
-        doc.setFont("helvetica", "normal");
+        doc.setFont(FONT, "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(...hexToRgb(INK.muted));
         doc.text(bodyLines, M + 26, y + 24);
