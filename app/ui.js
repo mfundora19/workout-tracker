@@ -748,6 +748,17 @@
   const KG_PER_LB = 0.45359237;
   const G_PER_OZ = 28.349523125;
 
+  const BMI_CATS = [
+    { max: 16, label: "Severe thinness", desc: "below 16 · underweight", cls: "bad" },
+    { max: 17, label: "Moderate thinness", desc: "16 – 17 · underweight", cls: "bad" },
+    { max: 18.5, label: "Mild thinness", desc: "17 – 18.5 · underweight", cls: "warn" },
+    { max: 25, label: "Normal weight", desc: "18.5 – 25 · healthy range", cls: "ok" },
+    { max: 30, label: "Overweight", desc: "25 – 30 · pre-obese", cls: "warn" },
+    { max: 35, label: "Obesity class I", desc: "30 – 35 · moderate", cls: "bad" },
+    { max: 40, label: "Obesity class II", desc: "35 – 40 · severe", cls: "bad" },
+    { max: Infinity, label: "Obesity class III", desc: "40+ · extreme", cls: "bad" }
+  ];
+
   function renderTools() {
     const wt = Store().settings.weightUnit || "lb";
     document.getElementById("toolsBody").innerHTML = `
@@ -779,8 +790,12 @@
           </div>
           <div class="bmi-result" aria-live="polite">
             <div class="bmi-value"><b id="bmiValue">22.9</b><span>BMI</span></div>
-            <div class="bmi-cat ok" id="bmiCat">Normal weight</div>
+            <div class="bmi-cat-wrap">
+              <div class="bmi-cat ok" id="bmiCat">Normal weight</div>
+              <div class="bmi-desc" id="bmiDesc">18.5 – 25 · healthy range</div>
+            </div>
           </div>
+          <p class="bmi-note">💪 Athletes: BMI doesn't measure muscle, so a very muscular build can read “overweight” at low body fat.</p>
         </div>
 
         <div class="card data-card">
@@ -815,11 +830,12 @@
   function updateBMI() {
     const v = document.getElementById("bmiValue");
     const cat = document.getElementById("bmiCat");
+    const desc = document.getElementById("bmiDesc");
     const hEl = document.getElementById("bmiHeight");
     const wEl = document.getElementById("bmiWeight");
     const huEl = document.getElementById("bmiHeightUnit");
     const wuEl = document.getElementById("bmiWeightUnit");
-    if (!v || !cat || !hEl || !wEl || !huEl || !wuEl) return;
+    if (!v || !cat || !desc || !hEl || !wEl || !huEl || !wuEl) return;
     const h = parseFloat(hEl.value);
     const w = parseFloat(wEl.value);
     const meters = huEl.value === "in" ? h * 2.54 / 100 : h / 100;
@@ -827,18 +843,19 @@
     if (!isFinite(h) || !isFinite(w) || h <= 0 || w <= 0 || !(meters > 0)) {
       v.textContent = "—";
       cat.textContent = "Enter your height and weight";
+      desc.textContent = "both fields are needed";
       cat.className = "bmi-cat neutral";
       return;
     }
     const bmi = kg / (meters * meters);
-    v.textContent = bmi.toFixed(1);
-    let label, cls;
-    if (bmi < 18.5) { label = "Underweight"; cls = "warn"; }
-    else if (bmi < 25) { label = "Normal weight"; cls = "ok"; }
-    else if (bmi < 30) { label = "Overweight"; cls = "warn"; }
-    else { label = "Obese"; cls = "bad"; }
-    cat.textContent = label;
-    cat.className = "bmi-cat " + cls;
+    // categorise by the rounded value actually displayed, so the pill always
+    // matches the number on screen (e.g. 24.96 shows 25.0 · Overweight)
+    const shown = Number(bmi.toFixed(1));
+    v.textContent = shown;
+    const c = BMI_CATS.find((c2) => shown < c2.max) || BMI_CATS[BMI_CATS.length - 1];
+    cat.textContent = c.label;
+    desc.textContent = c.desc;
+    cat.className = "bmi-cat " + c.cls;
   }
 
   function updateConverter() {
@@ -852,13 +869,13 @@
     }
     const kg = unit === "kg" ? val : unit === "lb" ? val * KG_PER_LB : unit === "g" ? val / 1000 : val * G_PER_OZ / 1000;
     const rows = [
-      ["Kilograms", kg],
-      ["Pounds", kg / KG_PER_LB],
-      ["Grams", kg * 1000],
-      ["Ounces", kg * 1000 / G_PER_OZ]
+      ["Kilograms", kg, "kg"],
+      ["Pounds", kg / KG_PER_LB, "lb"],
+      ["Grams", kg * 1000, "g"],
+      ["Ounces", kg * 1000 / G_PER_OZ, "oz"]
     ];
-    out.innerHTML = rows.map(([name, v2]) => `
-      <div class="conv-row"><span>${name}</span><b>${fmtNumber(v2)}</b></div>`).join("");
+    out.innerHTML = rows.map(([name, v2, u]) => `
+      <div class="conv-row${u === unit ? " source" : ""}"><span>${name}</span><b>${fmtNumber(v2)} ${u}</b></div>`).join("");
   }
 
   function fmtNumber(n) {

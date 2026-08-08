@@ -235,6 +235,12 @@ function dump() {
     document.getElementById("bmiHeightUnit").value = "in";
     fire("bmiHeight");
     ok("BMI 68in/150lb = 22.8 normal", document.getElementById("bmiValue").textContent === "22.8" && document.getElementById("bmiCat").textContent === "Normal weight", document.getElementById("bmiValue").textContent);
+    document.getElementById("bmiWeight").value = "100";
+    document.getElementById("bmiWeightUnit").value = "kg";
+    document.getElementById("bmiHeight").value = "175";
+    document.getElementById("bmiHeightUnit").value = "cm";
+    fire("bmiWeight");
+    ok("BMI 100kg/175cm = 32.7 obesity class I", document.getElementById("bmiValue").textContent === "32.7" && document.getElementById("bmiCat").textContent === "Obesity class I" && document.getElementById("bmiDesc").textContent.includes("30 – 35"), document.getElementById("bmiCat").textContent + " / " + document.getElementById("bmiDesc").textContent);
     document.getElementById("bmiWeight").value = "";
     fire("bmiWeight");
     ok("BMI empty weight shows prompt", document.getElementById("bmiCat").textContent === "Enter your height and weight");
@@ -243,7 +249,7 @@ function dump() {
     document.getElementById("convUnit").value = "lb";
     fire("convUnit");
     const conv = document.getElementById("convResults").textContent;
-    ok("1 lb -> 0.45 kg / 16 oz", conv.includes("0.45") && conv.includes("16") && conv.includes("Kilograms") && conv.includes("Ounces"), conv);
+    ok("1 lb -> 0.45 kg / 16 oz with units", conv.includes("0.45 kg") && conv.includes("16 oz") && conv.includes("Kilograms") && conv.includes("Ounces"), conv);
     document.getElementById("convValue").value = "100";
     document.getElementById("convUnit").value = "kg";
     fire("convValue");
