@@ -555,9 +555,9 @@
     const perMonth = ys.monthsWithData ? Math.round(ys.workouts / ys.monthsWithData) : 0;
     out.push(mkInsight("volume", "workouts",
       plural(ys.workouts, "workout") + " in " + year,
-      "You trained on " + plural(ys.days, "active day") +
-        ", averaging " + plural(perMonth, "workout") +
-        " per active month across " + ys.monthsWithData + " of 12 months.",
+      "You trained on **" + plural(ys.days, "active day") +
+        "**, averaging **" + plural(perMonth, "workout") +
+        "** per active month across **" + ys.monthsWithData + " of 12 months**.",
       ys.workouts >= 48 ? "positive" : ys.workouts < 12 ? "negative" : "neutral",
       { magnitude: ys.workouts }));
     if (ys.monthsWithData === 1) {
@@ -569,12 +569,12 @@
     } else if (ys.monthsWithData >= 2 && ys.bestMonth && ys.worstMonth && ys.bestMonth.label !== ys.worstMonth.label) {
       out.push(mkInsight("peak", "activity",
         "Strongest month: " + ys.bestMonth.label,
-        ys.bestMonth.label + " was your most active month with " + ys.bestMonth.days +
-          " workout day" + (ys.bestMonth.days === 1 ? "" : "s") + ".",
+        ys.bestMonth.label + " was your most active month with **" + ys.bestMonth.days +
+          "** workout day" + (ys.bestMonth.days === 1 ? "" : "s") + ".",
         "positive"));
       out.push(mkInsight("trough", "activity",
         "Quietest month: " + ys.worstMonth.label,
-        ys.worstMonth.label + " had the fewest workouts of the year (" + ys.worstMonth.workouts + ").",
+        ys.worstMonth.label + " had the fewest workouts of the year (**" + ys.worstMonth.workouts + "**).",
         "warn"));
     }
     return out;
@@ -592,28 +592,28 @@
     if (ma.monthsWithData >= 2 && ma.bestMom && ma.bestMom.delta > 0) {
       out.push(mkInsight("improvement", "workouts",
         "Biggest month-over-month jump: " + ma.bestMom.cur.label,
-        ma.bestMom.cur.label + " added " + ma.bestMom.delta + " workout" + (ma.bestMom.delta === 1 ? "" : "s") +
+        "**" + ma.bestMom.cur.label + "** added " + ma.bestMom.delta + " workout" + (ma.bestMom.delta === 1 ? "" : "s") +
           " vs " + ma.bestMom.prev.label + " (" + ma.bestMom.prev.workouts + " to " + ma.bestMom.cur.workouts + ").",
         "positive"));
     }
     if (ma.monthsWithData >= 2 && ma.worstMom && ma.worstMom.delta < 0 && !isCurMonth(ma.worstMom.cur)) {
       out.push(mkInsight("decline", "workouts",
         "Largest month-over-month drop: " + ma.worstMom.cur.label,
-        ma.worstMom.cur.label + " fell " + Math.abs(ma.worstMom.delta) + " workout" +
+        "**" + ma.worstMom.cur.label + "** fell " + Math.abs(ma.worstMom.delta) + " workout" +
           (Math.abs(ma.worstMom.delta) === 1 ? "" : "s") + " vs " + ma.worstMom.prev.label + ".",
         "warn"));
     }
     if (ma.mostConsistent && ma.mostConsistent.bestStreak >= 3) {
       out.push(mkInsight("consistency", "streak",
         "Most consistent stretch: " + ma.mostConsistent.label,
-        ma.mostConsistent.label + " held your longest in-month streak of " + ma.mostConsistent.bestStreak +
+        "**" + ma.mostConsistent.label + "** held your longest in-month streak of " + ma.mostConsistent.bestStreak +
           " consecutive day" + (ma.mostConsistent.bestStreak === 1 ? "" : "s") + ".",
         "positive"));
     }
     if (ma.mostCal && ma.mostCal.calories > 0) {
       out.push(mkInsight("peak", "calories",
         "Highest-calorie month: " + ma.mostCal.label,
-        ma.mostCal.label + " led the year with " + fmtNum(ma.mostCal.calories) + " kcal.",
+        "**" + ma.mostCal.label + "** led the year with " + fmtNum(ma.mostCal.calories) + " kcal.",
         "neutral"));
     }
     return out;
@@ -635,8 +635,8 @@
         : (pct > 0 ? "+" : "") + Math.round(pct) + "%";
       out.push(mkInsight("comparison", metric,
         fmt(row.a) + " " + noun + " (" + pctPart + (pct != null ? " vs " + cmp.yearB : "") + ")",
-        noun.charAt(0).toUpperCase() + noun.slice(1) + " went from " + fmt(row.b) + " in " + cmp.yearB +
-          " to " + fmt(row.a) + " in " + cmp.yearA + ".",
+        noun.charAt(0).toUpperCase() + noun.slice(1) + " went from **" + fmt(row.b) + "** in " + cmp.yearB +
+          " to **" + fmt(row.a) + "** in " + cmp.yearA + ".",
         dir === "up" ? "positive" : dir === "down" ? "negative" : "neutral",
         { magnitude: Math.round(row.diff) }));
     };
@@ -654,14 +654,14 @@
       if (top.delta > 0) {
         out.push(mkInsight("trend", "driver",
           "Driven by " + top.month,
-          top.month + " contributed the largest month-over-year gain (" + top.delta + " workout" +
+          "**" + top.month + "** contributed the largest month-over-year gain (" + top.delta + " workout" +
             (top.delta === 1 ? "" : "s") + " more than " + cmp.yearB + ").",
           "positive"));
       }
       if (bottom.delta < 0 && bottom.month !== top.month) {
         out.push(mkInsight("decline", "driver",
           "Weakest vs " + cmp.yearB + ": " + bottom.month,
-          bottom.month + " was " + Math.abs(bottom.delta) + " workout" + (Math.abs(bottom.delta) === 1 ? "" : "s") +
+          "**" + bottom.month + "** was " + Math.abs(bottom.delta) + " workout" + (Math.abs(bottom.delta) === 1 ? "" : "s") +
             " behind " + cmp.yearB + ".",
           "warn"));
       }
@@ -672,8 +672,8 @@
     if (mA !== mB) {
       out.push(mkInsight("consistency", "months",
         "Active months: " + mA + " vs " + mB,
-        "You trained in " + mA + " month" + (mA === 1 ? "" : "s") + " in " + cmp.yearA +
-          " compared with " + mB + " in " + cmp.yearB + ".",
+        "You trained in **" + mA + " month" + (mA === 1 ? "" : "s") + "** in " + cmp.yearA +
+          " compared with **" + mB + "** in " + cmp.yearB + ".",
         mA > mB ? "positive" : "warn"));
     }
     return out;
@@ -691,9 +691,9 @@
       const dirWord = delta < -0.0001 ? "decreased" : delta > 0.0001 ? "increased" : "held steady";
       const unit = s.unit ? " " + s.unit : "";
       let body = s.type + " " + dirWord + " from " + fmtNum(s.first.value, 1) + unit + " (" +
-        shortDate(s.first.date) + ") to " + fmtNum(s.latest.value, 1) + unit + " (" + shortDate(s.latest.date) + ")";
-      if (pct != null && Math.abs(delta) > 0.0001) body += ", a " + Math.round(Math.abs(pct) * 10) / 10 + "% change";
-      if (s.count >= 3) body += ". Across " + s.count + " readings it ranged " + fmtNum(s.min, 1) + " to " + fmtNum(s.max, 1) + unit;
+        shortDate(s.first.date) + ") to **" + fmtNum(s.latest.value, 1) + unit + "** (" + shortDate(s.latest.date) + ")";
+      if (pct != null && Math.abs(delta) > 0.0001) body += ", a **" + Math.round(Math.abs(pct) * 10) / 10 + "% change**";
+      if (s.count >= 3) body += ". Across **" + s.count + "** readings it ranged " + fmtNum(s.min, 1) + " to " + fmtNum(s.max, 1) + unit;
       out.push(mkInsight("measurement", s.type,
         s.type + ": " + fmtNum(s.latest.value, 1) + unit,
         body + ".",
@@ -719,9 +719,9 @@
     }
     out.push(mkInsight("consistency", "frequency",
       "Trained on " + (activePct < 1 ? "less than 1%" : Math.round(activePct) + "%") + " of days",
-      plural(sorted.length, "active day") + " across " + year +
-        (maxGap > 0 ? ", with a longest break of " + plural(maxGap, "day") +
-          " (" + shortDate(gapFrom) + " to " + shortDate(gapTo) + ")" : "") + ".",
+      "**" + plural(sorted.length, "active day") + "** across " + year +
+        (maxGap > 0 ? ", with a longest break of **" + plural(maxGap, "day") +
+          "** (" + shortDate(gapFrom) + " to " + shortDate(gapTo) + ")" : "") + ".",
       activePct >= 25 ? "positive" : activePct >= 10 ? "neutral" : "warn"));
     // Longest run of consecutive days, with its date range, for the narrative.
     let best = { run: 0, from: null, to: null }, run = 0, runFrom = null, prevD = null;
@@ -734,15 +734,15 @@
     if (best.run >= 3) {
       out.push(mkInsight("milestone", "streak",
         "Longest streak: " + best.run + " days",
-        "Your best run of consecutive training days in " + year + " stretched from " +
-          shortDate(best.from) + " to " + shortDate(best.to) + ".",
+        "Your best run of consecutive training days in " + year + " stretched from **" +
+          shortDate(best.from) + "** to **" + shortDate(best.to) + "**.",
         "positive"));
     }
     const cur = streaks(workouts, todayISO()).current;
     if (cur >= 3) {
       out.push(mkInsight("consistency", "streak",
         "Current streak: " + cur + " days",
-        "As of today you have trained " + cur + " days in a row.",
+        "As of today you have trained **" + cur + "** days in a row.",
         "positive"));
     }
     return out;
@@ -771,14 +771,14 @@
       const d = sorted[i].workouts - sorted[i - 1].workouts;
       if (d > 0 && (!bestMom || d > bestMom.delta)) bestMom = { delta: d, cur: sorted[i], prev: sorted[i - 1] };
     }
-    out.workouts = (best ? best.label + " was your most active month (" + best.days + " workout day" + (best.days === 1 ? "" : "s") + "). " : "") +
+    out.workouts = (best ? best.label + " was your most active month (**" + best.days + "** workout day" + (best.days === 1 ? "" : "s") + "). " : "") +
       (quiet && quiet.label !== best.label
         ? (isCurMonth(quiet) ? quiet.label + " has " + quiet.workouts + " workout" + (quiet.workouts === 1 ? "" : "s") + " so far this month. "
-          : quiet.label + " had the fewest workouts (" + quiet.workouts + "). ")
+          : quiet.label + " had the fewest workouts (**" + quiet.workouts + "**). ")
         : "") +
-      (bestMom ? "Workout count climbed most between " + bestMom.prev.label + " and " + bestMom.cur.label + " (+" + bestMom.delta + ")." : "");
-    out.calories = mostCal && mostCal.calories > 0 ? mostCal.label + " led in calories with " + fmtNum(mostCal.calories) + " kcal." : "";
-    out.duration = mostDur && mostDur.duration > 0 ? mostDur.label + " led in training time with " + fmtDuration(mostDur.duration) + "." :
+      (bestMom ? "Workout count climbed most between **" + bestMom.prev.label + "** and **" + bestMom.cur.label + "** (+" + bestMom.delta + ")." : "");
+    out.calories = mostCal && mostCal.calories > 0 ? mostCal.label + " led in calories with **" + fmtNum(mostCal.calories) + " kcal**." : "";
+    out.duration = mostDur && mostDur.duration > 0 ? mostDur.label + " led in training time with **" + fmtDuration(mostDur.duration) + "**." :
       withData.length ? "No training duration was recorded in " + year + "." : "";
     return out;
   }
@@ -792,25 +792,25 @@
       return paras;
     }
     const perMonth = ys.monthsWithData ? Math.round(ys.workouts / ys.monthsWithData) : 0;
-    let s = "You completed " + plural(ys.workouts, "workout") + " across " + plural(ys.days, "active day") +
-      ", averaging " + plural(perMonth, "workout") +
-      " per active month" + (ys.monthsWithData < 12 ? " — training was concentrated in " + ys.monthsWithData + " of 12 months" : "") +
-      ". " + (ys.duration > 0 ? "Total training time reached " + fmtDuration(ys.duration) + " and you burned " + fmtCal(ys.calories) + "." : "You burned " + fmtCal(ys.calories) + " in total.");
+    let s = "You completed **" + plural(ys.workouts, "workout") + "** across **" + plural(ys.days, "active day") +
+      "**, averaging **" + plural(perMonth, "workout") +
+      "** per active month" + (ys.monthsWithData < 12 ? " — training was concentrated in **" + ys.monthsWithData + " of 12 months**" : "") +
+      ". " + (ys.duration > 0 ? "Total training time reached **" + fmtDuration(ys.duration) + "** and you burned **" + fmtCal(ys.calories) + "**." : "You burned **" + fmtCal(ys.calories) + "** in total.");
     paras.push({ title: "The year in numbers", body: s });
     if (compareYear && compareYear !== year) {
       const cmp = compareYears(workouts, year, compareYear);
       const p = cmp.totals.workouts;
       const pct = pctChange(p.a, p.b);
-      let c = "Compared with " + cmp.yearB + ", workout volume " +
+      let c = "Compared with " + cmp.yearB + ", workout volume **" +
         (pct == null ? (p.a > 0 ? "went from zero to " + p.a : "was unchanged") :
           pct > 0 ? "rose " + Math.round(pct) + "%" : pct < 0 ? "fell " + Math.round(Math.abs(pct)) + "%" : "held steady") +
-        " (" + p.b + " to " + p.a + " workouts).";
+        "** (" + p.b + " to " + p.a + " workouts).";
       const ad = cmp.totals.duration.a && cmp.totals.workouts.a ? cmp.totals.duration.a / cmp.totals.workouts.a : null;
       const bd = cmp.totals.duration.b && cmp.totals.workouts.b ? cmp.totals.duration.b / cmp.totals.workouts.b : null;
       if (ad != null && bd != null) {
         const dp = pctChange(ad, bd);
         if (dp != null && Math.abs(dp) > 0.5) {
-          c += " Average session length " + (dp > 0 ? "grew " : "shrank ") + Math.round(Math.abs(dp)) + "%.";
+          c += " Average session length **" + (dp > 0 ? "grew " : "shrank ") + Math.round(Math.abs(dp)) + "%**.";
         }
       }
       paras.push({ title: "Year over year", body: c });
@@ -829,12 +829,12 @@
     if (ys.workouts > 0) {
       out.push(mkInsight("milestone", "workouts",
         plural(ys.workouts, "workout") + " logged",
-        "Across " + plural(ys.days, "active day") + " in " + year + ".", "positive"));
+        "Across **" + plural(ys.days, "active day") + "** in " + year + ".", "positive"));
     }
     if (ys.bestMonth && ys.monthsWithData >= 2) {
       out.push(mkInsight("peak", "activity",
         "Peak month: " + ys.bestMonth.label,
-        ys.bestMonth.label + " was your most active month with " + ys.bestMonth.days + " workout days.", "positive"));
+        "Your busiest month, with **" + ys.bestMonth.days + "** active days.", "positive"));
     }
     if (ys.longestStreak >= 3) {
       out.push(mkInsight("milestone", "streak",
@@ -848,7 +848,7 @@
       if (pct != null && pct !== 0) {
         out.push(mkInsight("comparison", "workouts",
           (pct > 0 ? "+" : "") + Math.round(pct) + "% workouts vs " + cmp.yearB,
-          "Workout volume went from " + p.b + " to " + p.a + " sessions.",
+          "Workout volume went from **" + p.b + "** to **" + p.a + "** sessions.",
           pct > 0 ? "positive" : "warn"));
       }
     }

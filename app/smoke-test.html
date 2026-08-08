@@ -315,7 +315,9 @@ function dump() {
     ok("consistency longest streak 13", ci.some((i) => i.title === "Longest streak: 13 days"), JSON.stringify(ci.map((i) => i.title)));
     const es = S.execSummary(Focus.Store.workouts, Focus.Store.measurements, 2026);
     ok("execSummary has year in numbers", es.length > 0 && es[0].title === "The year in numbers", es[0] && es[0].title);
-    ok("execSummary no fake duration", es[0] && es[0].body.includes("You burned 61,005 kcal in total"), es[0] && es[0].body);
+    // bodies may carry **bold** markers for the PDF emphasis layer — strip them before asserting the plain text
+    const stripMark = (t) => String(t).replace(/\*\*/g, "");
+    ok("execSummary no fake duration", es[0] && stripMark(es[0].body).includes("You burned 61,005 kcal in total"), es[0] && es[0].body);
     const tk = S.keyTakeaways(Focus.Store.workouts, Focus.Store.measurements, 2026);
     ok("keyTakeaways 3-7 items", tk.length >= 3 && tk.length <= 7, "n=" + tk.length);
     ok("keyTakeaways first = 92 workouts logged", tk[0] && tk[0].title === "92 workouts logged", tk[0] && tk[0].title);
@@ -334,7 +336,7 @@ function dump() {
     const cmp25 = S.compareYears(both, 2026, 2025);
     const cin = S.comparisonInsights(both, cmp25);
     ok("comparison insight title has value not sign-mangled", cin[0] && cin[0].title.startsWith("92 workouts (") && !cin[0].title.startsWith("+"), cin[0] && cin[0].title);
-    ok("comparison insight explains change", cin[0] && cin[0].body.includes("went from 48 in 2025 to 92 in 2026"), cin[0] && cin[0].body);
+    ok("comparison insight explains change", cin[0] && stripMark(cin[0].body).includes("went from 48 in 2025 to 92 in 2026"), cin[0] && cin[0].body);
 
     // --- PDF report scenarios (layout telemetry, pristine seed) ---
     if (window.jspdf && window.jspdf.jsPDF) {

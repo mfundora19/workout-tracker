@@ -165,6 +165,11 @@ Technical notes:
   are handled (e.g. “No training duration was recorded”), and a comparison year
   must actually contain workouts to appear.
 - Charts stay **vector** (jsPDF primitives) so they remain sharp when zoomed.
+  Monthly bar charts show the actual value inside (or just above) each bar;
+  x-axis labels get their own dedicated space so captions never cover them.
+- **Typography**: a small rich-text engine in the renderer turns `**bold**`
+  markers (used sparingly on the 1–3 key numbers per statement in `stats.js`)
+  into real bold runs, and the bundled DejaVu font keeps symbols legible.
 - Low-data years still produce a clean two-page report explaining that there
   is nothing to analyse yet. Passing `{ debug: true }` to `exportPdf` returns
   layout telemetry (page count, per-page usage, warnings) used by the tests.
