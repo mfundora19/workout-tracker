@@ -12,10 +12,9 @@ the HTML file and start.
 
 | | |
 |---|---|
-| ![Dashboard](screenshots/dashboard-dark.png) | ![Calendar](screenshots/calendar-dark.png) |
-| ![Analytics](screenshots/analytics-dark.png) | ![Progress](screenshots/progress-dark.png) |
-| ![Tools](screenshots/tools-dark.png) | ![Data](screenshots/data-dark.png) |
-| ![Settings](screenshots/settings-dark.png) | ![Light theme](screenshots/dashboard-light.png) |
+| ![Dashboard](app/screenshots/dashboard-dark.png) | ![Calendar](app/screenshots/calendar-dark.png) |
+| ![Analytics](app/screenshots/analytics-dark.png) | ![Progress](app/screenshots/progress-dark.png) |
+| ![Tools](app/screenshots/tools-dark.png) | ![Data](app/screenshots/data-dark.png) |
 
 *Screenshots show the built-in demo data (your seed history plus a few extra
 entries for illustration).*
@@ -188,7 +187,6 @@ logic, including the exact Excel round-trip. Exports and imports live in the
 WorkoutTracker/
 ├── Focus-Workout-Tracker.html  ← open this
 ├── README.md
-├── screenshots/            ← images used in this README
 ├── app/                    ← everything the app needs, in one folder
 │   ├── css/                ← design system, light + dark themes, accents, motion
 │   │   └── app.css
@@ -205,6 +203,7 @@ WorkoutTracker/
 │   │   ├── jspdf.umd.min.js ← PDF library
 │   │   ├── xlsx.full.min.js ← SheetJS
 │   │   └── fonts/fonts.js   ← embedded Unicode font for the PDF report
+│   ├── screenshots/        ← images used in this README
 │   └── tests/              ← optional automated checks
 │       └── smoke-test.html
 └── data/                   ← keep your Excel/JSON exports & imports here
