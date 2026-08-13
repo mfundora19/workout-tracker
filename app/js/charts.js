@@ -26,6 +26,11 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
   }
 
+  /* Draw-in animations are gated by the Settings toggle and reduced-motion. */
+  const animsOn = () =>
+    !document.documentElement.classList.contains("no-anim") &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   function compact(n) {
     if (n == null || !isFinite(n)) return "—";
     const abs = Math.abs(n);
@@ -117,12 +122,14 @@
         const bar = el("path", {
           d: `M${x} ${y + 5}Q${x} ${y} ${x + 5} ${y}L${x + barW - 5} ${y}Q${x + barW} ${y} ${x + barW} ${y + 5}L${x + barW} ${pad.t + plotH}L${x} ${pad.t + plotH}Z`,
           fill: colors[si],
-          opacity: opts.highlight && !opts.highlight.includes(i) ? 0.4 : 0.88
+          opacity: opts.highlight && !opts.highlight.includes(i) ? 0.4 : 0.88,
+          style: animsOn() ? `--bd:${Math.min((i + si) * 35, 420)}ms` : ""
         });
         bindTip(bar, tipForSeries(s, lb, v, opts));
         svg.appendChild(bar);
       });
     });
+    if (animsOn()) svg.setAttribute("class", "anim-bars");
 
     // x labels
     const every = n > 24 ? 3 : n > 12 ? 2 : 1;
@@ -202,7 +209,7 @@
         const pts = s.values.map((v, i) => `${xOf(i)},${yOf(v)}`);
         const area = el("path", {
           d: `M${xOf(0)},${pad.t + plotH}L${pts.join("L")}L${xOf(n - 1)},${pad.t + plotH}Z`,
-          fill: `url(#${gid})`, stroke: "none"
+          fill: `url(#${gid})`, stroke: "none", class: "area"
         });
         svg.appendChild(area);
       }
@@ -218,7 +225,7 @@
         if (seg.length === 1) {
           svg.appendChild(el("circle", { cx: seg[0][0], cy: seg[0][1], r: 4, fill: colors[si] }));
         } else {
-          svg.appendChild(el("path", { d: smoothPath(seg), fill: "none", stroke: colors[si], "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+          svg.appendChild(el("path", { d: smoothPath(seg), fill: "none", stroke: colors[si], "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round", class: "ln", pathLength: 1000 }));
         }
         seg = [];
       };
@@ -240,6 +247,8 @@
         svg.appendChild(hit);
       });
     });
+
+    if (animsOn()) svg.setAttribute("class", "anim-line");
 
     // Thin x labels so dense date labels (e.g. weekly measurements) never overlap:
     // aim for ~7 labels, always including the last one.

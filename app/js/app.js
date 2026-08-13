@@ -33,6 +33,24 @@
 
     async setSetting(key, value) {
       await Focus.Store.setSetting(key, value);
+    },
+
+    /** Backup reminder rule — delegates to the pure Stats helper. */
+    shouldShowBackupReminder(iso) {
+      const s = Focus.Store.settings;
+      return S().backupReminderDue(iso, {
+        enabled: s.backupReminder,
+        lastBackupAt: s.lastBackupAt,
+        lastShownAt: s.lastBackupReminderAt
+      });
+    },
+
+    maybeShowBackupReminder() {
+      const today = S().todayISO();
+      if (!App.shouldShowBackupReminder(today)) return;
+      Focus.Store.setSetting("lastBackupReminderAt", today);
+      // let the view paint first, then surface the modal
+      setTimeout(() => Focus.UI.showBackupReminder(), 700);
     }
   };
 
@@ -67,6 +85,9 @@
     // view from hash
     const v = location.hash.replace("#/", "");
     showView(VIEW_META[v] ? v : "dashboard");
+
+    // weekly backup reminder (Sundays, ≥14 days since the last backup)
+    App.maybeShowBackupReminder();
 
     Focus.Store.onChange(() => {
       if (!document.getElementById("modalBackdrop").hidden) return;
@@ -117,6 +138,7 @@
 
   function showView(name) {
     App.currentView = name;
+    if (name === "dashboard") Focus.UI.markDashEnter(); // staggered card entrance
     Focus.UI.closeInfoPopover(); // drop any open ⓘ popover when leaving the view
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("is-active", b.dataset.view === name));
     document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + name));
@@ -418,6 +440,14 @@
           renderCurrent();
           break;
         }
+        case "set-backup-reminder": {
+          const on = target.dataset.setBackupReminder === "on";
+          Focus.Store.setSetting("backupReminder", on);
+          Focus.UI.closeModal(); // "Turn off reminders" in the reminder modal
+          Focus.UI.toast(on ? "Backup reminders on" : "Backup reminders turned off");
+          renderCurrent();
+          break;
+        }
         case "set-weightunit": {
           const next = target.dataset.setWeightunit;
           if (next === "kg" || next === "lb") {
@@ -513,6 +543,7 @@
           const blob = new Blob([JSON.stringify(Focus.Store.exportBackup(), null, 2)], { type: "application/json" });
           downloadBlob(blob, "focus-backup-" + S().todayISO() + ".json");
           Focus.App.setSetting("lastBackupAt", new Date().toISOString());
+          Focus.UI.closeModal(); // the reminder modal's "Back up now"
           Focus.UI.toast("Full backup downloaded — keep it safe 🗄️");
           break;
         }

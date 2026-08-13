@@ -978,6 +978,22 @@
     return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][parse(iso).getDay()];
   }
 
+  /** Backup-reminder rule: Sundays only, once per day, and only when no backup
+   *  exists or the last one is ≥14 days old — i.e. every other Sunday in
+   *  practice, self-aligned to when the user actually backs up. Pure so it's
+   *  easy to test; opts: { enabled, lastBackupAt (ISO date/datetime), lastShownAt }. */
+  function backupReminderDue(iso, opts) {
+    const o = opts || {};
+    if (o.enabled === false) return false;
+    if (weekdayOf(iso) !== 0) return false; // Sundays only
+    if (o.lastShownAt === iso) return false; // already shown today
+    if (o.lastBackupAt) {
+      const days = (parse(iso) - parse(String(o.lastBackupAt).slice(0, 10))) / 86400000;
+      if (days < 14) return false;
+    }
+    return true;
+  }
+
   window.Focus = window.Focus || {};
   window.Focus.Stats = {
     MONTHS_SHORT, MONTHS_LONG,
@@ -988,7 +1004,7 @@
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
-    monthDayMap, availableYears, longestStreakInSet,
+    monthDayMap, availableYears, longestStreakInSet, backupReminderDue,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
 })();

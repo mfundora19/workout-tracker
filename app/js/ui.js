@@ -22,8 +22,13 @@
     anaB: null,
     importPending: null,
     qaMode: "workout",
-    accentOpen: false
+    accentOpen: false,
+    dashEnter: false
   };
+
+  /* Set when the Dashboard view is shown — the next render plays the staggered
+   * entrance animation. Data re-renders leave it false, so cards don't re-animate. */
+  function markDashEnter() { state.dashEnter = true; }
 
   /* ---------------- type styles ---------------- */
 
@@ -177,6 +182,26 @@
         });
       }
     });
+  }
+
+  /** Backup reminder — shown on Sundays when no backup exists or the last one
+   *  is ≥14 days old. "Back up now" reuses the export-backup action. */
+  function showBackupReminder() {
+    const s = Store().settings;
+    const last = s.lastBackupAt;
+    let age = "You haven't created a backup yet.";
+    if (last) {
+      const days = Math.floor((St().parse(St().todayISO()) - St().parse(last.slice(0, 10))) / 86400000);
+      age = `It's been <b>${Math.max(0, days)} days</b> since your last backup.`;
+    }
+    openModal(`
+      <h2>Time for a backup 💾</h2>
+      <p class="modal-sub">${age} Everything lives only in this browser — a JSON backup is the best way to keep it safe.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-close>Later</button>
+        <button class="btn btn-primary" data-action="export-backup">${ICONS.database} Back up now</button>
+        <button class="btn btn-ghost" data-action="set-backup-reminder" data-set-backup-reminder="off">Turn off reminders</button>
+      </div>`);
   }
 
   /* ---------------- workout form ---------------- */
@@ -551,6 +576,17 @@
       </div>`);
 
     grid.innerHTML = parts.join("");
+
+    // Staggered entrance plays only when the view was just shown. The class is
+    // also removed on plain re-renders so freshly-created children never re-play it.
+    if (state.dashEnter) {
+      state.dashEnter = false;
+      grid.classList.remove("dash-enter");
+      void grid.offsetWidth; // reflow so a second visit re-triggers the animation
+      grid.classList.add("dash-enter");
+    } else {
+      grid.classList.remove("dash-enter");
+    }
 
     // Drop any lingering hover tip — the pills were just re-created.
     Focus.Charts.hideTip();
@@ -1368,6 +1404,7 @@
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
+    const rem = s.backupReminder !== false;
     const curColor = (ACCENTS.find(([n]) => n === accent) || ACCENTS[0])[1];
     document.getElementById("settingsBody").innerHTML = `
       <div class="settings-grid">
@@ -1392,8 +1429,8 @@
             </div>
           </div>
           <div class="setting-row">
-            <div class="setting-label"><b>Motion</b><span>Subtle transitions and entrance animations across the app.</span></div>
-            <div class="seg" role="group" aria-label="Motion">
+            <div class="setting-label"><b>Animations</b><span>Ambient background glows, card highlights, chart draw-ins and entrance animations. Respects your system's reduced-motion preference.</span></div>
+            <div class="seg" role="group" aria-label="Animations">
               <button class="seg-btn ${anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="on">✨ On</button>
               <button class="seg-btn ${!anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="off">Off</button>
             </div>
@@ -1477,6 +1514,13 @@
             <li>💾 Everything is stored in this browser only.</li>
             <li>📦 Move data with the export/import tools in the <b>Data</b> view.</li>
           </ul>
+          <div class="setting-row">
+            <div class="setting-label"><b>Backup reminder</b><span>On Sundays, if no backup was made in the last 14 days, reminds you to download a JSON backup.</span></div>
+            <div class="seg" role="group" aria-label="Backup reminder">
+              <button class="seg-btn ${rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="on">✨ On</button>
+              <button class="seg-btn ${!rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="off">Off</button>
+            </div>
+          </div>
         </div>
 
         <div class="card data-card">
@@ -2144,6 +2188,7 @@
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes, pickerTypes, typeSummaryHTML,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog, closeInfoPopover,
+    markDashEnter, showBackupReminder,
     openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
     renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor

@@ -168,7 +168,7 @@
       const [w, m, s] = await Promise.all([getAll("workouts"), getAll("measurements"), loadSettings()]);
       state.workouts = w.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
       state.measurements = m.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
-      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } };
+      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, backupReminder: true, customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } };
       state.settings = Object.assign({}, defaults, s);
       state.settings.goals = Object.assign({}, defaults.goals, s.goals || {});
 

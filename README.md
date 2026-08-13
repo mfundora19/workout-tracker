@@ -21,14 +21,14 @@ entries for illustration).*
 
 ## Features
 
-- 📊 **Dashboard** — week / month / year totals, streaks, goals and a year-vs-year card at a glance
+- 📊 **Dashboard** — year totals, streaks, year-vs-year and goals KPI cards, then **This Week / This Month** cards that benchmark **9 metrics** against the previous period (hover any ▲/▼ pill to reveal the previous period's value), then the Workouts-per-month and cumulative-calories charts and recent activity
 - 📅 **Calendar** — GitHub-style heatmap with intensity levels, a month view with a day panel, and subtle marking of your best day and the current month
 - 📏 **Progress** — weight, waist, neck, height… any measurement, any frequency. Trend charts, a **Body composition** card (current BMI + estimated body fat %, computed from your records — no re-entry) and a summary with colored trend highlights
 - 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a consistency heatmap, and a year-over-year comparison (current vs previous year by default)
-- 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes
+- 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
 - 🎯 **Goals** — daily calorie / duration and weekly workout targets; see them on the dashboard and as gold ✓ on goal days in the calendar
-- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), a motion toggle, weight unit (kg/lb), body profile (sex, **height**, age — set once), goals and privacy
+- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle
 
 ## Getting started
 
@@ -57,6 +57,7 @@ anywhere. Storage is per-browser, so to move data between browsers or computers:
 - **Export Excel** produces a spreadsheet-friendly copy with clean, human-readable sheets (`Overview`, `Workouts`, `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics`) that read perfectly in Google Sheets. A hidden `_AppData` sheet carries the internal record IDs and timestamps, so re-import is exact.
 - **Google Sheets archiving**: export → upload → archive; later download as `.xlsx` and import back. Imports show a preview (will add / will update / unchanged / invalid) and never delete local records — they match on stable ID, then identical content, then a human-edit key, and only add what's genuinely new.
 - **Export PDF Report** builds a multi-page **Progress & Analytics Report** locally — see below.
+- **Backup reminder** — on Sundays, if the last JSON backup is 14+ days old (or there isn't one yet), the app shows a reminder with **Back up now** / **Later** / **Turn off reminders**. It runs once per day, aligns itself to your actual backups (so you get a nudge roughly every other Sunday), and can be switched off in **Settings → Privacy**.
 
 <details>
 <summary><b>PDF report — what's inside</b></summary>
@@ -172,7 +173,8 @@ calories by overwriting a day cell in a yearly grid, so the import assumed:
 - [x] Export Excel — opens in Excel & Google Sheets; re-import → "0 new"
 - [x] Export PDF report for a year with data
 - [x] Export JSON backup, reset, import backup → everything restored
-- [x] Dark / light mode, accent color and motion toggle (remembered between sessions)
+- [x] Backup reminder: Sunday + no backup in 14 days → modal; "Back up now" exports and stamps the date; toggle in Settings → Privacy
+- [x] Dark / light mode, accent color and animations toggle (remembered between sessions); ambient glows, card highlights and chart draw-ins turn off with the toggle or reduced motion
 - [x] Close the browser, reopen `Focus-Workout-Tracker.html` → data is still there
 - [x] Works with the network cable unplugged
 

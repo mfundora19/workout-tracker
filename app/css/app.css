@@ -34,6 +34,9 @@
   --radius-xs: 7px;
   --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  /* Ambient background glows (indigo + emerald, mirroring the bg gradient). */
+  --glow-a: rgba(99, 102, 241, .45);
+  --glow-b: rgba(16, 185, 129, .32);
   --heat-0: transparent;
   --heat-1: rgba(99, 102, 241, .16);
   --heat-2: rgba(99, 102, 241, .38);
@@ -77,6 +80,9 @@ html[data-theme="dark"] {
   --chart-grid: #23283a;
   --tooltip-bg: #f1f2f8;
   --tooltip-text: #171a26;
+  /* Ambient background glows — dimmer in dark mode so they stay behind the UI. */
+  --glow-a: rgba(129, 140, 248, .34);
+  --glow-b: rgba(52, 211, 153, .24);
 }
 
 /* ---------- Accent colors (picked in Settings > Appearance) ---------- */
@@ -106,6 +112,40 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: background-color .3s ease, color .3s ease;
 }
+
+/* Ambient background illumination — two slow-drifting glows behind the app. */
+body::before, body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 56vmax;
+  height: 56vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+body::before {
+  top: -20vmax;
+  right: -15vmax;
+  background: radial-gradient(circle at 35% 35%, var(--glow-a), transparent 62%);
+}
+body::after {
+  bottom: -24vmax;
+  left: -17vmax;
+  background: radial-gradient(circle at 65% 65%, var(--glow-b), transparent 62%);
+}
+html:not(.no-anim) body::before { opacity: 1; animation: orbDriftA 36s ease-in-out infinite alternate; }
+html:not(.no-anim) body::after { opacity: 1; animation: orbDriftB 44s ease-in-out infinite alternate; }
+@keyframes orbDriftA {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-4vmax, 3vmax, 0) scale(1.12); }
+}
+@keyframes orbDriftB {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(4vmax, -3vmax, 0) scale(1.1); }
+}
+
 [hidden] { display: none !important; }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
@@ -146,7 +186,10 @@ svg { display: block; }
 }
 .nav-item svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
-.nav-item.is-active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.nav-item.is-active {
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent-soft), 0 4px 16px -8px var(--accent-soft);
+}
 
 .sidebar-foot { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 8px 0; border-top: 1px solid var(--border); margin-top: 6px; }
 
@@ -891,7 +934,23 @@ html:not(.no-anim) .view:not([hidden]) { animation: viewIn .28s ease; }
 html:not(.no-anim) #modalBackdrop:not([hidden]) { animation: fadeIn .18s ease; }
 html:not(.no-anim) #modal { animation: modalIn .22s ease; }
 html:not(.no-anim) .card { transition: transform .18s ease, box-shadow .18s ease, border-color .15s ease; }
-html:not(.no-anim) .stat:hover, html:not(.no-anim) .month-card:hover, html:not(.no-anim) .data-card:hover, html:not(.no-anim) .big-card:hover, html:not(.no-anim) .day-panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+html:not(.no-anim) .stat:hover, html:not(.no-anim) .month-card:hover, html:not(.no-anim) .data-card:hover, html:not(.no-anim) .big-card:hover, html:not(.no-anim) .period-card:hover, html:not(.no-anim) .day-panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md), 0 0 0 1px var(--accent-soft), 0 14px 34px -14px var(--accent-soft); }
+
+/* Dashboard entrance: rows fade up in sequence when the view is shown (not on data re-renders). */
+html:not(.no-anim) .dash-enter > * { animation: dashIn .5s cubic-bezier(.22, .61, .36, 1) both; }
+html:not(.no-anim) .dash-enter > *:nth-child(2) { animation-delay: .06s; }
+html:not(.no-anim) .dash-enter > *:nth-child(3) { animation-delay: .12s; }
+html:not(.no-anim) .dash-enter > *:nth-child(4) { animation-delay: .18s; }
+html:not(.no-anim) .dash-enter > *:nth-child(5) { animation-delay: .24s; }
+@keyframes dashIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Chart bars grow from the baseline; line charts draw themselves in. */
+html:not(.no-anim) svg.anim-bars path { transform-box: fill-box; transform-origin: bottom; animation: barGrow .6s cubic-bezier(.22, .61, .36, 1) both; animation-delay: var(--bd, 0ms); }
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+html:not(.no-anim) svg.anim-line path.ln { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: lineDraw 1.05s ease-out .08s both; }
+html:not(.no-anim) svg.anim-line path.area { animation: fadeIn .7s ease .3s both; }
+html:not(.no-anim) svg.anim-line circle { animation: fadeIn .5s ease .8s both; }
+@keyframes lineDraw { to { stroke-dashoffset: 0; } }
 html:not(.no-anim) .btn:active, html:not(.no-anim) .seg-btn:active, html:not(.no-anim) .icon-btn:active, html:not(.no-anim) .type-chip:active, html:not(.no-anim) .swatch:active { transform: scale(.96); }
 html:not(.no-anim) .day-cell:not(.empty):hover { transform: translateY(-1px); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
