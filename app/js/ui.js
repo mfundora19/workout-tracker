@@ -450,36 +450,13 @@
     // --- Quick add card ---
     parts.push(quickAddCardHTML());
 
-    // --- Stat cards (5, evenly spaced with side margins) ---
-    // "This week" is scoped to the selected year, matching "This month".
-    const wk = St().weeklyStats(all.filter((w) => St().yearOf(w.date) === year), today);
+    // --- KPI stat cards (4, one row on desktop) ---
     const best = yStats.bestMonth;
     const prevYear = year - 1;
     const prev = St().yearlyStats(all, prevYear);
     const cmpDelta = yStats.workouts - prev.workouts;
 
     parts.push(`<div class="dash-stats">
-      ${statCard({
-        title: "This week", icon: "activity", cls: "",
-        rows: [
-          { label: "Workouts", value: St().fmtNum(wk.cur.workouts), delta: wk.cur.workouts - wk.prev.workouts },
-          { label: "Workout days", value: St().fmtNum(wk.cur.days) },
-          { label: "Calories", value: wk.cur.calories ? St().fmtNum(wk.cur.calories) : "0" },
-          { label: "Duration", value: wk.cur.duration ? St().fmtDuration(wk.cur.duration) : "—" },
-          { label: "Avg kcal / workout", value: wk.cur.workouts ? St().fmtNum(Math.round(wk.cur.calories / wk.cur.workouts)) : "—" }
-        ]
-      })}
-      ${statCard({
-        title: "This month", icon: "calendar", cls: "green",
-        rows: [
-          { label: "Workouts", value: St().fmtNum(mStats.workouts) },
-          { label: "Calories", value: mStats.calories ? St().fmtNum(mStats.calories) : "0" },
-          { label: "Duration", value: mStats.duration ? St().fmtDuration(mStats.duration) : "—" },
-          { label: "Avg kcal / workout", value: mStats.avgCal ? St().fmtNum(mStats.avgCal, 0) : "—" },
-          { label: "Workout days", value: St().fmtNum(mStats.days) + " / " + St().daysInMonth(year, month) },
-          { label: "Best streak", value: mStats.bestStreak ? mStats.bestStreak + " days" : "—" }
-        ]
-      })}
       ${statCard({
         title: year + " totals", icon: "trophy", cls: "",
         rows: [
@@ -512,6 +489,46 @@
       ${goalsCardHTML()}
     </div>`);
 
+    // --- This week / This month (large comparison KPI cards) ---
+    // "This week" is scoped to the selected year, matching "This month".
+    const yearWk = all.filter((w) => St().yearOf(w.date) === year);
+    const wk = St().weeklyStats(yearWk, today);
+    // Longest run of consecutive workout days inside each week window.
+    const wkStreak = (start, end) => St().longestStreakInSet(new Set(yearWk.filter((w) => w.date >= start && w.date <= end).map((w) => w.date)));
+    const wkStreaks = {
+      cur: wkStreak(wk.start, wk.end),
+      prev: wkStreak(St().addDays(wk.start, -7), St().addDays(wk.end, -7))
+    };
+    // Previous calendar month (December of the previous year when in January).
+    const prevMonth = month > 1
+      ? St().monthlyStats(all, year)[month - 2]
+      : St().monthlyStats(all, year - 1)[11];
+    const curDaysInPeriod = St().daysInMonth(year, month);
+    const prevDaysInPeriod = month > 1 ? St().daysInMonth(year, month - 1) : St().daysInMonth(year - 1, 12);
+
+    parts.push(`<div class="dash-compare">
+      ${periodCard({
+        title: "This week",
+        sub: St().shortDate(wk.start) + " – " + St().shortDate(wk.end),
+        value: wk.cur.workouts,
+        pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
+        vs: "last week",
+        period: "week",
+        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur }),
+        prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev })
+      })}
+      ${periodCard({
+        title: "This month",
+        sub: St().MONTHS_LONG[month - 1] + " " + year,
+        value: mStats.workouts,
+        pct: St().pctVsPrev(mStats.workouts, prevMonth.workouts),
+        vs: "last month",
+        period: "month",
+        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod }),
+        prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod })
+      })}
+    </div>`);
+
     // --- Charts (side by side) ---
     parts.push(`
       <div class="dash-charts">
@@ -534,6 +551,16 @@
       </div>`);
 
     grid.innerHTML = parts.join("");
+
+    // Drop any lingering hover tip — the pills were just re-created.
+    Focus.Charts.hideTip();
+
+    // One-time delegation: hovering a comparison pill for >0.75s reveals the
+    // previous period's actual value (never shown in the card itself).
+    if (!prevTipBound) {
+      prevTipBound = true;
+      bindPrevTipHover(grid);
+    }
 
     // charts
     const ms = St().monthlyStats(all, year);
@@ -630,6 +657,135 @@
     if (v === 0) return `<span class="delta flat">±0</span>`;
     const cls = v > 0 ? "up" : "down";
     return `<span class="delta ${cls}">${v > 0 ? "▲" : "▼"} ${St().fmtNum(Math.abs(v))}</span>`;
+  }
+
+  /**
+   * Large comparison KPI card ("This week" / "This month") — a headline
+   * workout count + % pill vs the previous period, plus a compact grid of
+   * secondary metrics (days, calories, duration, intensity), each with its
+   * own delta pill. Shares the large-card tier (title + sub) with the chart
+   * cards below it.
+   */
+  function periodCard({ title, sub, value, pct, vs, period, cur, prev }) {
+    // Hover tip (revealed after 2s on a pill): the previous period's actual value.
+    const tip = prev.workouts
+      ? { label: "Last " + period + ":", value: St().fmtNum(prev.workouts) + (prev.workouts === 1 ? " workout" : " workouts") }
+      : null;
+    return `
+      <div class="card period-card">
+        <div class="card-title">
+          <h3>${esc(title)}</h3>
+          <span class="sub">${esc(sub)}</span>
+        </div>
+        <div class="period-body">
+          <div class="period-hero">
+            <div class="period-value">${St().fmtNum(value)}<span>${value === 1 ? "workout" : "workouts"}</span></div>
+            ${pctPill(pct, vs, tip)}
+          </div>
+          <div class="stat-mini-grid">
+            ${metricTile("Workout days", cur.days, prev.days, (v) => St().fmtNum(v), period, "days")}
+            ${metricTile("Calories", cur.calories, prev.calories, (v) => St().fmtNum(v), period, "kcal")}
+            ${metricTile("Duration", cur.duration, prev.duration, (v) => St().fmtDuration(v), period)}
+            ${metricTile("Avg kcal / workout", cur.avgCal, prev.avgCal, (v) => St().fmtNum(v), period, "kcal")}
+            ${metricTile("Avg time / workout", cur.avgDur, prev.avgDur, (v) => St().fmtDuration(v), period)}
+            ${metricTile("Calories / day", cur.calPerDay, prev.calPerDay, (v) => St().fmtNum(v), period, "kcal")}
+            ${metricTile("Time / day", cur.timePerDay, prev.timePerDay, (v) => St().fmtDuration(v), period)}
+            ${metricTile("Workouts / day", cur.wkPerDay, prev.wkPerDay, (v) => St().fmtNum(v, 1), period)}
+            ${metricTile("Best streak", cur.bestStreak, prev.bestStreak, (v) => v + " days", period)}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  /**
+   * Normalize a week/month stats object for the metric tiles. Computes the
+   * per-workout averages from the raw aggregates so both periods behave
+   * identically; opts: { daysInPeriod, bestStreak } for metrics that need
+   * the period length or a run-of-days computation the stats object lacks.
+   */
+  function periodMetrics(s, opts) {
+    const o = opts || {};
+    return {
+      workouts: s.workouts,
+      days: s.days,
+      calories: s.calories,
+      duration: s.duration,
+      avgCal: s.workouts ? s.calories / s.workouts : null,
+      avgDur: s.workouts ? s.duration / s.workouts : null,
+      calPerDay: o.daysInPeriod ? s.calories / o.daysInPeriod : null,
+      timePerDay: o.daysInPeriod ? s.duration / o.daysInPeriod : null,
+      wkPerDay: o.daysInPeriod ? s.workouts / o.daysInPeriod : null,
+      bestStreak: o.bestStreak != null ? o.bestStreak : (s.bestStreak != null ? s.bestStreak : null)
+    };
+  }
+
+  /** Compact stat tile: label + current value + signed % pill vs the previous period. */
+  function metricTile(label, cur, prev, fmt, period, unit) {
+    const hasPrev = prev != null && prev > 0;
+    // null current value (e.g. average with no workouts) or nothing recorded
+    // in either period → em dash, no pill — never a misleading percentage.
+    if (cur == null || (cur <= 0 && !hasPrev)) return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">—</div></div>`;
+    const val = cur > 0 ? fmt(cur) : "0";
+    const tip = hasPrev ? { label: "Last " + period + ":", value: fmt(prev) + (unit ? " " + unit : "") } : null;
+    const pill = hasPrev ? pctPill(St().pctVsPrev(cur > 0 ? cur : 0, prev), "", tip) : "";
+    return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">${val} ${pill}</div></div>`;
+  }
+
+  /** Delta pill in the "2026 vs 2025" style — signed percentage, optional period label, and an optional hover tip revealing the previous period's actual value. */
+  function pctPill(pct, vs, tip) {
+    const suffix = vs ? " vs " + vs : "";
+    const attrs = tip ? ` data-prev="${esc(tip.value)}" data-prev-label="${esc(tip.label)}"` : "";
+    if (pct === 0) return `<span class="delta flat"${attrs}>±0%${suffix}</span>`;
+    const cls = pct > 0 ? "up" : "down";
+    return `<span class="delta ${cls}"${attrs}>${pct > 0 ? "▲" : "▼"} ${St().fmtDelta(pct)}%${suffix}</span>`;
+  }
+
+  /* --- hover-to-reveal: previous period's value after a 0.75s hover on a pill --- */
+  let prevTipBound = false;
+  let prevTipTimer = null;
+
+  /** Show the previous-period value tooltip near the cursor (edge-flip like chart tips). */
+  function showPrevTip(pill, e) {
+    const t = document.getElementById("chartTooltip");
+    if (!t) return;
+    t.innerHTML = `<b>${esc(pill.getAttribute("data-prev-label") || "")}</b> ${esc(pill.getAttribute("data-prev") || "")}`;
+    t.hidden = false;
+    t.style.left = "0px";
+    t.style.top = "0px";
+    const r = t.getBoundingClientRect();
+    const pad = 12;
+    let tx = e.clientX + pad;
+    let ty = e.clientY - r.height - 10;
+    if (tx + r.width > window.innerWidth - 8) tx = e.clientX - r.width - pad;
+    if (ty < 8) ty = e.clientY + pad;
+    t.style.left = tx + "px";
+    t.style.top = ty + "px";
+  }
+
+  /** Event delegation on the dashboard grid: hover a pill 0.75s → show the previous value. */
+  function bindPrevTipHover(grid) {
+    grid.addEventListener("mouseover", (e) => {
+      const pill = e.target.closest(".delta[data-prev]");
+      if (!pill) return;
+      clearTimeout(prevTipTimer);
+      prevTipTimer = setTimeout(() => {
+        prevTipTimer = null;
+        showPrevTip(pill, e);
+      }, 750);
+    });
+    // Once visible, follow the pointer; while the 0.75s is still counting, keep the anchor.
+    grid.addEventListener("mousemove", (e) => {
+      if (prevTipTimer) return;
+      const pill = e.target.closest(".delta[data-prev]");
+      if (pill && !document.getElementById("chartTooltip").hidden) showPrevTip(pill, e);
+    });
+    grid.addEventListener("mouseout", (e) => {
+      const pill = e.target.closest(".delta[data-prev]");
+      if (!pill) return;
+      clearTimeout(prevTipTimer);
+      prevTipTimer = null;
+      Focus.Charts.hideTip();
+    });
   }
 
   /** Progress toward the user's goals (set in Settings). Shown as a stat card. */

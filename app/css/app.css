@@ -770,23 +770,81 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .dash-greeting p { margin: 3px 0 0; font-size: 13.5px; color: var(--text-dim); }
 #dashGrid { display: grid; gap: 16px; }
 .dash-stats {
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px;
-  max-width: 1320px; width: 100%; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
 }
 .dash-stats .stat { padding: 16px; }
+.dash-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .dash-charts .chart-wrap { margin-top: 2px; }
+
+/* Large comparison KPI cards (This week / This month) */
+.period-card { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }
+.period-card .stat-mini { min-width: 0; }
+.period-card .card-title { margin-bottom: 8px; }
+.period-body {
+  flex: 1;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0 6px;
+}
+.period-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.period-value {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 40px;
+  font-weight: 750;
+  letter-spacing: -.8px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.period-value span {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0;
+}
+/* Secondary metric tiles inside the comparison cards — compact reuse of the
+   stat-mini component so value + % pill sit on one line. Tile columns adapt
+   to the card width (container query): 3 columns once the card is wide
+   enough, 2 below (phones) — the base rule is the 2-column fallback. */
+.period-card .stat-mini-grid { width: 100%; grid-template-columns: repeat(2, 1fr); }
+.period-card .stat-mini { padding: 8px 10px; border-radius: 10px; }
+@container (min-width: 480px) {
+  .period-card .stat-mini-grid { grid-template-columns: repeat(3, 1fr); }
+}
+.period-card .stat-mini .l { font-size: 10.5px; }
+.period-card .stat-mini .v {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 15px;
+  margin-top: 1px;
+}
+.period-card .stat-mini .delta { font-size: 11px; padding: 1px 7px; }
+.period-card .delta[data-prev] { cursor: help; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1200px) {
   .month-grid { grid-template-columns: repeat(4, 1fr); }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .dash-charts { grid-template-columns: 1fr; }
+  .dash-compare, .dash-charts { grid-template-columns: 1fr; }
   .month-detail { grid-template-columns: 1fr; }
   .progress-grid { flex-direction: column; }
 }
 @media (max-width: 1100px) {
-  .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings-grid, .tools-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1024px) {
@@ -815,6 +873,12 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
   .month-grid { grid-template-columns: repeat(2, 1fr); }
   .dash-greeting h2 { font-size: 18px; }
   .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Very narrow phones: stack the KPI cards so labels never wrap. */
+@media (max-width: 520px) {
+  .dash-stats { grid-template-columns: 1fr; }
+  .period-value { font-size: 34px; }
+  .period-card .stat-mini .delta { font-size: 10px; padding: 1px 6px; }
 }
 
 /* ---------- Motion preference ---------- */

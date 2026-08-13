@@ -64,6 +64,14 @@ function dump() {
     const cmp = S.compareYears(Focus.Store.workouts, 2026, 2025);
     ok("compare: 2026 workouts=92, 2025=0", cmp.totals.workouts.a === 92 && cmp.totals.workouts.b === 0, JSON.stringify(cmp.totals.workouts));
 
+    // --- period comparison (dashboard This week / This month) ---
+    ok("pctVsPrev 8 vs 6 = +33.3", Math.abs(S.pctVsPrev(8, 6) - 33.333) < 0.001, "got " + S.pctVsPrev(8, 6));
+    ok("pctVsPrev 24 vs 20 = +20", S.pctVsPrev(24, 20) === 20, "got " + S.pctVsPrev(24, 20));
+    ok("pctVsPrev decline 9 vs 10 = -10", S.pctVsPrev(9, 10) === -10, "got " + S.pctVsPrev(9, 10));
+    ok("pctVsPrev 5 vs 0 = +100", S.pctVsPrev(5, 0) === 100, "got " + S.pctVsPrev(5, 0));
+    ok("pctVsPrev 0 vs 0 = 0 (neutral)", S.pctVsPrev(0, 0) === 0, "got " + S.pctVsPrev(0, 0));
+    ok("pctVsPrev zero base matches compareYears rule (+100)", S.pctVsPrev(92, 0) === cmp.totals.workouts.pct, S.pctVsPrev(92, 0) + " vs " + cmp.totals.workouts.pct);
+
     // --- measurement stats ---
     const mstats = S.measurementStats(Focus.Store.measurements);
     const weight = mstats.find((m) => m.type === "Weight");
@@ -535,6 +543,39 @@ function dump() {
     Focus.UI.renderDashboard();
     const goalCard = document.getElementById("dashGrid").querySelector(".stat");
     ok("dashboard shows a goals card", document.getElementById("dashGrid").textContent.includes("Goals") && document.getElementById("dashGrid").textContent.includes("/ 400 kcal"), "has Goals card");
+
+    // --- dashboard This week / This month multi-metric comparison cards ---
+    Focus.UI.renderDashboard();
+    const periodCards = document.querySelectorAll(".period-card");
+    ok("dashboard has This week + This month comparison cards", periodCards.length === 2, "cards=" + periodCards.length);
+    const metricGrids = document.querySelectorAll(".period-card .stat-mini-grid");
+    ok("each comparison card has 9 metric tiles", metricGrids.length === 2 && [...metricGrids].every((g) => g.querySelectorAll(".stat-mini").length === 9), "grids=" + metricGrids.length);
+    const wkHero = document.querySelector(".period-card .period-hero");
+    ok("week card shows headline + % vs last week", /workouts/.test(wkHero.textContent) && wkHero.querySelector(".delta").textContent.includes("vs last week"), wkHero.textContent.slice(0, 60));
+    const monthTiles = [...periodCards[1].querySelectorAll(".stat-mini")].map((t) => ({ l: t.querySelector(".l").textContent, v: t.querySelector(".v") }));
+    const monthPills = monthTiles.map((t) => t.v.querySelector(".delta")).filter(Boolean).map((p) => p.textContent.trim());
+    ok("month card compares days/calories/avg from seed data", monthPills.includes("▼ -66.7%") && monthPills.includes("▼ -64.9%") && monthPills.includes("▲ +5.3%"), monthPills.join(" | "));
+    const streakTile = monthTiles.find((t) => t.l === "Best streak");
+    ok("month card compares best streak (3 vs 5 days)", streakTile && streakTile.v.textContent.includes("3 days") && streakTile.v.querySelector(".delta").textContent.includes("▼ -40%"), streakTile && streakTile.v.textContent.replace(/\s+/g, " "));
+    ok("month card has avg time + calories/day tiles", monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day"), monthTiles.map((t) => t.l).join(" | "));
+    const wkPerDayTile = monthTiles.find((t) => t.l === "Workouts / day");
+    const timePerDayTile = monthTiles.find((t) => t.l === "Time / day");
+    ok("month card adds time/day + workouts/day tiles (9 total)", !!wkPerDayTile && !!timePerDayTile && monthTiles.length === 9, monthTiles.map((t) => t.l).join(" | "));
+    ok("workouts/day compares from seed (0.1 vs 0.4)", wkPerDayTile && wkPerDayTile.v.textContent.includes("0.1") && wkPerDayTile.v.textContent.includes("▼ -66.7%"), wkPerDayTile && wkPerDayTile.v.textContent.replace(/\s+/g, " "));
+
+    // --- hover-to-reveal: previous-period value after a 2s hover on a pill ---
+    Focus.UI.renderDashboard();
+    const heroPill = document.querySelector(".period-card .period-hero .delta");
+    ok("hero pill carries the previous value for hover", heroPill.getAttribute("data-prev-label") === "Last week:" && heroPill.getAttribute("data-prev") === "3 workouts", (heroPill.getAttribute("data-prev-label") || "") + " " + (heroPill.getAttribute("data-prev") || ""));
+    const tipEl = document.getElementById("chartTooltip");
+    ok("prev-value tooltip hidden before 0.75s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
+    heroPill.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 100, clientY: 100 }));
+    await new Promise((r) => setTimeout(r, 500));
+    ok("prev-value tooltip still hidden at 0.5s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
+    await new Promise((r) => setTimeout(r, 400));
+    ok("prev-value tooltip appears after 0.75s hover", tipEl.hidden === false && tipEl.textContent.includes("Last week: 3 workouts"), tipEl.textContent.replace(/\s+/g, " "));
+    heroPill.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+    ok("prev-value tooltip hides on leave", tipEl.hidden === true, "hidden=" + tipEl.hidden);
     Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8;
     Focus.UI.renderCalendar();
     ok("calendar month view marks goal-hit days", document.querySelectorAll(".day-cell.goal-hit").length > 0, "count=" + document.querySelectorAll(".day-cell.goal-hit").length);

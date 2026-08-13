@@ -521,6 +521,16 @@
     return ((a - b) / Math.abs(b)) * 100;
   }
 
+  /**
+   * Percentage change of cur vs prev for period comparisons, matching the
+   * compareYears() rule: a zero base with a non-zero current value reads as
+   * +100%, and both zero reads as 0 (so "0 vs 0" stays neutral instead of
+   * undefined). Used by the dashboard's This week / This month cards.
+   */
+  function pctVsPrev(cur, prev) {
+    return prev === 0 ? (cur === 0 ? 0 : 100) : ((cur - prev) / prev) * 100;
+  }
+
   function mkInsight(type, metric, title, body, tone, extra) {
     return Object.assign({ type, metric, title, body, tone }, extra || {});
   }
@@ -976,7 +986,7 @@
     typeBreakdown, measurementStats, measurementSeries, intensityForCalories,
     toCm, toKg, convertTo, latestOfType, calcBMI, bmiCategory, navyNeeds,
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
-    pctChange, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
+    pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
     monthDayMap, availableYears, longestStreakInSet,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
