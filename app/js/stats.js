@@ -978,18 +978,18 @@
     return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][parse(iso).getDay()];
   }
 
-  /** Backup-reminder rule: Sundays only, once per day, and only when no backup
-   *  exists or the last one is ≥14 days old — i.e. every other Sunday in
-   *  practice, self-aligned to when the user actually backs up. Pure so it's
-   *  easy to test; opts: { enabled, lastBackupAt (ISO date/datetime), lastShownAt }. */
+  /** Backup-reminder rule: due when enabled, not already shown today, and no
+   *  backup exists or the last one is ≥ opts.days (default 10) days old — i.e.
+   *  "remind me every N days after the last JSON backup". Pure so it's easy to
+   *  test; opts: { enabled, lastBackupAt (ISO date/datetime), lastShownAt, days }. */
   function backupReminderDue(iso, opts) {
     const o = opts || {};
     if (o.enabled === false) return false;
-    if (weekdayOf(iso) !== 0) return false; // Sundays only
     if (o.lastShownAt === iso) return false; // already shown today
+    const interval = Number.isFinite(Number(o.days)) && Number(o.days) > 0 ? Number(o.days) : 10;
     if (o.lastBackupAt) {
       const days = (parse(iso) - parse(String(o.lastBackupAt).slice(0, 10))) / 86400000;
-      if (days < 14) return false;
+      if (days < interval) return false;
     }
     return true;
   }

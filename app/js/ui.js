@@ -184,24 +184,39 @@
     });
   }
 
-  /** Backup reminder — shown on Sundays when no backup exists or the last one
-   *  is ≥14 days old. "Back up now" reuses the export-backup action. */
-  function showBackupReminder() {
+  /** Backup-reminder banner — shown at the top of the Dashboard when no backup
+   *  exists or the last one is ≥ backupReminderDays old. Dismissible; "Back up
+   *  now" reuses the export-backup action. Rendered into #backupBanner so data
+   *  re-renders of the dashboard grid never wipe it out. */
+  function showBackupBanner() {
     const s = Store().settings;
+    const el = document.getElementById("backupBanner");
+    if (!el) return;
     const last = s.lastBackupAt;
     let age = "You haven't created a backup yet.";
     if (last) {
       const days = Math.floor((St().parse(St().todayISO()) - St().parse(last.slice(0, 10))) / 86400000);
       age = `It's been <b>${Math.max(0, days)} days</b> since your last backup.`;
     }
-    openModal(`
-      <h2>Time for a backup 💾</h2>
-      <p class="modal-sub">${age} Everything lives only in this browser — a JSON backup is the best way to keep it safe.</p>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" data-close>Later</button>
-        <button class="btn btn-primary" data-action="export-backup">${ICONS.database} Back up now</button>
-        <button class="btn btn-ghost" data-action="set-backup-reminder" data-set-backup-reminder="off">Turn off reminders</button>
-      </div>`);
+    el.innerHTML = `
+      <div class="backup-banner" role="status" aria-label="Backup reminder">
+        <span class="backup-banner-icon">${ICONS.database}</span>
+        <div class="backup-banner-body">
+          <b>Time for a backup 💾</b>
+          <span>${age} Everything lives only in this browser — a JSON backup is the best way to keep it safe.</span>
+        </div>
+        <div class="backup-banner-actions">
+          <button class="btn btn-ghost btn-sm" data-action="set-backup-reminder" data-set-backup-reminder="off">Turn off</button>
+          <button class="btn btn-ghost btn-sm" data-action="dismiss-backup-banner">Not now</button>
+          <button class="btn btn-primary btn-sm" data-action="export-backup">${ICONS.database} Back up now</button>
+        </div>
+        <button class="backup-banner-close" data-action="dismiss-backup-banner" aria-label="Dismiss">✕</button>
+      </div>`;
+  }
+
+  function hideBackupBanner() {
+    const el = document.getElementById("backupBanner");
+    if (el) el.innerHTML = "";
   }
 
   /* ---------------- workout form ---------------- */
@@ -1515,10 +1530,17 @@
             <li>📦 Move data with the export/import tools in the <b>Data</b> view.</li>
           </ul>
           <div class="setting-row">
-            <div class="setting-label"><b>Backup reminder</b><span>On Sundays, if no backup was made in the last 14 days, reminds you to download a JSON backup.</span></div>
+            <div class="setting-label"><b>Backup reminder</b><span>Reminds you to download a JSON backup every N days after your last one.</span></div>
             <div class="seg" role="group" aria-label="Backup reminder">
               <button class="seg-btn ${rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="on">✨ On</button>
               <button class="seg-btn ${!rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="off">Off</button>
+            </div>
+          </div>
+          <div class="setting-row ${rem ? "" : "is-disabled"}">
+            <div class="setting-label"><b>Remind every</b><span>Days between reminders — e.g. 10 means a nudge 10 days after each backup.</span></div>
+            <div class="input-with-unit" style="width:120px">
+              <input class="input" id="setBackupDays" type="number" min="1" max="365" step="1" value="${s.backupReminderDays ?? 10}" ${rem ? "" : "disabled"} aria-label="Backup reminder interval in days">
+              <span class="suffix">days</span>
             </div>
           </div>
         </div>
@@ -1544,6 +1566,16 @@
         if (isFinite(v) && v > 0) {
           hInp.value = hSel.value === "in" ? Math.round(v / 2.54 * 10) / 10 : Math.round(v * 2.54 * 10) / 10;
         }
+      });
+    }
+    // Backup reminder interval — clamps to 1..365 and applies instantly.
+    const daysInp = document.getElementById("setBackupDays");
+    if (daysInp) {
+      daysInp.addEventListener("change", () => {
+        const v = Math.max(1, Math.min(365, Math.round(Number(daysInp.value) || 10)));
+        daysInp.value = v;
+        Focus.App.setSetting("backupReminderDays", v);
+        Focus.UI.toast(`Backup reminder: every ${v} days`);
       });
     }
   }
@@ -2188,7 +2220,7 @@
     state, TYPE_STYLES, typeStyle, existingTypes, existingMeasTypes, pickerTypes, typeSummaryHTML,
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog, closeInfoPopover,
-    markDashEnter, showBackupReminder,
+    markDashEnter, showBackupBanner, hideBackupBanner,
     openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
     renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor

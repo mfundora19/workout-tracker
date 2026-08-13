@@ -10,12 +10,12 @@
 <script src="../lib/jspdf.umd.min.js"></script>
 <script src="../lib/fonts/fonts.js"></script>
 <script src="../js/seed-data.js"></script>
-<script src="../js/store.js?v=6"></script>
-<script src="../js/stats.js?v=6"></script>
-<script src="../js/charts.js?v=6"></script>
+<script src="../js/store.js?v=7"></script>
+<script src="../js/stats.js?v=7"></script>
+<script src="../js/charts.js?v=7"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=6"></script>
+<script src="../js/ui.js?v=7"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -72,14 +72,16 @@ function dump() {
     ok("pctVsPrev 0 vs 0 = 0 (neutral)", S.pctVsPrev(0, 0) === 0, "got " + S.pctVsPrev(0, 0));
     ok("pctVsPrev zero base matches compareYears rule (+100)", S.pctVsPrev(92, 0) === cmp.totals.workouts.pct, S.pctVsPrev(92, 0) + " vs " + cmp.totals.workouts.pct);
 
-    // --- backup reminder rule (pure, date-driven) ---
-    ok("reminder: Sunday + never backed up -> due", S.backupReminderDue("2026-08-09") === true, String(S.backupReminderDue("2026-08-09")));
-    ok("reminder: Wednesday -> not due", S.backupReminderDue("2026-08-12") === false, String(S.backupReminderDue("2026-08-12")));
-    ok("reminder: disabled -> never due", S.backupReminderDue("2026-08-09", { enabled: false }) === false);
-    ok("reminder: backup 10 days ago -> not due", S.backupReminderDue("2026-08-09", { lastBackupAt: "2026-07-30" }) === false);
-    ok("reminder: backup 14 days ago -> due", S.backupReminderDue("2026-08-09", { lastBackupAt: "2026-07-26" }) === true);
-    ok("reminder: backup datetime string handled (13 days) -> not due", S.backupReminderDue("2026-08-09", { lastBackupAt: "2026-07-27T12:00:00.000Z" }) === false);
-    ok("reminder: already shown today -> not due", S.backupReminderDue("2026-08-09", { lastShownAt: "2026-08-09" }) === false);
+    // --- backup reminder rule (pure, interval-driven: every N days) ---
+    ok("reminder: never backed up -> due (any day)", S.backupReminderDue("2026-08-12") === true, String(S.backupReminderDue("2026-08-12")));
+    ok("reminder: disabled -> never due", S.backupReminderDue("2026-08-12", { enabled: false }) === false);
+    ok("reminder: backup 9 days ago -> not due (default 10)", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-03" }) === false, String(S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-03" })));
+    ok("reminder: backup 10 days ago -> due (default 10)", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-02" }) === true, String(S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-02" })));
+    ok("reminder: custom 20-day interval, 15 days -> not due", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-07-28", days: 20 }) === false, String(S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-07-28", days: 20 })));
+    ok("reminder: custom 20-day interval, 20 days -> due", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-07-23", days: 20 }) === true, String(S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-07-23", days: 20 })));
+    ok("reminder: backup datetime string handled (9 days) -> not due", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-03T12:00:00.000Z" }) === false);
+    ok("reminder: already shown today -> not due", S.backupReminderDue("2026-08-12", { lastShownAt: "2026-08-12" }) === false);
+    ok("reminder: invalid days falls back to 10", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-03", days: "abc" }) === false);
 
     // --- measurement stats ---
     const mstats = S.measurementStats(Focus.Store.measurements);
@@ -457,7 +459,7 @@ function dump() {
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
       <div id="dataBody"></div>
       <div id="settingsBody"></div>
-      <div id="dashGreeting"></div><div id="dashGrid"></div>
+      <div id="dashGreeting"></div><div id="backupBanner"></div><div id="dashGrid"></div>
     `);
 
     // --- workout type picker: default order, collapsed by default, add/remove ---
@@ -598,6 +600,11 @@ function dump() {
       return b && b.textContent === "Backup reminder";
     });
     ok("Backup reminder setting renders, defaults On", !!remRow && !!remRow.querySelector('[data-set-backup-reminder="on"].is-active'), remRow ? remRow.textContent.replace(/\s+/g, " ") : "no Backup reminder row");
+    const daysRow = [...document.querySelectorAll(".setting-row")].find((r) => {
+      const b = r.querySelector(".setting-label b");
+      return b && b.textContent === "Remind every";
+    });
+    ok("Backup reminder interval input renders, default 10", !!daysRow && daysRow.querySelector("#setBackupDays") && daysRow.querySelector("#setBackupDays").value === "10", daysRow ? daysRow.textContent.replace(/\s+/g, " ") : "no Remind-every row");
     Focus.UI.renderDashboard();
     ok("dashboard charts carry draw-in animation classes", !!document.querySelector("#dashChartMonthly svg.anim-bars") && !!document.querySelector("#dashChartCumulative svg.anim-line"), "bars=" + !!document.querySelector("#dashChartMonthly svg.anim-bars") + " line=" + !!document.querySelector("#dashChartCumulative svg.anim-line"));
     Focus.UI.markDashEnter();
@@ -606,13 +613,14 @@ function dump() {
     Focus.UI.renderDashboard();
     ok("no re-entrance animation on data re-render", !document.getElementById("dashGrid").classList.contains("dash-enter"));
 
-    // --- backup reminder modal ---
-    Focus.UI.showBackupReminder();
-    const bd = document.getElementById("modalBackdrop");
-    ok("backup reminder modal opens with CTA", !bd.hidden && document.getElementById("modal").textContent.includes("Time for a backup") && !!document.querySelector("#modal [data-action='export-backup']"), document.getElementById("modal").textContent.replace(/\s+/g, " ").slice(0, 80));
-    ok("reminder modal has Later + turn-off actions", !!document.querySelector("#modal [data-close]") && !!document.querySelector("#modal [data-action='set-backup-reminder']"));
-    Focus.UI.closeModal();
-    ok("reminder modal closes", bd.hidden === true, "hidden=" + bd.hidden);
+    // --- backup reminder banner ---
+    Focus.Store.setSetting("lastBackupAt", "2026-08-03T12:00:00.000Z"); // 10 days before "today"
+    Focus.UI.showBackupBanner();
+    const bb = document.getElementById("backupBanner");
+    ok("backup banner renders with CTA", bb.innerHTML.includes("Time for a backup") && !!bb.querySelector("[data-action='export-backup']") && !!bb.querySelector("[data-action='dismiss-backup-banner']"), bb.textContent.replace(/\s+/g, " ").slice(0, 90));
+    ok("backup banner shows last-backup age + turn-off", bb.innerHTML.includes("since your last backup") && !!bb.querySelector("[data-action='set-backup-reminder']"));
+    Focus.UI.hideBackupBanner();
+    ok("backup banner hides", bb.innerHTML === "", "innerHTML=" + bb.innerHTML);
     Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8;
     Focus.UI.renderCalendar();
     ok("calendar month view marks goal-hit days", document.querySelectorAll(".day-cell.goal-hit").length > 0, "count=" + document.querySelectorAll(".day-cell.goal-hit").length);

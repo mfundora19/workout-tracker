@@ -28,7 +28,7 @@ entries for illustration).*
 - 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
 - 🎯 **Goals** — daily calorie / duration and weekly workout targets; see them on the dashboard and as gold ✓ on goal days in the calendar
-- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle
+- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
 
 ## Getting started
 
@@ -57,7 +57,7 @@ anywhere. Storage is per-browser, so to move data between browsers or computers:
 - **Export Excel** produces a spreadsheet-friendly copy with clean, human-readable sheets (`Overview`, `Workouts`, `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics`) that read perfectly in Google Sheets. A hidden `_AppData` sheet carries the internal record IDs and timestamps, so re-import is exact.
 - **Google Sheets archiving**: export → upload → archive; later download as `.xlsx` and import back. Imports show a preview (will add / will update / unchanged / invalid) and never delete local records — they match on stable ID, then identical content, then a human-edit key, and only add what's genuinely new.
 - **Export PDF Report** builds a multi-page **Progress & Analytics Report** locally — see below.
-- **Backup reminder** — on Sundays, if the last JSON backup is 14+ days old (or there isn't one yet), the app shows a reminder with **Back up now** / **Later** / **Turn off reminders**. It runs once per day, aligns itself to your actual backups (so you get a nudge roughly every other Sunday), and can be switched off in **Settings → Privacy**.
+- **Backup reminder** — a dismissible banner at the top of the Dashboard that appears **every N days after your last JSON backup** (N defaults to 10, configurable in **Settings → Privacy**; it also shows if you've never backed up). **Back up now** exports and restarts the countdown, **Not now** / **✕** dismisses it for the day, and the whole thing can be switched off in Settings.
 
 <details>
 <summary><b>PDF report — what's inside</b></summary>
@@ -173,7 +173,7 @@ calories by overwriting a day cell in a yearly grid, so the import assumed:
 - [x] Export Excel — opens in Excel & Google Sheets; re-import → "0 new"
 - [x] Export PDF report for a year with data
 - [x] Export JSON backup, reset, import backup → everything restored
-- [x] Backup reminder: Sunday + no backup in 14 days → modal; "Back up now" exports and stamps the date; toggle in Settings → Privacy
+- [x] Backup reminder: banner on the Dashboard every N days since the last JSON backup (default 10); "Back up now" exports and restarts the countdown, ✕ dismisses for the day; interval + toggle in Settings → Privacy
 - [x] Dark / light mode, accent color and animations toggle (remembered between sessions); ambient glows, card highlights and chart draw-ins turn off with the toggle or reduced motion
 - [x] Close the browser, reopen `Focus-Workout-Tracker.html` → data is still there
 - [x] Works with the network cable unplugged

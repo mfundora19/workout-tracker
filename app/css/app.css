@@ -6,7 +6,7 @@
 :root {
   --bg: #f4f5fa;
   --bg-grad: radial-gradient(1200px 600px at 85% -10%, rgba(99, 102, 241, .10), transparent 60%),
-             radial-gradient(900px 500px at -10% 110%, rgba(16, 185, 129, .08), transparent 55%);
+             radial-gradient(900px 500px at -10% 110%, rgba(217, 70, 239, .08), transparent 55%);
   --surface: #ffffff;
   --surface-2: #f7f8fc;
   --surface-3: #eef0f7;
@@ -34,9 +34,9 @@
   --radius-xs: 7px;
   --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
-  /* Ambient background glows (indigo + emerald, mirroring the bg gradient). */
+  /* Ambient background glows (indigo + fuchsia, mirroring the bg gradient). */
   --glow-a: rgba(99, 102, 241, .45);
-  --glow-b: rgba(16, 185, 129, .32);
+  --glow-b: rgba(217, 70, 239, .30);
   --heat-0: transparent;
   --heat-1: rgba(99, 102, 241, .16);
   --heat-2: rgba(99, 102, 241, .38);
@@ -50,7 +50,7 @@
 html[data-theme="dark"] {
   --bg: #0e1017;
   --bg-grad: radial-gradient(1200px 600px at 85% -10%, rgba(99, 102, 241, .13), transparent 60%),
-             radial-gradient(900px 500px at -10% 110%, rgba(16, 185, 129, .07), transparent 55%);
+             radial-gradient(900px 500px at -10% 110%, rgba(217, 70, 239, .06), transparent 55%);
   --surface: #171a24;
   --surface-2: #1d2130;
   --surface-3: #262b3d;
@@ -82,7 +82,7 @@ html[data-theme="dark"] {
   --tooltip-text: #171a26;
   /* Ambient background glows — dimmer in dark mode so they stay behind the UI. */
   --glow-a: rgba(129, 140, 248, .34);
-  --glow-b: rgba(52, 211, 153, .24);
+  --glow-b: rgba(217, 70, 239, .22);
 }
 
 /* ---------- Accent colors (picked in Settings > Appearance) ---------- */
@@ -126,7 +126,9 @@ body::before, body::after {
   transition: opacity 1.6s ease;
 }
 body::before {
-  top: -20vmax;
+  /* Keep the bright core fully inside the viewport so the orb never looks
+     sliced by the top edge; only the gradient's transparent tail crosses it. */
+  top: -6vmax;
   right: -15vmax;
   background: radial-gradient(circle at 35% 35%, var(--glow-a), transparent 62%);
 }
@@ -604,6 +606,32 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .toast.warn { border-left-color: var(--warn); } .toast.warn svg { color: var(--warn); }
 @keyframes slideIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 .toast.out { opacity: 0; transform: translateX(24px); transition: all .25s ease; }
+
+/* ---------- Backup-reminder banner (dashboard) ---------- */
+#backupBanner { margin-bottom: 18px; }
+.backup-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(135deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); padding: 13px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.backup-banner-icon { color: var(--accent); flex: 0 0 auto; display: flex; }
+.backup-banner-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.backup-banner-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.backup-banner-body b { font-size: 14.5px; letter-spacing: -.2px; }
+.backup-banner-body span { color: var(--text-dim); font-size: 13px; line-height: 1.45; }
+.backup-banner-actions { display: flex; gap: 8px; flex: 0 0 auto; align-items: center; }
+.backup-banner-close {
+  flex: 0 0 auto; border: 0; background: transparent; cursor: pointer;
+  color: var(--text-faint); font-size: 15px; line-height: 1; padding: 5px 7px; border-radius: 8px;
+}
+.backup-banner-close:hover { background: var(--surface-3); color: var(--text); }
+@media (max-width: 720px) {
+  .backup-banner { flex-wrap: wrap; row-gap: 10px; }
+  .backup-banner-actions { width: 100%; justify-content: flex-end; }
+}
+.setting-row.is-disabled { opacity: .55; }
 
 /* ---------- Chart tooltip ---------- */
 .tooltip {

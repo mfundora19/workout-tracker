@@ -41,7 +41,8 @@
       return S().backupReminderDue(iso, {
         enabled: s.backupReminder,
         lastBackupAt: s.lastBackupAt,
-        lastShownAt: s.lastBackupReminderAt
+        lastShownAt: s.lastBackupReminderAt,
+        days: s.backupReminderDays
       });
     },
 
@@ -49,8 +50,7 @@
       const today = S().todayISO();
       if (!App.shouldShowBackupReminder(today)) return;
       Focus.Store.setSetting("lastBackupReminderAt", today);
-      // let the view paint first, then surface the modal
-      setTimeout(() => Focus.UI.showBackupReminder(), 700);
+      Focus.UI.showBackupBanner();
     }
   };
 
@@ -84,10 +84,7 @@
 
     // view from hash
     const v = location.hash.replace("#/", "");
-    showView(VIEW_META[v] ? v : "dashboard");
-
-    // weekly backup reminder (Sundays, ≥14 days since the last backup)
-    App.maybeShowBackupReminder();
+    showView(VIEW_META[v] ? v : "dashboard"); // also triggers the backup banner check
 
     Focus.Store.onChange(() => {
       if (!document.getElementById("modalBackdrop").hidden) return;
@@ -151,6 +148,9 @@
       try { history.replaceState(null, "", "#/" + name); } catch (e) { /* file:// safe */ }
     }
     renderCurrent();
+    // Surface the backup-reminder banner when the dashboard is shown (gated by
+    // the once-per-day stamp inside maybeShowBackupReminder).
+    if (name === "dashboard") App.maybeShowBackupReminder();
   }
 
   function renderCurrent() {
@@ -443,11 +443,17 @@
         case "set-backup-reminder": {
           const on = target.dataset.setBackupReminder === "on";
           Focus.Store.setSetting("backupReminder", on);
-          Focus.UI.closeModal(); // "Turn off reminders" in the reminder modal
+          Focus.UI.closeModal(); // safety: close any open modal
+          Focus.UI.hideBackupBanner(); // "Turn off reminders" on the banner
           Focus.UI.toast(on ? "Backup reminders on" : "Backup reminders turned off");
           renderCurrent();
           break;
         }
+        case "dismiss-backup-banner":
+          // "Not now" / ✕ — hide the banner and remember it was shown today.
+          Focus.Store.setSetting("lastBackupReminderAt", S().todayISO());
+          Focus.UI.hideBackupBanner();
+          break;
         case "set-weightunit": {
           const next = target.dataset.setWeightunit;
           if (next === "kg" || next === "lb") {
@@ -543,7 +549,8 @@
           const blob = new Blob([JSON.stringify(Focus.Store.exportBackup(), null, 2)], { type: "application/json" });
           downloadBlob(blob, "focus-backup-" + S().todayISO() + ".json");
           Focus.App.setSetting("lastBackupAt", new Date().toISOString());
-          Focus.UI.closeModal(); // the reminder modal's "Back up now"
+          Focus.UI.closeModal(); // safety: close any open modal
+          Focus.UI.hideBackupBanner(); // "Back up now" on the banner
           Focus.UI.toast("Full backup downloaded — keep it safe 🗄️");
           break;
         }
