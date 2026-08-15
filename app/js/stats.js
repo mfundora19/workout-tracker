@@ -967,6 +967,20 @@
     return Array.from(new Set(arr)).sort((a, b) => b - a);
   }
 
+  /** Years with at least one workout, newest first — the Analytics year-over-year
+   *  comparison only offers years that are actually comparable, so future years
+   *  and years with no workout data (measurement-only or entirely empty) are
+   *  excluded. */
+  function workoutYears(workouts) {
+    const cur = new Date().getFullYear();
+    const set = new Set();
+    workouts.forEach((w) => {
+      const y = yearOf(w.date);
+      if (isFinite(y) && y <= cur) set.add(y);
+    });
+    return Array.from(set).sort((a, b) => b - a);
+  }
+
   /* ---------------- formatting ---------------- */
 
   function fmtNum(n, dp = 0) {
@@ -999,6 +1013,10 @@
     return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][parse(iso).getDay()];
   }
 
+  /** Days per backup-reminder unit, so "every 2 weeks" / "every 1 year" can be
+   *  normalized to the day-based interval backupReminderDue expects. */
+  const REMINDER_UNIT_DAYS = { days: 1, weeks: 7, years: 365 };
+
   /** Backup-reminder rule: due when enabled, not already shown today, and no
    *  backup exists or the last one is ≥ opts.days (default 10) days old — i.e.
    *  "remind me every N days after the last JSON backup". Pure so it's easy to
@@ -1025,7 +1043,7 @@
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
-    monthDayMap, availableYears, longestStreakInSet, backupReminderDue, dailyGoalStatus,
+    monthDayMap, availableYears, workoutYears, longestStreakInSet, backupReminderDue, REMINDER_UNIT_DAYS, dailyGoalStatus,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
 })();

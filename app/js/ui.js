@@ -110,7 +110,8 @@
     check: '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>',
     trophy: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 6H4a2 2 0 0 0 2 4M17 6h3a2 2 0 0 1-2 4"/></svg>',
-    eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'
+    eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+    info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11.5V16"/></svg>'
   };
   function icon(name, cls) {
     return `<span class="${cls || "stat-icon"}">${ICONS[name] || ICONS.activity}</span>`;
@@ -385,12 +386,19 @@
   }
 
   function measurementFormHTML(values = {}) {
+    // Editing keeps the focused single-measurement form; adding a new record
+    // opens a compact multi-entry form (Weight / Waist / Neck + Other tabs).
+    if (values.id) return singleMeasurementFormHTML(values);
+    return multiMeasurementFormHTML(values);
+  }
+
+  /** Single-measurement form (used when editing an existing record). */
+  function singleMeasurementFormHTML(values = {}) {
     const types = measurementTypes();
-    const typeOpts = types.map((t) => `<option value="${esc(t)}" ${t === (values.type || "Weight") ? "selected" : ""}>${t}</option>`).join("");
-    // new records default to the sensible unit for the chosen type (e.g. Weight -> lb)
-    const unitOpts = unitOptsHTML(values.unit || (!values.id ? unitDefault(values.type || "Weight") : ""));
+    const typeOpts = types.map((t) => `<option value="${esc(t)}" ${t === values.type ? "selected" : ""}>${t}</option>`).join("");
+    const unitOpts = unitOptsHTML(values.unit || "");
     return `
-      <h2>${values.id ? "Edit measurement" : "Add measurement"}</h2>
+      <h2>Edit measurement</h2>
       <p class="modal-sub">Measurements can be recorded at any frequency — daily, weekly, monthly.</p>
       <form id="measForm">
         <div class="form-grid">
@@ -421,7 +429,77 @@
         <p class="form-error" id="mfError" hidden></p>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close>Cancel</button>
-          <button type="submit" class="btn btn-primary">${values.id ? "Save changes" : "Add measurement"}</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>`;
+  }
+
+  /** Compact multi-entry form: weight, waist and neck in one save, plus an
+   *  Other tab for any remaining measurement type. */
+  function multiMeasurementFormHTML(values = {}) {
+    const types = measurementTypes();
+    const typeOpts = types.map((t) => `<option value="${esc(t)}" ${t === "Weight" ? "selected" : ""}>${t}</option>`).join("");
+    const section = (type, id, placeholder, unit) => `
+      <div class="mtab" data-mpanel="${id}" role="tabpanel" ${id === "Weight" ? "" : "hidden"}>
+        <div class="form-grid">
+          <div class="field">
+            <label for="mValue_${id}">${esc(type)} *</label>
+            <input class="input" id="mValue_${id}" type="number" step="any" min="0" placeholder="${placeholder}">
+          </div>
+          <div class="field">
+            <label for="mUnit_${id}">Unit</label>
+            <select class="select" id="mUnit_${id}">${unitOptsHTML(unit)}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="mNotes_${id}">Notes</label>
+          <input class="input" id="mNotes_${id}" type="text" placeholder="Optional">
+        </div>
+      </div>`;
+    return `
+      <h2>Add measurements</h2>
+      <p class="modal-sub">Log weight, waist and neck together — switch sections and fill in the ones you want.</p>
+      <form id="measForm">
+        <div class="field">
+          <label for="mfDate">Date *</label>
+          <input class="input" id="mfDate" name="date" type="date" required value="${esc(values.date || "")}">
+        </div>
+        <div class="seg seg-measure" role="tablist" aria-label="Measurement section">
+          <button type="button" class="seg-btn is-active" data-mtab="Weight" role="tab" aria-selected="true">Weight</button>
+          <button type="button" class="seg-btn" data-mtab="Waist" role="tab" aria-selected="false">Waist</button>
+          <button type="button" class="seg-btn" data-mtab="Neck" role="tab" aria-selected="false">Neck</button>
+          <button type="button" class="seg-btn" data-mtab="Other" role="tab" aria-selected="false">Other</button>
+        </div>
+        ${section("Weight", "Weight", "e.g. 79.8", unitDefault("Weight"))}
+        ${section("Waist", "Waist", "e.g. 91", unitDefault("Waist"))}
+        ${section("Neck", "Neck", "e.g. 38", unitDefault("Neck"))}
+        <div class="mtab" data-mpanel="Other" role="tabpanel" hidden>
+          <div class="form-grid">
+            <div class="field">
+              <label for="mfType">Measurement *</label>
+              <select class="select" id="mfType">${typeOpts}
+                <option value="__custom__">➕ Custom measurement…</option>
+              </select>
+              <input class="input" id="mfCustomType" type="text" placeholder="Custom name" style="margin-top:8px;display:none">
+            </div>
+            <div class="field">
+              <label for="mfValue">Value *</label>
+              <input class="input" id="mfValue" type="number" step="any" min="0" placeholder="e.g. 79.8">
+            </div>
+            <div class="field">
+              <label for="mfUnit">Unit</label>
+              <select class="select" id="mfUnit">${unitOptsHTML(unitDefault("Weight"))}</select>
+            </div>
+            <div class="field">
+              <label for="mfNotes">Notes</label>
+              <input class="input" id="mfNotes" type="text" placeholder="Optional">
+            </div>
+          </div>
+        </div>
+        <p class="form-error" id="mfError" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary">Add measurements</button>
         </div>
       </form>`;
   }
@@ -430,29 +508,68 @@
     openModal(measurementFormHTML(values), {
       onSubmit: (f, { close }) => {
         const err = f.querySelector("#mfError");
-        const date = f.date.value;
-        const type = f.type.value === "__custom__" ? (f.customType.value || "").trim() : f.type.value;
-        const value = Number(f.value.value);
+        const date = f.querySelector("#mfDate").value;
         if (!date) { err.textContent = "Please pick a date."; err.hidden = false; return; }
-        if (!type) { err.textContent = "Please name the measurement."; err.hidden = false; return; }
-        if (!isFinite(value) || value < 0) { err.textContent = "Value must be a positive number."; err.hidden = false; return; }
-        err.hidden = true;
-        const data = { date, type, value, unit: f.unit.value, notes: f.notes.value.trim() };
+
+        // Editing a single record keeps the original one-field flow.
         if (values.id) {
+          const type = f.querySelector("#mfType").value === "__custom__" ? (f.querySelector("#mfCustomType").value || "").trim() : f.querySelector("#mfType").value;
+          const value = Number(f.querySelector("#mfValue").value);
+          if (!type) { err.textContent = "Please name the measurement."; err.hidden = false; return; }
+          if (!isFinite(value) || value < 0) { err.textContent = "Value must be a positive number."; err.hidden = false; return; }
+          err.hidden = true;
+          const data = { date, type, value, unit: f.querySelector("#mfUnit").value, notes: f.querySelector("#mfNotes").value.trim() };
           Store().updateMeasurement(values.id, data).then(() => toast("Measurement updated"));
           close();
-        } else {
-          Store().addMeasurement(data).then(() => toast("Measurement added"));
-          close();
+          return;
         }
+
+        // New record: every filled section is saved in one go.
+        const sections = [
+          { type: "Weight", id: "Weight" },
+          { type: "Waist", id: "Waist" },
+          { type: "Neck", id: "Neck" }
+        ];
+        const toAdd = [];
+        for (const s of sections) {
+          const raw = f.querySelector(`#mValue_${s.id}`).value;
+          if (raw === "" || raw == null) continue;
+          const v = Number(raw);
+          if (!isFinite(v) || v < 0) { err.textContent = `${s.type} must be a positive number.`; err.hidden = false; return; }
+          toAdd.push({ date, type: s.type, value: v, unit: f.querySelector(`#mUnit_${s.id}`).value, notes: f.querySelector(`#mNotes_${s.id}`).value.trim() });
+        }
+        // The Other tab is a single arbitrary measurement (also optional).
+        const otherRaw = f.querySelector("#mfValue").value;
+        if (otherRaw !== "" && otherRaw != null) {
+          const type = f.querySelector("#mfType").value === "__custom__" ? (f.querySelector("#mfCustomType").value || "").trim() : f.querySelector("#mfType").value;
+          const v = Number(otherRaw);
+          if (!type) { err.textContent = "Please name the measurement."; err.hidden = false; return; }
+          if (!isFinite(v) || v < 0) { err.textContent = "Value must be a positive number."; err.hidden = false; return; }
+          toAdd.push({ date, type, value: v, unit: f.querySelector("#mfUnit").value, notes: f.querySelector("#mfNotes").value.trim() });
+        }
+
+        if (toAdd.length === 0) { err.textContent = "Enter at least one measurement."; err.hidden = false; return; }
+        err.hidden = true;
+        Promise.all(toAdd.map((d) => Store().addMeasurement(d))).then(() => {
+          toast(toAdd.length === 1 ? "Measurement added" : `${toAdd.length} measurements added`);
+          close();
+        });
       },
       onOpen: (m) => {
+        // Section bar: switch the visible panel.
+        const tabs = m.querySelectorAll("[data-mtab]");
+        const panels = m.querySelectorAll(".mtab");
+        tabs.forEach((t) => t.addEventListener("click", () => {
+          tabs.forEach((x) => { x.classList.toggle("is-active", x === t); x.setAttribute("aria-selected", x === t ? "true" : "false"); });
+          panels.forEach((p) => { p.hidden = p.dataset.mpanel !== t.dataset.mtab; });
+        }));
+        // Custom-type toggle (used by the edit form and the Other tab).
         const sel = m.querySelector("#mfType");
         const custom = m.querySelector("#mfCustomType");
         const unit = m.querySelector("#mfUnit");
-        sel.addEventListener("change", () => {
-          custom.style.display = sel.value === "__custom__" ? "" : "none";
-          if (sel.value === "__custom__") custom.focus();
+        if (sel) sel.addEventListener("change", () => {
+          if (custom) custom.style.display = sel.value === "__custom__" ? "" : "none";
+          if (sel.value === "__custom__" && custom) custom.focus();
           if (unit) unit.value = unitDefault(sel.value);
         });
       }
@@ -1154,18 +1271,12 @@
   function onInfoEsc(e) {
     if (e.key === "Escape") closeInfoPopover();
   }
-  function openInfoPopover(anchor, sex) {
+  function openInfoPop(anchor, html) {
     closeInfoPopover();
-    const ranges = St().bfInfoRanges(sex);
     infoPopEl = document.createElement("div");
     infoPopEl.className = "info-pop";
     infoPopEl.setAttribute("role", "tooltip");
-    infoPopEl.innerHTML = `
-      <b>Body-fat reference ranges — ${sex === "female" ? "women" : "men"}</b>
-      <div class="info-rows">
-        ${ranges.map((r) => `<div class="info-row"><span>${esc(r.label)}</span><b>${r.range}</b></div>`).join("")}
-      </div>
-      <p>U.S. Navy circumference method · estimates, not a medical diagnosis.</p>`;
+    infoPopEl.innerHTML = html;
     document.body.appendChild(infoPopEl);
     const r = anchor.getBoundingClientRect();
     const w = infoPopEl.offsetWidth;
@@ -1175,6 +1286,16 @@
     infoPopEl.classList.add("show");
     setTimeout(() => document.addEventListener("click", onInfoDocClick), 0);
     document.addEventListener("keydown", onInfoEsc);
+  }
+
+  function openInfoPopover(anchor, sex) {
+    const ranges = St().bfInfoRanges(sex);
+    openInfoPop(anchor, `
+      <b>Body-fat reference ranges — ${sex === "female" ? "women" : "men"}</b>
+      <div class="info-rows">
+        ${ranges.map((r) => `<div class="info-row"><span>${esc(r.label)}</span><b>${r.range}</b></div>`).join("")}
+      </div>
+      <p>U.S. Navy circumference method · estimates, not a medical diagnosis.</p>`);
   }
 
   function renderTools() {
@@ -1264,7 +1385,7 @@
             </div>
           </div>
           <div class="bf-result" id="bfResult" hidden aria-live="polite">
-            <div class="bmi-value"><b id="bfValue">—</b><span>Est. body fat <button type="button" class="info-btn" id="bfInfoBtn" aria-label="About body-fat ranges">ⓘ</button></span></div>
+            <div class="bmi-value"><b id="bfValue">—</b><span>Est. body fat <button type="button" class="info-btn" id="bfInfoBtn" aria-label="About body-fat ranges">${ICONS.info}</button></span></div>
             <div class="bmi-cat-wrap">
               <div class="bmi-cat neutral" id="bfCat">—</div>
               <div class="bmi-desc" id="bfNote"></div>
@@ -1437,6 +1558,17 @@
     ["blue", "#38bdf8"]
   ];
 
+  /* Per-unit maximum interval for the backup reminder. */
+  const REMINDER_MAX = { days: 365, weeks: 52, years: 10 };
+  const PRIVACY_HTML = `
+    <b>Privacy</b>
+    <ul class="info-list">
+      <li>🔒 No account, no login, no tracking.</li>
+      <li>🚫 No internet connection is ever used.</li>
+      <li>💾 Everything is stored in this browser only.</li>
+      <li>📦 Move data with the export/import tools in the <b>Data</b> view.</li>
+    </ul>`;
+
   function renderSettings() {
     const s = Store().settings;
     const theme = document.documentElement.getAttribute("data-theme") || "dark";
@@ -1449,6 +1581,12 @@
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
     const rem = s.backupReminder !== false;
+    const remUnit = s.backupReminderUnit || "days";
+    const remVal = s.backupReminderDays ?? 10;
+    // App version comes from app/version.js (managed by bump-version.py), read
+    // at render time so a new build is picked up without a hard refresh.
+    const ver = window.FOCUS_VERSION || { major: 1, minor: 0, patch: 0 };
+    const versionStr = String(ver.major) + "." + String(ver.minor) + "." + String(ver.patch);
     const curColor = (ACCENTS.find(([n]) => n === accent) || ACCENTS[0])[1];
     document.getElementById("settingsBody").innerHTML = `
       <div class="settings-grid">
@@ -1550,26 +1688,26 @@
         </div>
 
         <div class="card data-card">
-          <h3>Privacy</h3>
-          <p class="desc">Focus is designed to be completely private.</p>
-          <ul class="about-list">
-            <li>🔒 No account, no login, no tracking.</li>
-            <li>🚫 No internet connection is ever used.</li>
-            <li>💾 Everything is stored in this browser only.</li>
-            <li>📦 Move data with the export/import tools in the <b>Data</b> view.</li>
-          </ul>
           <div class="setting-row">
-            <div class="setting-label"><b>Backup reminder</b><span>Reminds you to download a JSON backup every N days after your last one.</span></div>
+            <div class="setting-label"><b>Privacy</b><span>Focus is designed to be completely private.</span></div>
+            <button type="button" class="info-btn" id="privacyInfoBtn" aria-label="About privacy">${ICONS.info}</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Backup reminder</b><span>Reminds you to download a JSON backup after your last one.</span></div>
             <div class="seg" role="group" aria-label="Backup reminder">
               <button class="seg-btn ${rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="on">✨ On</button>
               <button class="seg-btn ${!rem ? "is-active" : ""}" data-action="set-backup-reminder" data-set-backup-reminder="off">Off</button>
             </div>
           </div>
           <div class="setting-row ${rem ? "" : "is-disabled"}">
-            <div class="setting-label"><b>Remind every</b><span>Days between reminders — e.g. 10 means a nudge 10 days after each backup.</span></div>
-            <div class="input-with-unit" style="width:120px">
-              <input class="input" id="setBackupDays" type="number" min="1" max="365" step="1" value="${s.backupReminderDays ?? 10}" ${rem ? "" : "disabled"} aria-label="Backup reminder interval in days">
-              <span class="suffix">days</span>
+            <div class="setting-label"><b>Remind every</b><span>How often to nudge you for a backup after your last one.</span></div>
+            <div class="remind-picker">
+              <input class="input" id="setBackupDays" type="number" min="1" max="${REMINDER_MAX[remUnit] || 365}" step="1" value="${remVal}" ${rem ? "" : "disabled"} aria-label="Backup reminder interval">
+              <select class="select" id="setBackupUnit" ${rem ? "" : "disabled"} aria-label="Backup reminder unit">
+                <option value="days" ${remUnit === "days" ? "selected" : ""}>days</option>
+                <option value="weeks" ${remUnit === "weeks" ? "selected" : ""}>weeks</option>
+                <option value="years" ${remUnit === "years" ? "selected" : ""}>years</option>
+              </select>
             </div>
           </div>
         </div>
@@ -1579,7 +1717,7 @@
           <p class="desc">Focus — a personal, offline fitness tracker.</p>
           <ul class="about-list">
             <li><b>Data</b> — ${St().fmtNum(w)} workouts · ${St().fmtNum(m)} measurements</li>
-            <li><b>Version</b> — 1.0.0</li>
+            <li><b>Version</b> — ${versionStr}</li>
             <li><b>Storage</b> — your browser's IndexedDB</li>
             <li><b>Offline</b> — open <code>Focus-Workout-Tracker.html</code> and it just works</li>
           </ul>
@@ -1597,14 +1735,36 @@
         }
       });
     }
-    // Backup reminder interval — clamps to 1..365 and applies instantly.
+    // Privacy details live behind the ⓘ button to keep the card compact.
+    const privacyBtn = document.getElementById("privacyInfoBtn");
+    if (privacyBtn) {
+      privacyBtn.addEventListener("click", () => openInfoPop(privacyBtn, PRIVACY_HTML));
+    }
+    // Backup reminder interval — value in the selected unit (days/weeks/years),
+    // clamped to the per-unit maximum and applied instantly.
     const daysInp = document.getElementById("setBackupDays");
-    if (daysInp) {
-      daysInp.addEventListener("change", () => {
-        const v = Math.max(1, Math.min(365, Math.round(Number(daysInp.value) || 10)));
+    const unitSel = document.getElementById("setBackupUnit");
+    if (daysInp && unitSel) {
+      unitSel.dataset.prev = unitSel.value;
+      daysInp.max = String(REMINDER_MAX[unitSel.value] || 365);
+      const saveReminder = () => {
+        const unit = unitSel.value;
+        const v = Math.max(1, Math.min(REMINDER_MAX[unit] || 365, Math.round(Number(daysInp.value) || 1)));
         daysInp.value = v;
         Focus.App.setSetting("backupReminderDays", v);
-        Focus.UI.toast(`Backup reminder: every ${v} days`);
+        Focus.App.setSetting("backupReminderUnit", unit);
+        Focus.UI.toast(`Backup reminder: every ${v} ${unit}`);
+      };
+      daysInp.addEventListener("change", saveReminder);
+      unitSel.addEventListener("change", () => {
+        // Keep the interval roughly the same when the unit changes (10 days -> 1 week).
+        const fromDays = (parseFloat(daysInp.value) || 1) * (St().REMINDER_UNIT_DAYS[unitSel.dataset.prev || "days"] || 1);
+        const unit = unitSel.value;
+        const v = Math.max(1, Math.min(REMINDER_MAX[unit] || 365, Math.round(fromDays / (St().REMINDER_UNIT_DAYS[unit] || 1))));
+        daysInp.value = v;
+        daysInp.max = String(REMINDER_MAX[unit] || 365);
+        unitSel.dataset.prev = unit;
+        saveReminder();
       });
     }
   }
@@ -1857,32 +2017,37 @@
    * ANALYTICS
    * =================================================================== */  function renderAnalytics() {
     const all = Store().workouts;
-    const years = St().availableYears(all, Store().measurements);
     const curYear = new Date().getFullYear();
-    // Default comparison: the current year vs the previous year (when present),
-    // otherwise the two most recent years with data.
-    if (state.anaA == null || !years.includes(state.anaA)) state.anaA = years.includes(curYear) ? curYear : years[0];
-    if (state.anaB == null || state.anaB === state.anaA || !years.includes(state.anaB)) {
-      state.anaB = years.includes(curYear - 1) && curYear - 1 !== state.anaA ? curYear - 1 : years.find((y) => y !== state.anaA) || state.anaA;
+    // The comparison only offers years with actual workout data (never future or
+    // empty years) and only appears once a second comparable year exists.
+    const cmpYears = St().workoutYears(all);
+    const hasCmp = cmpYears.length >= 2;
+    if (hasCmp) {
+      // Default comparison: the current year vs the previous year (when present),
+      // otherwise the two most recent years with data.
+      if (state.anaA == null || !cmpYears.includes(state.anaA)) state.anaA = cmpYears.includes(curYear) ? curYear : cmpYears[0];
+      if (state.anaB == null || state.anaB === state.anaA || !cmpYears.includes(state.anaB)) {
+        state.anaB = cmpYears.includes(curYear - 1) && curYear - 1 !== state.anaA ? curYear - 1 : cmpYears.find((y) => y !== state.anaA) || state.anaA;
+      }
     }
     const a = state.anaA, b = state.anaB;
     const year = Focus.App.year();
     const ms = St().monthlyStats(all, year);
-    const cmp = St().compareYears(all, a, b);
+    const cmp = hasCmp ? St().compareYears(all, a, b) : null;
 
-    document.getElementById("analyticsCompare").innerHTML = `
+    document.getElementById("analyticsCompare").innerHTML = hasCmp ? `
       <span class="lbl">Compare</span>
       <select class="select" id="anaA" aria-label="Year A">
-        ${years.map((y) => `<option value="${y}" ${y === a ? "selected" : ""}>${y}</option>`).join("")}
+        ${cmpYears.map((y) => `<option value="${y}" ${y === a ? "selected" : ""}>${y}</option>`).join("")}
       </select>
       <span style="color:var(--text-faint)">vs</span>
       <select class="select" id="anaB" aria-label="Year B">
-        ${years.map((y) => `<option value="${y}" ${y === b ? "selected" : ""}>${y}</option>`).join("")}
+        ${cmpYears.map((y) => `<option value="${y}" ${y === b ? "selected" : ""}>${y}</option>`).join("")}
       </select>
       <span style="color:var(--text-dim);font-size:13px">
         ${a}: <strong>${cmp.totals.workouts.a}</strong> workouts · <strong>${St().fmtNum(cmp.totals.calories.a)}</strong> kcal
         &nbsp;·&nbsp; ${b}: <strong>${cmp.totals.workouts.b}</strong> workouts · <strong>${St().fmtNum(cmp.totals.calories.b)}</strong> kcal
-      </span>`;
+      </span>` : "";
 
     const wrap = document.getElementById("analyticsCharts");
     const colorA = "var(--accent)", colorB = "var(--success)";
@@ -1891,7 +2056,6 @@
     // (null means "no dimming" — an empty array would dim everything.)
     const curYearNow = year === curYear;
     const hl = curYearNow ? ms.map((m, i) => i).filter((i) => i >= new Date().getMonth() + 1) : null;
-    const hasCmp = a !== b && cmp.totals.workouts.a > 0 && cmp.totals.workouts.b > 0;
     const tb = St().typeBreakdown(all, year);
     // Distinct workouts in the year — NOT the sum of breakdown counts, which
     // counts each type tag (a "Back, Biceps" workout counts twice).
@@ -1976,11 +2140,7 @@
           <div class="card-title"><h3>${a} vs ${b} · cumulative calories</h3><span class="sub">${St().fmtNum(cmp.totals.calories.a)} vs ${St().fmtNum(cmp.totals.calories.b)} (${St().fmtDelta(cmp.totals.calories.diff)})</span></div>
           <div class="chart-wrap" id="acCompareCal"></div>
         </div>
-      </div>` : `
-      <div class="card big-card cmp-hidden" style="margin-top:16px">
-        <div class="card-title"><h3>Year-over-year comparison</h3><span class="sub">needs data in two years</span></div>
-        <div class="chart-empty" style="padding:18px">No workouts recorded in these two years — pick two years with data above to compare them.</div>
-      </div>`}
+      </div>` : ""}
     `;
 
     const labels = ms.map((m) => m.label);
@@ -2269,6 +2429,75 @@
           }
         });
       }
+    });
+  }
+
+  /* ---------------- number steppers ---------------- */
+  /* Replace the native number-input spinner with app-styled − / + buttons.
+     The native WebKit spinner cannot be restyled without breaking its click
+     handling, so it is hidden in CSS and real buttons are injected here.
+     A MutationObserver decorates inputs as views/modals render them. */
+
+  const STEP_UP_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 9.75 8 6.25 11.5 9.75"/></svg>';
+  const STEP_DOWN_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.25 8 9.75 11.5 6.25"/></svg>';
+
+  function stepNumber(input, dir) {
+    if (input.disabled || input.readOnly) return;
+    const min = input.min === "" ? null : parseFloat(input.min);
+    const max = input.max === "" ? null : parseFloat(input.max);
+    let step = (input.step === "" || input.step === "any") ? 1 : parseFloat(input.step);
+    if (!isFinite(step) || step <= 0) step = 1;
+    let v = input.value === "" ? NaN : parseFloat(input.value);
+    if (isNaN(v)) v = min !== null ? min : 0;
+    let nv = v + dir * step;
+    // Numeric steps snap to the step grid (like the native spinner); step="any" adds/subtracts raw.
+    if (input.step !== "any") {
+      const base = min !== null ? min : 0;
+      nv = base + Math.round((nv - base) / step) * step;
+    }
+    nv = Math.round(nv * 1e6) / 1e6;
+    if (max !== null && nv > max) nv = max;
+    if (min !== null && nv < min) nv = min;
+    input.value = String(nv);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function decorateStepper(input) {
+    if (input.dataset.stepper) return;
+    input.dataset.stepper = "1";
+    const wrap = document.createElement("span");
+    wrap.className = "stepper";
+    if (input.style.width) { // e.g. the age field has an inline width — keep it on the wrapper
+      wrap.style.width = input.style.width;
+      input.style.width = "";
+    }
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    ["up", "down"].forEach((dir) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "stepper-btn " + dir;
+      b.tabIndex = -1;
+      b.setAttribute("aria-hidden", "true");
+      b.innerHTML = dir === "up" ? STEP_UP_SVG : STEP_DOWN_SVG;
+      b.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the input
+      b.addEventListener("click", (e) => { e.preventDefault(); stepNumber(input, dir === "up" ? 1 : -1); });
+      wrap.appendChild(b);
+    });
+  }
+
+  function decorateSteppers() {
+    document.querySelectorAll('input.input[type="number"]:not([data-stepper])').forEach(decorateStepper);
+  }
+
+  if (document.body) {
+    decorateSteppers();
+    new MutationObserver(decorateSteppers).observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      decorateSteppers();
+      new MutationObserver(decorateSteppers).observe(document.body, { childList: true, subtree: true });
     });
   }
 

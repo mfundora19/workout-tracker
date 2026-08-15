@@ -42,7 +42,8 @@
         enabled: s.backupReminder,
         lastBackupAt: s.lastBackupAt,
         lastShownAt: s.lastBackupReminderAt,
-        days: s.backupReminderDays
+        // backupReminderDays is the interval in the selected unit (days/weeks/years)
+        days: s.backupReminderDays * (S().REMINDER_UNIT_DAYS[s.backupReminderUnit] || 1)
       });
     },
 

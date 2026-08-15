@@ -16,8 +16,8 @@ the HTML file and start.
 | ![Analytics](app/screenshots/analytics-dark.png) | ![Progress](app/screenshots/progress-dark.png) |
 | ![Tools](app/screenshots/tools-dark.png) | ![Data](app/screenshots/data-dark.png) |
 
-*Screenshots show the built-in demo data (your seed history plus a few extra
-entries for illustration).*
+*Screenshots show the app in dark mode with the built-in demo data (your seed
+history of 92 workouts across Jan–Aug 2026).*
 
 ## Features
 
@@ -212,3 +212,20 @@ WorkoutTracker/
 ```
 
 </details>
+
+## Version bumping
+
+Settings → About shows the app version (`app/version.js`). After you change
+the program, bump it with:
+
+```
+python bump-version.py
+```
+
+The script fingerprints the source files, compares them with the last run and
+classifies the combined change itself — **major** for a big rework (a large
+amount of churn, never bumped lightly), **minor** for a solid change, **patch**
+for a small touch-up — then updates `app/version.js` and prints what it found.
+The version keeps to the project's limits: the **minor** digit never passes 20
+and the **patch** digit never passes 100; at those ceilings the next bump rolls
+into a major / minor respectively.

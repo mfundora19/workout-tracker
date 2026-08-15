@@ -10,12 +10,13 @@
 <script src="../lib/jspdf.umd.min.js"></script>
 <script src="../lib/fonts/fonts.js"></script>
 <script src="../js/seed-data.js"></script>
-<script src="../js/store.js?v=7"></script>
-<script src="../js/stats.js?v=7"></script>
-<script src="../js/charts.js?v=7"></script>
+<script src="../version.js"></script>
+<script src="../js/store.js?v=10"></script>
+<script src="../js/stats.js?v=10"></script>
+<script src="../js/charts.js?v=10"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=7"></script>
+<script src="../js/ui.js?v=10"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -465,7 +466,7 @@ function dump() {
     // --- UI renders without throwing ---
     Focus.UI.state.anaA = 2026; Focus.UI.state.anaB = 2025;
     Focus.UI.state.calMonth = 8; Focus.UI.state.calMode = "year"; Focus.UI.state.calDay = null;
-    Focus.App = { year: () => 2026, setYear: async () => {} };
+    Focus.App = { year: () => 2026, setYear: async () => {}, setSetting: async (k, v) => { Focus.Store.setSetting(k, v); } };
     document.body.insertAdjacentHTML("beforeend", `
       <div id="modalBackdrop" hidden><div id="modal"></div></div>
       <div id="toastRegion"></div>
@@ -553,13 +554,27 @@ function dump() {
       }
     });
 
-    // --- analytics defaults: current year vs previous year ---
+    // --- analytics comparison: only years with data, never future, hidden until a 2nd year ---
     Focus.UI.state.anaA = null; Focus.UI.state.anaB = null;
     Focus.UI.renderAnalytics();
-    const curY = new Date().getFullYear();
-    ok("analytics defaults to current vs previous year", Focus.UI.state.anaA === curY && Focus.UI.state.anaB === curY - 1, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
-    // seed has no workouts in the previous year -> comparison is hidden, not "vs empty"
-    ok("comparison hidden when a year has no data", !!document.querySelector(".cmp-hidden"), "cmp block present: " + !!document.querySelector("#acCompareWk"));
+    // seed has workouts only in the current year -> no comparison at all
+    ok("no comparison defaults with a single data year", Focus.UI.state.anaA === null && Focus.UI.state.anaB === null, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
+    ok("comparison row hidden with a single data year", document.getElementById("analyticsCompare").innerHTML.trim() === "" && !document.querySelector("#acCompareWk"), "cmp html: " + document.getElementById("analyticsCompare").innerHTML.slice(0, 40));
+    // add a second year (plus a future-dated workout) -> comparison appears with only valid years
+    const cmpA = await Focus.Store.addWorkout({ date: "2025-01-10", type: "Other", calories: 500 });
+    const cmpB = await Focus.Store.addWorkout({ date: "2025-02-10", type: "Other", calories: 600 });
+    const futureW = await Focus.Store.addWorkout({ date: "2028-01-05", type: "Other", calories: 500 });
+    Focus.UI.state.anaA = null; Focus.UI.state.anaB = null;
+    Focus.UI.renderAnalytics();
+    const anaOpts = [...document.querySelectorAll("#analyticsCompare .select")].map((s) => [...s.options].map((o) => o.value).join(","));
+    ok("comparison appears once a second data year exists", anaOpts.length === 2 && anaOpts[0] === "2026,2025" && anaOpts[1] === "2026,2025", JSON.stringify(anaOpts));
+    ok("comparison defaults to current vs previous data year", Focus.UI.state.anaA === 2026 && Focus.UI.state.anaB === 2025, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
+    ok("future years are not offered for comparison", anaOpts.every((s) => !s.includes("2028")), JSON.stringify(anaOpts));
+    ok("comparison charts render for two data years", !!document.querySelector("#acCompareWk svg") && !!document.querySelector("#acCompareCal svg"), "wk=" + !!document.querySelector("#acCompareWk svg"));
+    await Focus.Store.deleteWorkout(cmpA.id);
+    await Focus.Store.deleteWorkout(cmpB.id);
+    await Focus.Store.deleteWorkout(futureW.id);
+    ok("cleanup back to 92 after comparison tests", Focus.Store.workouts.length === 92, "len=" + Focus.Store.workouts.length);
     ok("month-by-month has no [object Object]", !document.getElementById("analyticsCharts").textContent.includes("[object Object]"));
     const gridA = document.querySelectorAll("#analyticsCharts .grid-2")[0];
     ok("analytics grid A has 6 cards", gridA && gridA.querySelectorAll(".card").length === 6, "cards=" + (gridA ? gridA.querySelectorAll(".card").length : 0));
@@ -624,6 +639,43 @@ function dump() {
       return b && b.textContent === "Remind every";
     });
     ok("Backup reminder interval input renders, default 10", !!daysRow && daysRow.querySelector("#setBackupDays") && daysRow.querySelector("#setBackupDays").value === "10", daysRow ? daysRow.textContent.replace(/\s+/g, " ") : "no Remind-every row");
+    // privacy details collapse into a ⓘ button + popover (not a tall list in the card)
+    const privCard = document.getElementById("privacyInfoBtn") ? document.getElementById("privacyInfoBtn").closest(".card") : null;
+    const privBtn = document.getElementById("privacyInfoBtn");
+    ok("privacy collapses into a styled ⓘ info button", !!privCard && !privCard.querySelector(".about-list") && privCard.textContent.includes("Privacy") && !!privBtn && !!privBtn.querySelector("svg"), privCard ? privCard.textContent.replace(/\s+/g, " ").slice(0, 60) : "no privacy card");
+    document.getElementById("privacyInfoBtn").click();
+    const privPop = document.querySelector(".info-pop");
+    ok("privacy ⓘ popover shows the details", !!privPop && privPop.textContent.includes("No account") && privPop.textContent.includes("No internet connection") && privPop.textContent.includes("stored in this browser"), privPop ? privPop.textContent.replace(/\s+/g, " ").slice(0, 90) : "no popover");
+    Focus.UI.closeInfoPopover();
+    ok("privacy popover closes", !document.querySelector(".info-pop"));
+    // About card shows the app version (app/version.js), with a sane fallback
+    window.FOCUS_VERSION = { major: 2, minor: 5, patch: 12 };
+    Focus.UI.renderSettings();
+    ok("About shows the version from version.js", document.getElementById("settingsBody").textContent.includes("2.5.12"), "missing 2.5.12");
+    delete window.FOCUS_VERSION;
+    Focus.UI.renderSettings();
+    ok("About falls back to 1.0.0 without version.js", document.getElementById("settingsBody").textContent.includes("1.0.0"), "missing 1.0.0");
+    // remind-every unit select: days/weeks/years, converting the value on switch
+    const remUnitSel = document.getElementById("setBackupUnit");
+    const remInp = document.getElementById("setBackupDays");
+    ok("remind every offers days/weeks/years, default days", !!remUnitSel && remUnitSel.value === "days" && [...remUnitSel.options].map((o) => o.value).join(",") === "days,weeks,years", remUnitSel ? remUnitSel.outerHTML : "no unit select");
+    remUnitSel.value = "weeks";
+    remUnitSel.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("switching unit converts the value (10 days -> 1 week)", remInp.value === "1", "got " + remInp.value);
+    ok("unit switch persists value + unit", Focus.Store.settings.backupReminderUnit === "weeks" && Focus.Store.settings.backupReminderDays === 1, JSON.stringify({ u: Focus.Store.settings.backupReminderUnit, v: Focus.Store.settings.backupReminderDays }));
+    ok("reminder normalization: 1 week = 7 days", S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-05", days: 1 * S.REMINDER_UNIT_DAYS.weeks }) === true && S.backupReminderDue("2026-08-12", { lastBackupAt: "2026-08-06", days: 1 * S.REMINDER_UNIT_DAYS.weeks }) === false, "not due before 7 days");
+    remInp.value = "2";
+    remInp.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("reminder value persists in the selected unit", Focus.Store.settings.backupReminderDays === 2 && Focus.Store.settings.backupReminderUnit === "weeks", JSON.stringify({ u: Focus.Store.settings.backupReminderUnit, v: Focus.Store.settings.backupReminderDays }));
+    remUnitSel.value = "years";
+    remUnitSel.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("2 weeks -> years converts to 0.04y rounded up to 1 year", remInp.value === "1" && Focus.Store.settings.backupReminderUnit === "years" && Focus.Store.settings.backupReminderDays === 1, "got " + remInp.value);
+    remUnitSel.value = "days";
+    remUnitSel.dispatchEvent(new Event("change", { bubbles: true })); // 1 year -> 365 days
+    remInp.value = "10";
+    remInp.dispatchEvent(new Event("change", { bubbles: true })); // back to the default
+    Focus.UI.renderSettings();
+    ok("reminder restored to days/10", document.getElementById("setBackupUnit").value === "days" && document.getElementById("setBackupDays").value === "10", document.getElementById("setBackupUnit").value + "/" + document.getElementById("setBackupDays").value);
     Focus.UI.renderDashboard();
     ok("dashboard charts carry draw-in animation classes", !!document.querySelector("#dashChartMonthly svg.anim-bars") && !!document.querySelector("#dashChartCumulative svg.anim-line"), "bars=" + !!document.querySelector("#dashChartMonthly svg.anim-bars") + " line=" + !!document.querySelector("#dashChartCumulative svg.anim-line"));
     Focus.UI.markDashEnter();
@@ -707,10 +759,26 @@ function dump() {
     ok("qaMode persists across re-render", !document.getElementById("quickMeasForm").hidden && document.getElementById("quickAddForm").hidden, "measHidden=" + document.getElementById("quickMeasForm").hidden);
     Focus.UI.state.qaMode = "workout";
     Focus.UI.renderDashboard();
-    // modal new-record unit defaults to the type's unit
+    // modal new record: tabbed multi-entry (Weight / Waist / Neck / Other)
     Focus.UI.openMeasurementForm({ date: "2026-08-11" });
-    ok("modal new record defaults Weight/lb", document.getElementById("mfUnit") && document.getElementById("mfUnit").value === "lb", "unit=" + (document.getElementById("mfUnit") || {}).value);
+    ok("modal new record has section tabs", !!document.querySelector('[data-mtab="Weight"]') && !!document.querySelector('[data-mtab="Waist"]') && !!document.querySelector('[data-mtab="Neck"]') && !!document.querySelector('[data-mtab="Other"]'), "tabs");
+    ok("modal Weight section defaults to lb", document.getElementById("mUnit_Weight") && document.getElementById("mUnit_Weight").value === "lb", "unit=" + (document.getElementById("mUnit_Weight") || {}).value);
+    ok("modal Other section defaults Weight/lb", document.getElementById("mfUnit") && document.getElementById("mfUnit").value === "lb", "unit=" + (document.getElementById("mfUnit") || {}).value);
     Focus.UI.closeModal();
+
+    // --- add weight + waist + neck in one submit ---
+    const measBefore = Focus.Store.measurements.length;
+    Focus.UI.openMeasurementForm({ date: "2026-08-12" });
+    document.getElementById("mValue_Weight").value = "80";
+    document.getElementById("mValue_Waist").value = "91";
+    document.getElementById("mValue_Neck").value = "38";
+    document.getElementById("measForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const backdrop = document.getElementById("modalBackdrop");
+    for (let i = 0; i < 50 && !backdrop.hidden; i++) await new Promise((r) => setTimeout(r, 20));
+    const trio = Focus.Store.measurements.filter((m) => m.date === "2026-08-12");
+    ok("one submit adds weight + waist + neck", trio.length === 3 && trio.some((m) => m.type === "Weight" && m.value === 80) && trio.some((m) => m.type === "Waist" && m.value === 91) && trio.some((m) => m.type === "Neck" && m.value === 38), JSON.stringify(trio.map((m) => m.type + ":" + m.value)));
+    for (const m of trio) await Focus.Store.deleteMeasurement(m.id);
+    ok("multi-measurement cleanup restores count", Focus.Store.measurements.length === measBefore, "before=" + measBefore + " after=" + Focus.Store.measurements.length);
 
     // --- calendar day panel: add measurement with the selected date ---
     Focus.UI.state.calMode = "month";
@@ -802,6 +870,28 @@ function dump() {
     document.getElementById("convUnit").value = "kg";
     fire("convValue");
     ok("100 kg -> 220.46 lb", document.getElementById("convResults").textContent.includes("220.46"), document.getElementById("convResults").textContent);
+
+    // --- number steppers: app-styled − / + buttons replace native spinners ---
+    await new Promise((r) => setTimeout(r, 0)); // let the stepper MutationObserver decorate the freshly rendered inputs
+    const stIn = document.getElementById("bmiWeight");
+    const stWrap = stIn.closest(".stepper");
+    ok("number input wrapped in .stepper with up/down buttons", !!stWrap && !!stWrap.querySelector(".stepper-btn.up") && !!stWrap.querySelector(".stepper-btn.down"), "wrap=" + !!stWrap);
+    if (stWrap) {
+      stIn.value = "70";
+      stWrap.querySelector(".stepper-btn.up").click();
+      ok("stepper up increments by 1 (step=any -> 1)", stIn.value === "71", "got " + stIn.value);
+      stWrap.querySelector(".stepper-btn.down").click();
+      ok("stepper down decrements by 1", stIn.value === "70", "got " + stIn.value);
+      stIn.value = "0";
+      stWrap.querySelector(".stepper-btn.down").click();
+      ok("stepper clamps at min=0", stIn.value === "0", "got " + stIn.value);
+      let stepperEvs = 0;
+      stIn.addEventListener("input", () => stepperEvs++);
+      stIn.value = "70";
+      stWrap.querySelector(".stepper-btn.up").click();
+      ok("stepper click fires input event (live recalcs)", stepperEvs === 1, "count=" + stepperEvs);
+      stIn.value = "70";
+    }
 
     // --- progress view: chips, headline, body-composition card ---
     Focus.UI.renderProgress();
