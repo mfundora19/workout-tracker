@@ -206,6 +206,7 @@ WorkoutTracker/
 │   │   ├── jspdf.umd.min.js ← PDF library
 │   │   ├── xlsx.full.min.js ← SheetJS
 │   │   └── fonts/fonts.js   ← embedded Unicode font for the PDF report
+│   ├── shortcut-icon.ico   ← app icon (browser tab favicon + desktop shortcut)
 │   ├── screenshots/        ← images used in this README
 │   └── tests/              ← optional automated checks
 │       └── smoke-test.html
