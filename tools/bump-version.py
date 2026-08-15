@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Focus version bumper — the app's own "AI" for sizing up code changes.
 
-Run after making changes to the program:
+Run after making changes to the program (from the project root):
 
-    python bump-version.py
+    python tools/bump-version.py
 
 It fingerprints every source file, compares with the last run, classifies the
 combined change as major / minor / patch, bumps the version shown in
-Settings > About (app/version.js) and records the new fingerprint.
+Settings > About (app/js/version.js) and records the new fingerprint.
 
 Classification (tweak the thresholds at the top if they don't match taste):
   * major (X.y.z) — a genuinely big change: a large amount of code churned.
@@ -27,9 +27,10 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-VERSION_FILE = os.path.join(ROOT, "app", "version.js")
-STATE_FILE = os.path.join(ROOT, ".version-state.json")
+# The script lives in tools/, so the project root is its parent directory.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VERSION_FILE = os.path.join(ROOT, "app", "js", "version.js")
+STATE_FILE = os.path.join(ROOT, "tools", ".version-state.json")
 
 # --- classification thresholds -----------------------------------------
 # "Churn" = sum over changed files of |new bytes - old bytes|, plus a small
@@ -50,13 +51,18 @@ TRACKED_GLOBS = [
     "app/tests/*.html",
     "README.md",
 ]
+EXCLUDED_FILES = {"app/js/version.js"}  # auto-managed by this script
 
 
 def tracked_files():
     files = {}
     for pattern in TRACKED_GLOBS:
         for path in glob.glob(os.path.join(ROOT, pattern)):
-            files[os.path.relpath(path, ROOT)] = path
+            rel = os.path.relpath(path, ROOT)
+            # Normalize separators so exclusions match on Windows too.
+            key = rel.replace(os.sep, "/")
+            if key not in EXCLUDED_FILES:
+                files[key] = path
     return files
 
 

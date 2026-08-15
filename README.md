@@ -200,7 +200,8 @@ WorkoutTracker/
 │   │   ├── seed-data.js    ← your historical data, embedded
 │   │   ├── stats.js        ← streaks, monthly/yearly, comparisons, insights
 │   │   ├── store.js        ← IndexedDB persistence + dedup + multi-type normalize
-│   │   └── ui.js           ← all views & dialogs
+│   │   ├── ui.js           ← all views & dialogs
+│   │   └── version.js      ← app version (auto-managed by tools/bump-version.py)
 │   ├── lib/                ← bundled locally, no CDN
 │   │   ├── jspdf.umd.min.js ← PDF library
 │   │   ├── xlsx.full.min.js ← SheetJS
@@ -208,6 +209,8 @@ WorkoutTracker/
 │   ├── screenshots/        ← images used in this README
 │   └── tests/              ← optional automated checks
 │       └── smoke-test.html
+├── tools/                  ← development tools
+│   └── bump-version.py     ← auto-bumps the app version after changes
 └── data/                   ← keep your Excel/JSON exports & imports here
 ```
 
@@ -215,17 +218,17 @@ WorkoutTracker/
 
 ## Version bumping
 
-Settings → About shows the app version (`app/version.js`). After you change
+Settings → About shows the app version (`app/js/version.js`). After you change
 the program, bump it with:
 
 ```
-python bump-version.py
+python tools/bump-version.py
 ```
 
 The script fingerprints the source files, compares them with the last run and
 classifies the combined change itself — **major** for a big rework (a large
 amount of churn, never bumped lightly), **minor** for a solid change, **patch**
-for a small touch-up — then updates `app/version.js` and prints what it found.
+for a small touch-up — then updates `app/js/version.js` and prints what it found.
 The version keeps to the project's limits: the **minor** digit never passes 20
 and the **patch** digit never passes 100; at those ceilings the next bump rolls
 into a major / minor respectively.

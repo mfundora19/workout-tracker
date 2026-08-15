@@ -1583,7 +1583,7 @@
     const rem = s.backupReminder !== false;
     const remUnit = s.backupReminderUnit || "days";
     const remVal = s.backupReminderDays ?? 10;
-    // App version comes from app/version.js (managed by bump-version.py), read
+    // App version comes from app/js/version.js (managed by bump-version.py), read
     // at render time so a new build is picked up without a hard refresh.
     const ver = window.FOCUS_VERSION || { major: 1, minor: 0, patch: 0 };
     const versionStr = String(ver.major) + "." + String(ver.minor) + "." + String(ver.patch);

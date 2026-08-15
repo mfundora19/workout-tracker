@@ -10,7 +10,7 @@
 <script src="../lib/jspdf.umd.min.js"></script>
 <script src="../lib/fonts/fonts.js"></script>
 <script src="../js/seed-data.js"></script>
-<script src="../version.js"></script>
+<script src="../js/version.js"></script>
 <script src="../js/store.js?v=10"></script>
 <script src="../js/stats.js?v=10"></script>
 <script src="../js/charts.js?v=10"></script>
@@ -648,7 +648,7 @@ function dump() {
     ok("privacy ⓘ popover shows the details", !!privPop && privPop.textContent.includes("No account") && privPop.textContent.includes("No internet connection") && privPop.textContent.includes("stored in this browser"), privPop ? privPop.textContent.replace(/\s+/g, " ").slice(0, 90) : "no popover");
     Focus.UI.closeInfoPopover();
     ok("privacy popover closes", !document.querySelector(".info-pop"));
-    // About card shows the app version (app/version.js), with a sane fallback
+    // About card shows the app version (app/js/version.js), with a sane fallback
     window.FOCUS_VERSION = { major: 2, minor: 5, patch: 12 };
     Focus.UI.renderSettings();
     ok("About shows the version from version.js", document.getElementById("settingsBody").textContent.includes("2.5.12"), "missing 2.5.12");
