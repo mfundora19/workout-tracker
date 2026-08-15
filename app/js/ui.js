@@ -854,17 +854,19 @@
     const cal = agg ? agg.calories : 0;
     const dur = agg ? agg.duration : 0;
     const wk = St().weeklyStats(Store().workouts, today).cur.workouts;
-    const row = (label, cur, goal, unit) => {
+    // Daily completion comes from the shared goal logic (calorie and time are
+    // judged independently); only the weekly workout target is local here.
+    const hits = St().dailyGoalStatus(Store().workouts, g).get(today);
+    const row = (label, icon, cur, goal, unit, met) => {
       if (goal == null) return null;
-      const met = cur >= goal;
-      return { label, value: `${St().fmtNum(cur)} / ${St().fmtNum(goal)} ${unit}`, emoji: met ? "✅" : "⏳" };
+      return { label, value: `${St().fmtNum(cur)} / ${St().fmtNum(goal)} ${unit} ${met ? "✅" : "⏳"}`, emoji: icon };
     };
     return statCard({
       title: "Goals", icon: "target", cls: "amber",
       rows: [
-        row("Calories (today)", cal, g.calPerDay, "kcal"),
-        row("Duration (today)", dur, g.durPerDay, "min"),
-        row("Workouts (this week)", wk, g.workoutsPerWeek, "")
+        row("Calories (today)", "🔥", cal, g.calPerDay, "kcal", !!(hits && hits.calHit)),
+        row("Duration (today)", "⏱️", dur, g.durPerDay, "min", !!(hits && hits.timeHit)),
+        row("Workouts (this week)", "🎯", wk, g.workoutsPerWeek, "", wk >= g.workoutsPerWeek)
       ].filter(Boolean)
     });
   }
@@ -919,6 +921,8 @@
   function yearHeatGrid(all, year, interactive) {
     const ms = St().monthlyStats(all, year);
     const g = Store().settings.goals || {};
+    // Independent per-day goal statuses (🔥 calories and ⏱️ time evaluated separately).
+    const gs = St().dailyGoalStatus(all, g);
     // Index of the year's most consistent month (most workout days) for the 🔥 badge.
     const bestIdx = ms.reduce((bi, m, i2) => (m.days > ms[bi].days ? i2 : bi), 0);
     // The single most intense day of the year (most calories) gets a subtle dot.
@@ -933,25 +937,27 @@
     }
     const cards = ms.map((m, i) => {
       const map = St().monthDayMap(all, year, i + 1);
-      let goalCnt = 0;
+      let calCnt = 0, durCnt = 0;
       const cells = [];
       for (let d = 1; d <= St().daysInMonth(year, i + 1); d++) {
         const info = map.get(d);
         const iso = year + "-" + String(i + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
         const lvl = info ? info.level : 0;
-        if (info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay))) goalCnt++;
+        const hits = gs.get(iso);
+        if (hits) { if (hits.calHit) calCnt++; if (hits.timeHit) durCnt++; }
         const today = year === St().yearOf(St().todayISO()) && d === St().dayOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
         cells.push(`<div class="day ${lvl ? "has-workout lvl-" + lvl : ""} ${today ? "today" : ""} ${info && interactive && iso === bestDayISO ? "best-day" : ""}" ${info ? `data-day="${iso}" data-calinfo="1"` : ""} title="${info ? `${d} · ${St().fmtNum(info.calories)} kcal · ${info.count} workout${info.count > 1 ? "s" : ""}` : ""}">${d}</div>`);
       }
       // Interactive grids (the real calendar) highlight the current month with
       // a colored border only; the analytics heatmap reuses this renderer.
       const isCur = interactive && year === St().yearOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
-      // The 🔥 Best badge is a heatmap flourish — analytics only. The goal
-      // chip shows in both grids.
+      // The 🔥 Best badge is a heatmap flourish — analytics only. The two goal
+      // chips (calories 🔥 / time ⏱️) count days that hit each goal separately.
       const isBest = !interactive && m.days > 0 && i === bestIdx;
       const foot = [
         isBest ? `<span class="best-chip" title="Most consistent month">🔥 Best</span>` : "",
-        goalCnt ? `<span class="goal-chip" title="Days that hit your daily goal">🎯 ${goalCnt}</span>` : ""
+        g.calPerDay != null && calCnt ? `<span class="goal-chip cal" title="Days that hit your calorie goal">🔥 ${calCnt}</span>` : "",
+        g.durPerDay != null && durCnt ? `<span class="goal-chip time" title="Days that hit your duration goal">⏱️ ${durCnt}</span>` : ""
       ].filter(Boolean).join("");
       return `
         <div class="card month-card ${isCur ? "is-current" : ""}" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
@@ -984,12 +990,14 @@
     const today = St().todayISO();
     const sel = state.calDay;
     const g = Store().settings.goals || {};
+    // Independent per-day goal statuses (🔥 calories and ⏱️ time evaluated separately).
+    const gs = St().dailyGoalStatus(all, g);
 
     // The month's most intense day (most calories) gets a subtle accent ring.
     let bestD = -1, bestCal = -1;
     map.forEach((info, d) => { if (info.calories > bestCal) { bestCal = info.calories; bestD = d; } });
 
-    let goalHits = 0;
+    let calHits = 0, durHits = 0;
     let cells = "";
     for (let i = 0; i < firstWeekday; i++) cells += `<div class="day-cell empty"></div>`;
     for (let d = 1; d <= dim; d++) {
@@ -997,12 +1005,24 @@
       const info = map.get(d);
       const isToday = iso === today;
       const isSel = iso === sel;
-      const gHit = !!info && ((g.calPerDay != null && info.calories >= g.calPerDay) || (g.durPerDay != null && info.duration >= g.durPerDay));
-      if (gHit) goalHits++;
+      const hits = gs.get(iso);
+      const calHit = !!(hits && hits.calHit);
+      const durHit = !!(hits && hits.timeHit);
+      const goalHit = calHit || durHit;
+      if (calHit) calHits++;
+      if (durHit) durHits++;
+      // Badges only appear on workout days (the status map only holds those);
+      // an empty day has nothing to evaluate against its goals.
+      const badges = [];
+      if (hits) {
+        if (g.calPerDay != null) badges.push(`<span class="goal-badge cal ${calHit ? "met" : ""}" title="${calHit ? "Calorie goal met" : "Calorie goal not met"}">🔥</span>`);
+        if (g.durPerDay != null) badges.push(`<span class="goal-badge time ${durHit ? "met" : ""}" title="${durHit ? "Duration goal met" : "Duration goal not met"}">⏱️</span>`);
+      }
+      const badgesHTML = badges.length ? `<span class="goal-badges">${badges.join("")}</span>` : "";
       cells += `
-        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""} ${gHit ? "goal-hit" : ""} ${d === bestD ? "best-day" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
+        <div class="day-cell ${info ? "has-wk lvl-" + info.level : ""} ${isToday ? "today" : ""} ${isSel ? "selected" : ""} ${goalHit ? "goal-hit" : ""} ${d === bestD ? "best-day" : ""}" data-day="${iso}" data-calday="1" role="button" tabindex="0" aria-label="${iso}${info ? ", " + info.count + " workouts" : ""}">
           <span class="dnum">${d}</span>
-          ${gHit ? `<span class="goal-check" title="Daily goal met">✓</span>` : ""}
+          ${badgesHTML}
           ${info ? `<span class="kcal">${St().fmtNum(info.calories)} kcal</span><span class="mini-bar" style="background:var(--heat-${info.level});width:${20 + info.level * 20}%"></span>` : ""}
         </div>`;
     }
@@ -1012,8 +1032,14 @@
     const prevY = month === 1 ? year - 1 : year;
     const nextY = month === 12 ? year + 1 : year;
 
-    const gLine = (g.calPerDay != null || g.durPerDay != null) ? `
-      <div class="goal-summary">${goalHits > 0 ? `<b class="goal-hit-count">🎯 ${goalHits} day${goalHits === 1 ? "" : "s"} hit your daily goal</b>` : `<span class="goal-miss">No days hit your daily goal yet</span>`}</div>` : "";
+    const gParts = [];
+    if (g.calPerDay != null) gParts.push(`<b class="goal-hit-count cal">🔥 ${calHits} day${calHits === 1 ? "" : "s"} hit your calorie goal</b>`);
+    if (g.durPerDay != null) gParts.push(`<b class="goal-hit-count time">⏱️ ${durHits} day${durHits === 1 ? "" : "s"} hit your duration goal</b>`);
+    const gLine = gParts.length
+      ? `<div class="goal-summary">${calHits === 0 && durHits === 0
+        ? `<span class="goal-miss">No days hit your daily goals yet</span>`
+        : gParts.join(`<span class="goal-summary-sep">·</span>`)}</div>`
+      : "";
     const dayPanel = sel ? dayPanelHTML(sel) : `
       <div class="card">
         <h3 style="margin-top:0">${St().MONTHS_LONG[month - 1]} ${year}</h3>
@@ -1051,17 +1077,19 @@
     body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
   }
 
-  /** Progress vs daily goals for a single day ('' when no goals are set). */
-  function dayGoalsHTML(calories, duration) {
+  /** Progress vs daily goals for a single day ('' when no goals are set).
+   *  `hits` comes from Stats.dailyGoalStatus so calorie/time completion uses
+   *  the same independent logic everywhere. */
+  function dayGoalsHTML(calories, duration, hits) {
     const g = Store().settings.goals || {};
     const rows = [];
     if (g.calPerDay != null) {
-      const met = calories >= g.calPerDay;
-      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>🎯 Calories</span><b>${St().fmtNum(calories)} / ${St().fmtNum(g.calPerDay)} kcal ${met ? "✅" : "⏳"}</b></div>`);
+      const met = !!(hits && hits.calHit);
+      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>🔥 Calories</span><b>${St().fmtNum(calories)} / ${St().fmtNum(g.calPerDay)} kcal ${met ? "✅" : "⏳"}</b></div>`);
     }
     if (g.durPerDay != null) {
-      const met = duration >= g.durPerDay;
-      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>🎯 Duration</span><b>${St().fmtNum(duration)} / ${St().fmtNum(g.durPerDay)} min ${met ? "✅" : "⏳"}</b></div>`);
+      const met = !!(hits && hits.timeHit);
+      rows.push(`<div class="goal-row ${met ? "ok" : ""}"><span>⏱️ Duration</span><b>${St().fmtNum(duration)} / ${St().fmtNum(g.durPerDay)} min ${met ? "✅" : "⏳"}</b></div>`);
     }
     return rows.length ? `<div class="goal-block">${rows.join("")}</div>` : "";
   }
@@ -1069,6 +1097,7 @@
   function dayPanelHTML(iso) {
     const all = Store().workouts.filter((w) => w.date === iso);
     const cal = all.reduce((s, w) => ({ calories: s.calories + (w.calories || 0), duration: s.duration + (w.duration || 0) }), { calories: 0, duration: 0 });
+    const hits = St().dailyGoalStatus(Store().workouts, Store().settings.goals || {}).get(iso);
     return `
       <div class="card day-panel">
         <div>
@@ -1080,7 +1109,7 @@
           <div class="t"><b>${cal.calories ? St().fmtNum(cal.calories) : "—"}</b><span>kcal</span></div>
           <div class="t"><b>${cal.duration ? St().fmtDuration(cal.duration) : "—"}</b><span>time</span></div>
         </div>
-        ${dayGoalsHTML(cal.calories, cal.duration)}
+        ${dayGoalsHTML(cal.calories, cal.duration, hits)}
         <div class="day-wk-list">
           ${all.map((w) => {
             return `
@@ -1494,14 +1523,14 @@
           <p class="desc">Set daily and weekly targets. Progress shows on the dashboard and lights up on the calendar when you beat them.</p>
           <div class="goal-form">
             <div class="goal-field">
-              <label for="goalCal">Daily calories</label>
+              <label for="goalCal">🔥 Daily calories</label>
               <div class="input-with-unit">
                 <input class="input" id="goalCal" type="number" min="0" step="1" placeholder="e.g. 500" value="${g.calPerDay ?? ""}">
                 <span class="suffix">kcal</span>
               </div>
             </div>
             <div class="goal-field">
-              <label for="goalDur">Daily duration</label>
+              <label for="goalDur">⏱️ Daily duration</label>
               <div class="input-with-unit">
                 <input class="input" id="goalDur" type="number" min="0" step="1" placeholder="e.g. 60" value="${g.durPerDay ?? ""}">
                 <span class="suffix">min</span>
@@ -1868,6 +1897,35 @@
     // counts each type tag (a "Back, Biceps" workout counts twice).
     const tbWorkouts = all.filter((w) => St().yearOf(w.date) === year).length;
 
+    // Daily-goal hit rate — calorie and time goals counted independently, as
+    // a share of the year's workout days.
+    const gA = Store().settings.goals || {};
+    const gsA = St().dailyGoalStatus(all, gA);
+    const yearDays = new Set(all.filter((w) => St().yearOf(w.date) === year).map((w) => w.date));
+    let calHitsY = 0, durHitsY = 0;
+    yearDays.forEach((iso) => {
+      const s = gsA.get(iso);
+      if (!s) return;
+      if (s.calHit) calHitsY++;
+      if (s.timeHit) durHitsY++;
+    });
+    const hitRow = (icon, label, hits, color) => {
+      const pct = yearDays.size ? Math.round((hits / yearDays.size) * 100) : 0;
+      return `<div class="type-bar-row">
+        <div class="tbr-head"><span>${icon} ${label}</span><b>${hits} <em>· ${pct}%</em></b></div>
+        <div class="tbr-track"><span style="width:${Math.max(pct, 2.5)}%;background:${color}"></span></div>
+      </div>`;
+    };
+    const goalRows = [];
+    if (gA.calPerDay != null) goalRows.push(hitRow("🔥", "Calorie goal", calHitsY, "var(--warn)"));
+    if (gA.durPerDay != null) goalRows.push(hitRow("⏱️", "Duration goal", durHitsY, "var(--info)"));
+    const goalHitsHTML = goalRows.length && yearDays.size
+      ? `<div class="goal-hits">
+          <div class="goal-hits-title"><b>Daily goals · hit rate</b><em>of ${yearDays.size} workout day${yearDays.size === 1 ? "" : "s"}</em></div>
+          ${goalRows.join("")}
+        </div>`
+      : "";
+
     wrap.innerHTML = `
       <div class="grid-2">
         <div class="card">
@@ -1904,6 +1962,7 @@
         <div class="card">
           <div class="card-title"><h3>Consistency heatmap · ${year}</h3><span class="sub">workout days</span></div>
           <div id="acHeat">${yearHeatGrid(all, year, false)}</div>
+          ${goalHitsHTML}
         </div>
       </div>
 

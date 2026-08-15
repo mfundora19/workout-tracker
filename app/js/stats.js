@@ -64,6 +64,27 @@
     return Array.from(set).sort();
   }
 
+  /**
+   * Independent daily-goal completion for every workout day.
+   * Each goal is evaluated on its own (current >= target), so completing one
+   * never affects the other. Goals that aren't configured (null) are excluded
+   * entirely. Returns a Map of iso-date -> { calHit, timeHit }.
+   */
+  function dailyGoalStatus(workouts, goals) {
+    const g = goals || {};
+    const hasCal = g.calPerDay != null;
+    const hasTime = g.durPerDay != null;
+    const out = new Map();
+    if (!hasCal && !hasTime) return out;
+    dayAggregates(workouts).forEach((a, iso) => {
+      out.set(iso, {
+        calHit: hasCal && a.calories >= g.calPerDay,
+        timeHit: hasTime && a.duration >= g.durPerDay
+      });
+    });
+    return out;
+  }
+
   /* ---------------- streaks ---------------- */
 
   function streaks(workouts, refDateISO) {
@@ -1004,7 +1025,7 @@
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
-    monthDayMap, availableYears, longestStreakInSet, backupReminderDue,
+    monthDayMap, availableYears, longestStreakInSet, backupReminderDue, dailyGoalStatus,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
 })();

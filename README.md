@@ -27,7 +27,7 @@ entries for illustration).*
 - 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a consistency heatmap, and a year-over-year comparison (current vs previous year by default)
 - 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
-- 🎯 **Goals** — daily calorie / duration and weekly workout targets; see them on the dashboard and as gold ✓ on goal days in the calendar
+- 🎯 **Goals** — a daily **calorie goal (🔥)** and a daily **duration goal (⏱️)** that complete independently, plus a weekly workout target; see them on the dashboard, as 🔥/⏱️ badges on goal days in the calendar, and as separate hit-rate bars in Analytics
 - ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
 
 ## Getting started

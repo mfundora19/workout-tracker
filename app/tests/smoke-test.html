@@ -433,6 +433,25 @@ function dump() {
     // --- intensity levels ---
     ok("intensity mapping", S.intensityForCalories(0) === 0 && S.intensityForCalories(200) === 1 && S.intensityForCalories(400) === 2 && S.intensityForCalories(700) === 3 && S.intensityForCalories(1000) === 4);
 
+    // --- independent daily goals: calorie and time complete on their own ---
+    const gTest = [
+      { id: "t1", date: "2026-01-01", type: "Cardio", calories: 550, duration: 35 },
+      { id: "t2", date: "2026-01-02", type: "Cardio", calories: 420, duration: 75 },
+      { id: "t3", date: "2026-01-03", type: "Cardio", calories: 550, duration: 75 },
+      { id: "t4", date: "2026-01-04", type: "Cardio", calories: 500, duration: 60 },
+      { id: "t5", date: "2026-01-05", type: "Cardio", calories: 400, duration: 45 }
+    ];
+    const gStat = S.dailyGoalStatus(gTest, { calPerDay: 500, durPerDay: 60 });
+    ok("case A: calories reached, time not", gStat.get("2026-01-01").calHit === true && gStat.get("2026-01-01").timeHit === false, JSON.stringify(gStat.get("2026-01-01")));
+    ok("case B: time reached, calories not", gStat.get("2026-01-02").calHit === false && gStat.get("2026-01-02").timeHit === true, JSON.stringify(gStat.get("2026-01-02")));
+    ok("case C: both reached", gStat.get("2026-01-03").calHit === true && gStat.get("2026-01-03").timeHit === true, JSON.stringify(gStat.get("2026-01-03")));
+    ok("case D: neither reached", gStat.get("2026-01-05").calHit === false && gStat.get("2026-01-05").timeHit === false, JSON.stringify(gStat.get("2026-01-05")));
+    ok("case E: exactly at target counts as completed", gStat.get("2026-01-04").calHit === true && gStat.get("2026-01-04").timeHit === true, JSON.stringify(gStat.get("2026-01-04")));
+    ok("case G: raising calorie target leaves time goal unchanged", S.dailyGoalStatus(gTest, { calPerDay: 9999, durPerDay: 60 }).get("2026-01-02").timeHit === true, JSON.stringify(S.dailyGoalStatus(gTest, { calPerDay: 9999, durPerDay: 60 }).get("2026-01-02")));
+    ok("case H: raising time target leaves calorie goal unchanged", S.dailyGoalStatus(gTest, { calPerDay: 500, durPerDay: 9999 }).get("2026-01-01").calHit === true, JSON.stringify(S.dailyGoalStatus(gTest, { calPerDay: 500, durPerDay: 9999 }).get("2026-01-01")));
+    ok("unconfigured goals never complete", S.dailyGoalStatus(gTest, { calPerDay: 500 }).get("2026-01-02").calHit === false && S.dailyGoalStatus(gTest, { calPerDay: 500 }).get("2026-01-02").timeHit === false, JSON.stringify(S.dailyGoalStatus(gTest, { calPerDay: 500 }).get("2026-01-02")));
+    ok("no goals configured -> no statuses computed", S.dailyGoalStatus(gTest, {}).size === 0, "size=" + S.dailyGoalStatus(gTest, {}).size);
+
     // --- multiple workouts per day aggregation ---
     await Focus.Store.addWorkout({ date: "2026-08-09", type: "Strength", duration: 45, calories: 420 });
     await Focus.Store.addWorkout({ date: "2026-08-09", type: "Walking", duration: 30, calories: 150 });
@@ -621,16 +640,49 @@ function dump() {
     ok("backup banner shows last-backup age + turn-off", bb.innerHTML.includes("since your last backup") && !!bb.querySelector("[data-action='set-backup-reminder']"));
     Focus.UI.hideBackupBanner();
     ok("backup banner hides", bb.innerHTML === "", "innerHTML=" + bb.innerHTML);
-    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8;
+    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8; Focus.UI.state.calDay = null;
     Focus.UI.renderCalendar();
-    ok("calendar month view marks goal-hit days", document.querySelectorAll(".day-cell.goal-hit").length > 0, "count=" + document.querySelectorAll(".day-cell.goal-hit").length);
+    ok("calendar month view shows calorie goal badges", document.querySelectorAll(".day-cell .goal-badge.cal").length > 0, "cal=" + document.querySelectorAll(".day-cell .goal-badge.cal").length);
+    ok("calendar month view shows time goal badges", document.querySelectorAll(".day-cell .goal-badge.time").length > 0, "time=" + document.querySelectorAll(".day-cell .goal-badge.time").length);
+    ok("no single combined goal check remains", document.querySelectorAll(".day-cell .goal-check").length === 0, "checks=" + document.querySelectorAll(".day-cell .goal-check").length);
+    ok("empty days get no goal badges", !document.querySelector('.day-cell[data-day="2026-08-01"] .goal-badge'), "badge=" + (document.querySelector('.day-cell[data-day="2026-08-01"] .goal-badge') || "none"));
     ok("month view marks the best day subtly", document.querySelectorAll(".day-cell.best-day").length === 1, "best=" + document.querySelectorAll(".day-cell.best-day").length);
     Focus.UI.state.calDay = "2026-08-07";
     Focus.UI.renderCalendar();
-    ok("day panel shows goal progress", document.getElementById("dayPanel").textContent.includes("/ 400 kcal"), document.getElementById("dayPanel").textContent.slice(0, 80));
+    ok("day panel shows calorie goal progress", document.getElementById("dayPanel").textContent.includes("/ 400 kcal"), document.getElementById("dayPanel").textContent.slice(0, 80));
+    ok("day panel shows time goal progress", document.getElementById("dayPanel").textContent.includes("/ 60 min"), document.getElementById("dayPanel").textContent.slice(0, 80));
+
+    // The calendar must show calorie and time completion independently.
+    // Seed data has no durations, so add two controlled days in a month that
+    // is otherwise empty: Sep 10 = 550 kcal / 35 min (case A), Sep 11 =
+    // 350 kcal / 75 min (case B) — vs the 400 kcal / 60 min goals set above.
+    await Focus.Store.addWorkout({ date: "2026-09-10", type: "Cardio", duration: 35, calories: 550 });
+    await Focus.Store.addWorkout({ date: "2026-09-11", type: "Cardio", duration: 75, calories: 350 });
+    Focus.UI.state.calMonth = 9; Focus.UI.state.calDay = null;
+    Focus.UI.renderCalendar();
+    const d10 = document.querySelector('.day-cell[data-day="2026-09-10"]');
+    const d11 = document.querySelector('.day-cell[data-day="2026-09-11"]');
+    ok("case A in calendar: 🔥 met, ⏱️ not met", !!(d10 && d10.querySelector(".goal-badge.cal.met")) && !!(d10 && d10.querySelector(".goal-badge.time:not(.met)")), d10 ? d10.innerHTML : "no cell");
+    ok("case B in calendar: ⏱️ met, 🔥 not met", !!(d11 && d11.querySelector(".goal-badge.time.met")) && !!(d11 && d11.querySelector(".goal-badge.cal:not(.met)")), d11 ? d11.innerHTML : "no cell");
+    ok("calendar summary counts the two goals independently", document.querySelector("#calendarBody .goal-summary").textContent.includes("calorie goal") && document.querySelector("#calendarBody .goal-summary").textContent.includes("duration goal"), document.querySelector("#calendarBody .goal-summary").textContent.replace(/\s+/g, " "));
+
+    // Year view: separate 🔥 / ⏱️ chips per month (the Sep 11 day gives the
+    // duration chip something to count; seed-only data has no durations).
+    Focus.UI.state.calMode = "year";
+    Focus.UI.renderCalendar();
+    ok("year view shows calorie goal chips", document.querySelectorAll(".month-card .goal-chip.cal").length > 0, "cal chips=" + document.querySelectorAll(".month-card .goal-chip.cal").length);
+    ok("year view shows time goal chips", document.querySelectorAll(".month-card .goal-chip.time").length > 0, "time chips=" + document.querySelectorAll(".month-card .goal-chip.time").length);
+
+    // Analytics: calorie and time goals shown as two separate hit-rate bars.
+    Focus.UI.renderAnalytics();
+    const gaRows = document.querySelectorAll("#analyticsCharts .goal-hits .type-bar-row");
+    ok("analytics shows calorie + time goal hit rates", gaRows.length === 2 && document.getElementById("analyticsCharts").textContent.includes("Calorie goal") && document.getElementById("analyticsCharts").textContent.includes("Duration goal"), "rows=" + gaRows.length);
+
+    await Focus.Store.deleteWorkout(Focus.Store.workouts.find((x) => x.date === "2026-09-10").id);
+    await Focus.Store.deleteWorkout(Focus.Store.workouts.find((x) => x.date === "2026-09-11").id);
+    ok("cleanup back to 92 after goal calendar checks", Focus.Store.workouts.length === 92);
     Focus.UI.state.calDay = null; Focus.UI.state.calMode = "year";
     Focus.UI.renderCalendar();
-    ok("year view shows goal chips", document.querySelectorAll(".month-card .goal-chip").length > 0, "chips=" + document.querySelectorAll(".month-card .goal-chip").length);
     ok("year view highlights the current month", document.querySelectorAll("#calendarBody .month-card.is-current").length === 1 && document.querySelector("#calendarBody .month-card.is-current").dataset.month === String(new Date().getMonth() + 1), "cur=" + document.querySelectorAll("#calendarBody .month-card.is-current").length);
     ok("current month has a colored border but no This-month label", document.querySelectorAll(".cur-chip").length === 0);
     ok("year view marks the best day subtly", document.querySelectorAll("#calendarBody .heat .day.best-day").length === 1, "best=" + document.querySelectorAll("#calendarBody .heat .day.best-day").length);
