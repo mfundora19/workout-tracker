@@ -22,12 +22,12 @@ history of 92 workouts across Jan–Aug 2026).*
 ## Features
 
 - 📊 **Dashboard** — year totals, streaks, year-vs-year and goals KPI cards, then **This Week / This Month** cards that benchmark **9 metrics** against the previous period (hover any ▲/▼ pill to reveal the previous period's value), then the Workouts-per-month and cumulative-calories charts and recent activity
-- 📅 **Calendar** — GitHub-style heatmap with intensity levels, a month view with a day panel, and subtle marking of your best day and the current month
+- 📅 **Calendar** — GitHub-style heatmap with intensity levels, a month view with a day panel (tap a day to drill in, tap elsewhere to return to the month summary), and subtle marking of your best day and the current month
 - 📏 **Progress** — weight, waist, neck, height… any measurement, any frequency. Trend charts, a **Body composition** card (current BMI + estimated body fat %, computed from your records — no re-entry) and a summary with colored trend highlights
-- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a consistency heatmap, and a year-over-year comparison (current vs previous year by default)
+- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a consistency heatmap (with a 🏆 best-month badge and 🔥/⏱️ goal chips; click a month to open it in the Calendar), and a year-over-year comparison (current vs previous year by default)
 - 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
-- 🎯 **Goals** — a daily **calorie goal (🔥)** and a daily **duration goal (⏱️)** that complete independently, plus a weekly workout target; see them on the dashboard, as 🔥/⏱️ badges on goal days in the calendar, and as separate hit-rate bars in Analytics
+- 🎯 **Goals** — a daily **calorie goal (🔥)** and a daily **duration goal (⏱️)** that complete independently, plus a weekly workout target; see them on the dashboard, as 🔥/⏱️ badges on goal days in the calendar (a day earns a gold ring only when every configured goal is met), and as separate hit-rate bars in Analytics
 - ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
 
 ## Getting started
@@ -50,7 +50,7 @@ All data lives in your browser's **IndexedDB** — a real local database. Every
 change saves automatically (there is no "Save" button) and nothing is ever sent
 anywhere. Storage is per-browser, so to move data between browsers or computers:
 
-1. **Data → Export JSON backup** — a complete snapshot (workouts, measurements, settings).
+1. **Data → Export JSON backup** — a complete snapshot (workouts, measurements, settings), saved as `focus-workout-YYYY-MM-DD.json`.
 2. Move the file, then **Data → Import JSON backup** on the other side.
    Imports are deduplicated — importing twice never creates duplicates.
 

@@ -741,7 +741,7 @@ function dump() {
     ok("heatmap month cards show Best chip bottom-right", document.querySelectorAll("#acHeat .month-foot .best-chip").length === 1, "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
     ok("no arm emoji chips remain anywhere", document.querySelectorAll(".act-chip").length === 0);
     ok("best month gets a Best chip (heatmap)", document.querySelector("#acHeat .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
-    ok("calendar year view keeps status chips out", document.querySelectorAll("#calendarBody .month-foot .best-chip").length === 0);
+    ok("calendar year view shows the Best month chip too", document.querySelectorAll("#calendarBody .month-foot .best-chip").length === 1);
     await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
     // --- dashboard quick add: measurement mode ---

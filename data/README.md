@@ -11,6 +11,6 @@ Suggested filenames (the app already names them this way):
 
 ```
 focus-export-2026-08-07.xlsx     ← for Google Sheets / Excel
-focus-backup-2026-08-07.json     ← full backup, moves between computers
+focus-workout-2026-08-07.json    ← full backup, moves between computers
 focus-workouts-2026-08-07.csv    ← simple spreadsheet
 ```

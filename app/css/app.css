@@ -424,20 +424,20 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .lvl-0 { background: var(--surface-3); border: 1px dashed var(--border); }
 
 .month-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px;
 }
 .month-card { display: flex; flex-direction: column; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; }
 .month-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow-md); }
 .month-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
-.month-head strong { font-size: 13.5px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.month-head span { font-size: 12px; color: var(--accent); font-weight: 700; white-space: nowrap; }
+.month-head strong { font-size: 13.5px; white-space: nowrap; flex-shrink: 0; }
+.month-head span { font-size: 12px; color: var(--accent); font-weight: 700; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .month-head span.rest { color: var(--text-faint); font-weight: 600; }
 /* Status chips pinned to the bottom-right of each month card — margin-top:auto
    keeps them flush against the card's bottom edge even when the card is taller
    than its calendar grid (e.g. a short 4-week February). */
-.month-foot { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: auto; padding-top: 8px; min-height: 20px; }
-.best-chip { font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; }
-.heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.month-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; margin-top: auto; padding-top: 8px; min-height: 20px; }
+.best-chip { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
+.heat { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .heat .day {
   aspect-ratio: 1; border-radius: 4px;
   background: var(--surface-3); border: 1px solid transparent;
@@ -484,15 +484,16 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 /* Best day of the month (most calories) — subtle inner accent ring. */
 .day-cell.best-day { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .day-cell .mini-bar { height: 4px; border-radius: 3px; margin-top: auto; }
-/* Days that hit at least one daily goal get a gold ring; each goal then gets
-   its own badge (🔥 calories, ⏱️ time) that is filled when that goal is met
-   and muted when it isn't — the two goals are judged independently. */
+/* Days that hit every configured daily goal get a gold ring (both goals when
+   both are set, the single one otherwise); each goal still gets its own badge
+   (🔥 calories, ⏱️ time) that is filled when met and muted when not — the two
+   goals are judged independently. */
 .day-cell.goal-hit { border-color: var(--warn); }
-.day-cell .goal-badges { position: absolute; top: 4px; right: 4px; display: flex; flex-direction: column; gap: 2px; z-index: 1; }
+.day-cell .goal-badges { position: absolute; top: 4px; right: 4px; display: flex; flex-direction: row; gap: 2px; z-index: 1; }
 .day-cell .goal-badge { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; line-height: 1; background: var(--surface-3); border: 1px solid var(--border); filter: grayscale(1); opacity: .5; }
 .day-cell .goal-badge.met { background: var(--warn); border-color: var(--warn); filter: none; opacity: 1; box-shadow: 0 1px 4px rgba(0, 0, 0, .28); }
 .day-cell .goal-badge.time.met { background: var(--info); border-color: var(--info); }
-.goal-chip { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; }
+.goal-chip { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 2px 8px; white-space: nowrap; }
 .goal-chip.time { color: var(--info); background: var(--info-soft); }
 /* Current month in the year heat-grid gets a colored border + glow only. */
 .month-card.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 22px -10px var(--accent); }
@@ -501,10 +502,8 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .goal-hit-count.time { color: var(--info); }
 .goal-summary-sep { color: var(--text-faint); }
 .goal-miss { color: var(--text-faint); }
-/* Analytics: daily-goal hit-rate block under the consistency heatmap. */
-.goal-hits-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin: 16px 0 10px; padding-top: 14px; border-top: 1px dashed var(--border); }
-.goal-hits-title b { font-weight: 700; }
-.goal-hits-title em { font-style: normal; color: var(--text-faint); font-weight: 600; }
+/* Analytics: daily-goal hit-rate rows live in their own card (paired with
+   Workout types); the header reuses .card-title. */
 .goal-block { display: flex; flex-direction: column; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
 .goal-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
 .goal-row span { color: var(--text-dim); }
@@ -702,8 +701,10 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .type-bar-row:last-child { margin-bottom: 2px; }
 .tbr-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 5px; }
 .tbr-head span { font-weight: 600; }
-.tbr-head b { font-variant-numeric: tabular-nums; }
-.tbr-head em { font-style: normal; color: var(--text-faint); font-weight: 600; }
+/* Percentage is the headline number; the raw count is informational. */
+.tbr-head .tbr-meta { display: inline-flex; align-items: baseline; gap: 5px; }
+.tbr-head .pct { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.tbr-head .cnt { font-size: 11.5px; color: var(--text-faint); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tbr-track { height: 9px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
 .tbr-track span { display: block; height: 100%; border-radius: 99px; min-width: 3px; transition: width .6s cubic-bezier(.22, 1, .36, 1); }
 .bars-track { display: flex; gap: 6px; flex-direction: column; }
@@ -964,7 +965,6 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1200px) {
-  .month-grid { grid-template-columns: repeat(4, 1fr); }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .dash-compare, .dash-charts { grid-template-columns: 1fr; }
   .month-detail { grid-template-columns: 1fr; }
@@ -997,7 +997,7 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
   .import-grid { grid-template-columns: 1fr; }
   .pdf-opts { grid-template-columns: 1fr; }
   .imp-report { grid-template-columns: repeat(2, 1fr); }
-  .month-grid { grid-template-columns: repeat(2, 1fr); }
+  .month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-greeting h2 { font-size: 18px; }
   .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

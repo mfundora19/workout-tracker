@@ -1068,16 +1068,17 @@
       // Interactive grids (the real calendar) highlight the current month with
       // a colored border only; the analytics heatmap reuses this renderer.
       const isCur = interactive && year === St().yearOf(St().todayISO()) && i + 1 === St().monthOf(St().todayISO());
-      // The 🔥 Best badge is a heatmap flourish — analytics only. The two goal
-      // chips (calories 🔥 / time ⏱️) count days that hit each goal separately.
-      const isBest = !interactive && m.days > 0 && i === bestIdx;
+      // The 🏆 Best badge marks the year's most consistent month and shows in
+      // both the calendar and the analytics heatmap. The two goal chips
+      // (calories 🔥 / time ⏱️) count days that hit each goal separately.
+      const isBest = m.days > 0 && i === bestIdx;
       const foot = [
-        isBest ? `<span class="best-chip" title="Most consistent month">🔥 Best</span>` : "",
+        isBest ? `<span class="best-chip" title="Most consistent month">🏆 Best</span>` : "",
         g.calPerDay != null && calCnt ? `<span class="goal-chip cal" title="Days that hit your calorie goal">🔥 ${calCnt}</span>` : "",
         g.durPerDay != null && durCnt ? `<span class="goal-chip time" title="Days that hit your duration goal">⏱️ ${durCnt}</span>` : ""
       ].filter(Boolean).join("");
       return `
-        <div class="card month-card ${isCur ? "is-current" : ""}" ${interactive ? `data-action="openmonth"` : ""} data-month="${i + 1}">
+        <div class="card month-card ${isCur ? "is-current" : ""}" data-action="openmonth" data-month="${i + 1}">
           <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
           <div class="heat">${cells.join("")}</div>
           <div class="month-foot">${foot}</div>
@@ -1125,7 +1126,7 @@
       const hits = gs.get(iso);
       const calHit = !!(hits && hits.calHit);
       const durHit = !!(hits && hits.timeHit);
-      const goalHit = calHit || durHit;
+      const goalHit = !!hits && (g.calPerDay == null || calHit) && (g.durPerDay == null || durHit); // gold ring only when every configured goal is met
       if (calHit) calHits++;
       if (durHit) durHits++;
       // Badges only appear on workout days (the status map only holds those);
@@ -2076,17 +2077,17 @@
     const hitRow = (icon, label, hits, color) => {
       const pct = yearDays.size ? Math.round((hits / yearDays.size) * 100) : 0;
       return `<div class="type-bar-row">
-        <div class="tbr-head"><span>${icon} ${label}</span><b>${hits} <em>· ${pct}%</em></b></div>
+        <div class="tbr-head"><span>${icon} ${label}</span><span class="tbr-meta"><b class="pct" style="color:${color}">${pct}%</b><span class="cnt">· ${hits}</span></span></div>
         <div class="tbr-track"><span style="width:${Math.max(pct, 2.5)}%;background:${color}"></span></div>
       </div>`;
     };
     const goalRows = [];
     if (gA.calPerDay != null) goalRows.push(hitRow("🔥", "Calorie goal", calHitsY, "var(--warn)"));
     if (gA.durPerDay != null) goalRows.push(hitRow("⏱️", "Duration goal", durHitsY, "var(--info)"));
-    const goalHitsHTML = goalRows.length && yearDays.size
-      ? `<div class="goal-hits">
-          <div class="goal-hits-title"><b>Daily goals · hit rate</b><em>of ${yearDays.size} workout day${yearDays.size === 1 ? "" : "s"}</em></div>
-          ${goalRows.join("")}
+    const goalCardHTML = goalRows.length
+      ? `<div class="card">
+          <div class="card-title"><h3>Daily goals · hit rate</h3><span class="sub">of ${yearDays.size} workout day${yearDays.size === 1 ? "" : "s"}</span></div>
+          <div class="goal-hits">${goalRows.join("")}</div>
         </div>`
       : "";
 
@@ -2119,15 +2120,16 @@
       </div>
 
       <div class="grid-2" style="margin-top:16px">
-        <div class="card">
+        <div class="card"${goalRows.length ? "" : ` style="grid-column:1 / -1"`}>
           <div class="card-title"><h3>Workout types · ${year}</h3><span class="sub">${tbWorkouts} workouts</span></div>
           <div id="acTypeBars"></div>
         </div>
-        <div class="card">
-          <div class="card-title"><h3>Consistency heatmap · ${year}</h3><span class="sub">workout days</span></div>
-          <div id="acHeat">${yearHeatGrid(all, year, false)}</div>
-          ${goalHitsHTML}
-        </div>
+        ${goalCardHTML}
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-title"><h3>Consistency heatmap · ${year}</h3><span class="sub">workout days</span></div>
+        <div id="acHeat">${yearHeatGrid(all, year, false)}</div>
       </div>
 
       ${hasCmp ? `
@@ -2154,7 +2156,7 @@
       ? tb.map((t) => {
         const st = typeStyle(t.type);
         return `<div class="type-bar-row">
-          <div class="tbr-head"><span>${st.emoji} ${esc(t.type)}</span><b>${t.count} <em>· ${t.pct.toFixed(0)}%</em></b></div>
+          <div class="tbr-head"><span>${st.emoji} ${esc(t.type)}</span><span class="tbr-meta"><span class="cnt">${t.count} ·</span><b class="pct">${t.pct.toFixed(0)}%</b></span></div>
           <div class="tbr-track"><span style="width:${Math.max(t.pct, 2.5)}%;background:${st.color}"></span></div>
         </div>`;
       }).join("")
@@ -2218,7 +2220,7 @@
         <div class="card data-card">
           <div class="data-card-head">${icon("clock")}<div><h3>Backup Status</h3><p class="desc">When your data last moved in or out.</p></div></div>
           <div class="data-status">
-            <div class="st"><b>${esc(pretty(set.lastExcelExportAt))}</b><span>Last Excel export</span></div>
+            <div class="st"><b>${esc(pretty(set.lastBackupAt))}</b><span>Last JSON backup</span></div>
             <div class="st"><b>${esc(pretty(set.lastImportAt))}</b><span>Last import</span></div>
             <div class="st"><b>${St().fmtNum(all.length + meas.length)}</b><span>Records stored</span></div>
             <div class="st"><b>${dataSize} KB</b><span>Data size</span></div>

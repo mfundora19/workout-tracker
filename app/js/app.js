@@ -515,7 +515,8 @@
           Focus.UI.state.calMode = "month";
           Focus.UI.state.calMonth = Number(target.dataset.month);
           Focus.UI.state.calDay = null;
-          renderCurrent();
+          if (App.currentView === "calendar") renderCurrent();
+          else showView("calendar");
           break;
         case "cal-year":
           Focus.UI.state.calMode = "year";
@@ -548,7 +549,7 @@
         }
         case "export-backup": {
           const blob = new Blob([JSON.stringify(Focus.Store.exportBackup(), null, 2)], { type: "application/json" });
-          downloadBlob(blob, "focus-backup-" + S().todayISO() + ".json");
+          downloadBlob(blob, "focus-workout-" + S().todayISO() + ".json");
           Focus.App.setSetting("lastBackupAt", new Date().toISOString());
           Focus.UI.closeModal(); // safety: close any open modal
           Focus.UI.hideBackupBanner(); // "Back up now" on the banner
@@ -594,11 +595,20 @@
       }
     });
 
-    // calendar day click / keyboard
+    // calendar day click / keyboard — clicking a day selects it; tapping
+    // anywhere else (not another day, not a control, not the modal) while a
+    // day is selected clears the selection so the right pane shows the
+    // whole-month summary again.
     document.addEventListener("click", (e) => {
       const day = e.target.closest("[data-calday]");
       if (day) {
         Focus.UI.state.calDay = day.dataset.day;
+        Focus.UI.renderCalendar();
+      } else if (
+        Focus.UI.state.calDay &&
+        !e.target.closest("[data-action], [data-cal-mode], button, a, input, select, textarea, label, #modalBackdrop")
+      ) {
+        Focus.UI.state.calDay = null;
         Focus.UI.renderCalendar();
       }
     });
@@ -610,7 +620,8 @@
         Focus.UI.renderCalendar();
       }
     });
-    // heat cell click -> jump to that day in month view
+    // heat cell click -> jump to that day in month view (from Analytics it
+    // also switches to the Calendar view, like the month cards do).
     document.addEventListener("click", (e) => {
       const cell = e.target.closest("[data-calinfo]");
       if (cell) {
@@ -618,7 +629,8 @@
         Focus.UI.state.calMode = "month";
         Focus.UI.state.calMonth = Number(iso.slice(5, 7));
         Focus.UI.state.calDay = iso;
-        renderCurrent();
+        if (App.currentView === "calendar") renderCurrent();
+        else showView("calendar");
       }
     });
   }
