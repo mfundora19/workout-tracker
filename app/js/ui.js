@@ -656,12 +656,30 @@
       cur: wkStreak(wk.start, wk.end),
       prev: wkStreak(St().addDays(wk.start, -7), St().addDays(wk.end, -7))
     };
+    // Best day = the single day with the most calories in the period (date + kcal).
+    const bestDayOf = (rows) => {
+      let best = null;
+      St().dayAggregates(rows).forEach((a, iso) => {
+        if (!best || a.calories > best.calories) best = { date: iso, calories: a.calories };
+      });
+      return best;
+    };
+    const wkBest = {
+      cur: bestDayOf(yearWk.filter((w) => w.date >= wk.start && w.date <= wk.end)),
+      prev: bestDayOf(yearWk.filter((w) => w.date >= St().addDays(wk.start, -7) && w.date <= St().addDays(wk.end, -7)))
+    };
     // Previous calendar month (December of the previous year when in January).
     const prevMonth = month > 1
       ? St().monthlyStats(all, year)[month - 2]
       : St().monthlyStats(all, year - 1)[11];
     const curDaysInPeriod = St().daysInMonth(year, month);
     const prevDaysInPeriod = month > 1 ? St().daysInMonth(year, month - 1) : St().daysInMonth(year - 1, 12);
+    const prevMonthYear = month > 1 ? year : year - 1;
+    const prevMonthNum = month > 1 ? month - 1 : 12;
+    const moBest = {
+      cur: bestDayOf(all.filter((w) => St().yearOf(w.date) === year && St().monthOf(w.date) === month)),
+      prev: bestDayOf(all.filter((w) => St().yearOf(w.date) === prevMonthYear && St().monthOf(w.date) === prevMonthNum))
+    };
 
     parts.push(`<div class="dash-compare">
       ${periodCard({
@@ -671,8 +689,8 @@
         pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
         vs: "last week",
         period: "week",
-        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur }),
-        prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev })
+        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur }),
+        prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev, bestDay: wkBest.prev })
       })}
       ${periodCard({
         title: "This month",
@@ -681,8 +699,8 @@
         pct: St().pctVsPrev(mStats.workouts, prevMonth.workouts),
         vs: "last month",
         period: "month",
-        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod }),
-        prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod })
+        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod, bestDay: moBest.cur }),
+        prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod, bestDay: moBest.prev })
       })}
     </div>`);
 
@@ -858,7 +876,7 @@
             ${metricTile("Avg time / workout", cur.avgDur, prev.avgDur, (v) => St().fmtDuration(v), period)}
             ${metricTile("Calories / day", cur.calPerDay, prev.calPerDay, (v) => St().fmtNum(v), period, "kcal")}
             ${metricTile("Time / day", cur.timePerDay, prev.timePerDay, (v) => St().fmtDuration(v), period)}
-            ${metricTile("Workouts / day", cur.wkPerDay, prev.wkPerDay, (v) => St().fmtNum(v, 1), period)}
+            ${bestDayTile(cur.bestDay, prev.bestDay, period)}
             ${metricTile("Best streak", cur.bestStreak, prev.bestStreak, (v) => v + " days", period)}
           </div>
         </div>
@@ -882,7 +900,7 @@
       avgDur: s.workouts ? s.duration / s.workouts : null,
       calPerDay: o.daysInPeriod ? s.calories / o.daysInPeriod : null,
       timePerDay: o.daysInPeriod ? s.duration / o.daysInPeriod : null,
-      wkPerDay: o.daysInPeriod ? s.workouts / o.daysInPeriod : null,
+      bestDay: o.bestDay != null ? o.bestDay : null,
       bestStreak: o.bestStreak != null ? o.bestStreak : (s.bestStreak != null ? s.bestStreak : null)
     };
   }
@@ -899,6 +917,22 @@
     return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">${val} ${pill}</div></div>`;
   }
 
+  /** Best-day tile: shows only the best day's date; the kcal metrics of both periods
+   *  appear on the % pill's hover tooltip vs the previous period's best day. */
+  function bestDayTile(cur, prev, period) {
+    if (!cur) return `<div class="stat-mini"><div class="l">Best day</div><div class="v">—</div></div>`;
+    const val = esc(St().shortDate(cur.date));
+    let pill = "";
+    if (prev) {
+      const tip = {
+        label: "This " + period + ":",
+        value: esc(St().shortDate(cur.date)) + " · " + St().fmtNum(cur.calories) + " kcal · last " + period + ": " + esc(St().shortDate(prev.date)) + " · " + St().fmtNum(prev.calories) + " kcal"
+      };
+      pill = pctPill(St().pctVsPrev(cur.calories, prev.calories), "", tip);
+    }
+    return `<div class="stat-mini"><div class="l">Best day</div><div class="v">${val} ${pill}</div></div>`;
+  }
+
   /** Delta pill in the "2026 vs 2025" style — signed percentage, optional period label, and an optional hover tip revealing the previous period's actual value. */
   function pctPill(pct, vs, tip) {
     const suffix = vs ? " vs " + vs : "";
@@ -908,7 +942,7 @@
     return `<span class="delta ${cls}"${attrs}>${pct > 0 ? "▲" : "▼"} ${St().fmtDelta(pct)}%${suffix}</span>`;
   }
 
-  /* --- hover-to-reveal: previous period's value after a 0.75s hover on a pill --- */
+  /* --- hover-to-reveal: previous period's value after a 0.3s hover on a pill --- */
   let prevTipBound = false;
   let prevTipTimer = null;
 
@@ -930,7 +964,7 @@
     t.style.top = ty + "px";
   }
 
-  /** Event delegation on the dashboard grid: hover a pill 0.75s → show the previous value. */
+  /** Event delegation on the dashboard grid: hover a pill 0.3s → show the previous value. */
   function bindPrevTipHover(grid) {
     grid.addEventListener("mouseover", (e) => {
       const pill = e.target.closest(".delta[data-prev]");
@@ -939,9 +973,9 @@
       prevTipTimer = setTimeout(() => {
         prevTipTimer = null;
         showPrevTip(pill, e);
-      }, 750);
+      }, 300);
     });
-    // Once visible, follow the pointer; while the 0.75s is still counting, keep the anchor.
+    // Once visible, follow the pointer; while the 0.3s is still counting, keep the anchor.
     grid.addEventListener("mousemove", (e) => {
       if (prevTipTimer) return;
       const pill = e.target.closest(".delta[data-prev]");

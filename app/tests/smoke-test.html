@@ -602,23 +602,24 @@ function dump() {
     ok("month card compares days/calories/avg from seed data", monthPills.includes("▼ -66.7%") && monthPills.includes("▼ -64.9%") && monthPills.includes("▲ +5.3%"), monthPills.join(" | "));
     const streakTile = monthTiles.find((t) => t.l === "Best streak");
     ok("month card compares best streak (3 vs 5 days)", streakTile && streakTile.v.textContent.includes("3 days") && streakTile.v.querySelector(".delta").textContent.includes("▼ -40%"), streakTile && streakTile.v.textContent.replace(/\s+/g, " "));
-    ok("month card has avg time + calories/day tiles", monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day"), monthTiles.map((t) => t.l).join(" | "));
-    const wkPerDayTile = monthTiles.find((t) => t.l === "Workouts / day");
+    ok("month card has avg time + calories/day tiles and no workouts/day", monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day") && !monthTiles.some((t) => t.l === "Workouts / day"), monthTiles.map((t) => t.l).join(" | "));
+    const bestDayTileEl = monthTiles.find((t) => t.l === "Best day");
     const timePerDayTile = monthTiles.find((t) => t.l === "Time / day");
-    ok("month card adds time/day + workouts/day tiles (9 total)", !!wkPerDayTile && !!timePerDayTile && monthTiles.length === 9, monthTiles.map((t) => t.l).join(" | "));
-    ok("workouts/day compares from seed (0.1 vs 0.4)", wkPerDayTile && wkPerDayTile.v.textContent.includes("0.1") && wkPerDayTile.v.textContent.includes("▼ -66.7%"), wkPerDayTile && wkPerDayTile.v.textContent.replace(/\s+/g, " "));
+    ok("month card adds time/day + best-day tiles (9 total)", !!bestDayTileEl && !!timePerDayTile && monthTiles.length === 9, monthTiles.map((t) => t.l).join(" | "));
+    const bestDayPill = bestDayTileEl && bestDayTileEl.v.querySelector(".delta");
+    ok("best day tile shows only the date; kcal data rides on the pill tooltip", bestDayTileEl && bestDayTileEl.v.textContent.replace(/\s+/g, " ").trim() === "Aug 4 ▼ -5.9%" && bestDayPill && bestDayPill.getAttribute("data-prev-label") === "This month:" && bestDayPill.getAttribute("data-prev").includes("Aug 4") && bestDayPill.getAttribute("data-prev").includes("1,045") && bestDayPill.getAttribute("data-prev").includes("Jul 27"), bestDayTileEl && bestDayTileEl.v.textContent.replace(/\s+/g, " ") + " | " + (bestDayPill ? bestDayPill.getAttribute("data-prev") : ""));
 
-    // --- hover-to-reveal: previous-period value after a 2s hover on a pill ---
+    // --- hover-to-reveal: previous-period value after a 0.3s hover on a pill ---
     Focus.UI.renderDashboard();
     const heroPill = document.querySelector(".period-card .period-hero .delta");
     ok("hero pill carries the previous value for hover", heroPill.getAttribute("data-prev-label") === "Last week:" && heroPill.getAttribute("data-prev") === "3 workouts", (heroPill.getAttribute("data-prev-label") || "") + " " + (heroPill.getAttribute("data-prev") || ""));
     const tipEl = document.getElementById("chartTooltip");
-    ok("prev-value tooltip hidden before 0.75s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
+    ok("prev-value tooltip hidden before 0.3s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
     heroPill.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 100, clientY: 100 }));
-    await new Promise((r) => setTimeout(r, 500));
-    ok("prev-value tooltip still hidden at 0.5s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
-    await new Promise((r) => setTimeout(r, 400));
-    ok("prev-value tooltip appears after 0.75s hover", tipEl.hidden === false && tipEl.textContent.includes("Last week: 3 workouts"), tipEl.textContent.replace(/\s+/g, " "));
+    await new Promise((r) => setTimeout(r, 150));
+    ok("prev-value tooltip still hidden at 0.15s", tipEl.hidden === true, "hidden=" + tipEl.hidden);
+    await new Promise((r) => setTimeout(r, 250));
+    ok("prev-value tooltip appears after 0.3s hover", tipEl.hidden === false && tipEl.textContent.includes("Last week: 3 workouts"), tipEl.textContent.replace(/\s+/g, " "));
     heroPill.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
     ok("prev-value tooltip hides on leave", tipEl.hidden === true, "hidden=" + tipEl.hidden);
 
