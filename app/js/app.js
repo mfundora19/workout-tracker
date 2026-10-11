@@ -35,6 +35,8 @@
       await Focus.Store.setSetting(key, value);
     },
 
+    rescheduleWorkoutReminder,
+
     /** Backup reminder rule — delegates to the pure Stats helper. */
     shouldShowBackupReminder(iso) {
       const s = Focus.Store.settings;
@@ -86,6 +88,7 @@
     // view from hash
     const v = location.hash.replace("#/", "");
     showView(VIEW_META[v] ? v : "dashboard"); // also triggers the backup banner check
+    rescheduleWorkoutReminder();
 
     Focus.Store.onChange(() => {
       if (!document.getElementById("modalBackdrop").hidden) return;
@@ -109,14 +112,53 @@
     document.documentElement.classList.toggle("no-anim", Focus.Store.settings.animations === false);
   }
 
+  /* Daily workout reminder: one Notification at the configured time, then
+   *  rescheduled for the next day. Never throws — reminders must not break boot. */
+  let workoutReminderTimer = null;
+  function rescheduleWorkoutReminder() {
+    if (workoutReminderTimer) { clearTimeout(workoutReminderTimer); workoutReminderTimer = null; }
+    try {
+      const s = Focus.Store.settings;
+      if (!s || s.workoutReminder !== true) return;
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const m = /^(\d{2}):(\d{2})$/.exec(s.workoutReminderTime || "");
+      if (!m) return;
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      workoutReminderTimer = setTimeout(() => {
+        try {
+          const n = new Notification("Time to train \uD83D\uDCAA", { body: "Log today's workout in Focus." });
+          n.onclick = () => window.focus();
+        } catch (e) { /* notifications unavailable here */ }
+        rescheduleWorkoutReminder();
+      }, Math.min(next - now, 2147483647));
+    } catch (e) { /* never break the app for a reminder */ }
+  }
+
   function initTheme() {
-    const saved = Focus.Store.settings.theme;
-    const pref = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-    const theme = saved === "light" || saved === "dark" ? saved : pref;
-    document.documentElement.setAttribute("data-theme", theme);
+    const sysPref = () => (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    let saved = Focus.Store.settings.theme;
+    // Legacy installs stored null (follow-system); normalize to "system".
+    if (saved !== "light" && saved !== "dark" && saved !== "system") {
+      saved = "system";
+      Focus.Store.setSetting("theme", "system");
+    }
+    document.documentElement.setAttribute("data-theme", saved === "system" ? sysPref() : saved);
     document.documentElement.setAttribute("data-accent", Focus.Store.settings.accent || "violet");
     applyMotionPref();
-    if (!saved) Focus.Store.setSetting("theme", theme);
+    // Follow OS theme changes live while in System mode.
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: light)");
+      const onChange = () => {
+        if ((Focus.Store.settings.theme || "system") === "system") {
+          document.documentElement.setAttribute("data-theme", mq.matches ? "light" : "dark");
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener("change", onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
     document.getElementById("themeToggle").addEventListener("click", () => {
       const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
@@ -431,11 +473,44 @@
           break;
         case "set-theme": {
           const next = target.dataset.setTheme;
-          if (next === "light" || next === "dark") {
-            document.documentElement.setAttribute("data-theme", next);
+          if (next === "light" || next === "dark" || next === "system") {
+            const resolved = next === "system"
+              ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+              : next;
+            document.documentElement.setAttribute("data-theme", resolved);
             Focus.Store.setSetting("theme", next);
             renderCurrent();
           }
+          break;
+        }
+        case "settings-tab": {
+          Focus.UI.state.settingsTab = target.dataset.tab;
+          renderCurrent();
+          break;
+        }
+        case "set-workout-reminder": {
+          const on = target.dataset.setWorkoutReminder === "on";
+          const apply = () => Focus.Store.setSetting("workoutReminder", on).then(() => {
+            Focus.UI.toast(on ? "Workout reminder on \uD83D\uDD14" : "Workout reminder off");
+            rescheduleWorkoutReminder();
+            renderCurrent();
+          });
+          if (on && "Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission().then((perm) => {
+              if (perm !== "granted") Focus.UI.toast("Browser blocked notifications — reminder saved but can't pop up", "warn");
+              apply();
+            }).catch(apply);
+          } else apply();
+          break;
+        }
+        case "test-reminder": {
+          try {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("Time to train \uD83D\uDCAA", { body: "This is how your daily Focus reminder looks." });
+            } else {
+              Focus.UI.toast("Time to train \uD83D\uDCAA — enable browser notifications to see pop-ups", "warn");
+            }
+          } catch (e) { Focus.UI.toast("Notifications aren't available here", "warn"); }
           break;
         }
         case "set-accent": {
@@ -516,12 +591,23 @@
             Focus.UI.toast("Age should be between 10 and 120", "warn");
             break;
           }
+          const nEl = document.getElementById("setNeck");
+          const nuEl = document.getElementById("setNeckUnit");
+          const nu = nuEl && nuEl.value === "in" ? "in" : "cm";
+          const nRaw = nEl ? nEl.value : "";
+          const nVal = nRaw === "" ? null : parseFloat(nRaw);
+          if (nVal != null && (!isFinite(nVal) || nVal <= 0 || nVal >= 300)) {
+            Focus.UI.toast("Enter a realistic neck (in " + nu + ")", "warn");
+            break;
+          }
           Focus.Store.setSettings({
             height: hVal,
             heightUnit: hu,
-            age: isFinite(ageVal) ? ageVal : null
+            age: isFinite(ageVal) ? ageVal : null,
+            neck: nVal,
+            neckUnit: nu
           }).then(() => {
-            Focus.UI.toast("Profile saved — BMI & body-fat tools will use your height");
+            Focus.UI.toast("Profile saved — BMI & body-fat tools will use your height & neck");
             renderCurrent();
           });
           break;

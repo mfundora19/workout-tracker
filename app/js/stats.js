@@ -102,7 +102,7 @@
     const ref = validISODate(refDateISO) ? refDateISO : todayISO();
     const dateLimit = year > yearOf(ref) ? null : year < yearOf(ref) ? String(year) + "-12-31" : ref;
     const months = [];
-    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0;
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0, partialFractionalDays = 0;
     for (let month = 1; month <= 12; month++) {
       const start = String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0") + "-01";
       const last = start.slice(0, 8) + String(daysInMonth(year, month)).padStart(2, "0");
@@ -112,11 +112,13 @@
       avoidedDays += stats.avoidedDays;
       partialJunkFoodDays += stats.partialJunkFoodDays;
       junkFoodDays += stats.junkFoodDays;
+      partialFractionalDays += stats.partialFractionalDays;
       months.push({ month, label: MONTHS_SHORT[month - 1], ...stats });
     }
     return {
       year, elapsedDays, loggedDays, avoidedDays, partialJunkFoodDays, junkFoodDays,
       unloggedDays: elapsedDays - loggedDays,
+      partialFractionalDays,
       avoidanceRate: loggedDays ? avoidedDays / loggedDays : null,
       months
     };
@@ -129,18 +131,18 @@
     }
     const ref = validISODate(refDateISO) ? refDateISO : todayISO();
     const end = endISO < ref ? endISO : ref;
-    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0;
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0, partialFractionalDays = 0;
     if (end >= startISO) {
       for (let day = startISO; day <= end; day = addDays(day, 1)) {
         elapsedDays++;
         if (!log || !Object.prototype.hasOwnProperty.call(log, day) || (log[day] !== true && log[day] !== "some" && log[day] !== false)) continue;
         loggedDays++;
         if (log[day] === true) avoidedDays++;
-        else if (log[day] === "some") partialJunkFoodDays++;
+        else if (log[day] === "some") { partialJunkFoodDays++; partialFractionalDays += 0.5; }
         else junkFoodDays++;
       }
     }
-    return { elapsedDays, loggedDays, avoidedDays, partialJunkFoodDays, junkFoodDays, unloggedDays: elapsedDays - loggedDays, avoidanceRate: loggedDays ? avoidedDays / loggedDays : null };
+    return { elapsedDays, loggedDays, avoidedDays, partialJunkFoodDays, junkFoodDays, partialFractionalDays, unloggedDays: elapsedDays - loggedDays, avoidanceRate: loggedDays ? avoidedDays / loggedDays : null };
   }
 
   /**
@@ -287,6 +289,68 @@
   function foodHabitStatus(log, iso) {
     return log && Object.prototype.hasOwnProperty.call(log, iso) && (log[iso] === true || log[iso] === false || log[iso] === "some")
       ? log[iso] : null;
+  }
+
+  /**
+   * Year-level food-habit insights for the Food Habits & Recovery section.
+   * Weighted junk load counts a full junk-food day as 1 and a partial day
+   * ("some") as 0.5. Streaks only run through explicitly logged days — an
+   * unlogged date breaks a streak instead of extending it. All rates use
+   * elapsed dates (today and future excluded via refDateISO).
+   */
+  function foodHabitInsights(log, year, refDateISO) {
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const dateLimit = year > yearOf(ref) ? null : year < yearOf(ref) ? String(year) + "-12-31" : ref;
+    const days = [];
+    if (dateLimit) {
+      for (let day = String(year) + "-01-01"; day <= dateLimit; day = addDays(day, 1)) {
+        days.push({ iso: day, status: foodHabitStatus(log, day), weekend: weekdayOf(day) === 0 || weekdayOf(day) === 6 });
+      }
+    }
+    const logged = days.filter((d) => d.status !== null);
+    const load = (d) => (d.status === false ? 1 : d.status === "some" ? 0.5 : 0);
+    const junkLoad = logged.reduce((s, d) => s + load(d), 0);
+    // Longest + current runs of explicitly logged no-junk-food days.
+    let longestAvoid = 0, run = 0;
+    for (const d of days) {
+      if (d.status === true) { run++; longestAvoid = Math.max(longestAvoid, run); }
+      else run = 0;
+    }
+    // Current run: a still-open today (unlogged ref day) doesn't break it.
+    let currentAvoid = 0;
+    for (let i = days.length - 1; i >= 0; i--) {
+      if (days[i].status === true) currentAvoid++;
+      else if (days[i].status === null && i === days.length - 1) continue;
+      else break;
+    }
+    // Longest run of consecutive junk-load days (full or partial).
+    let longestJunkRun = 0;
+    run = 0;
+    for (const d of days) {
+      if (d.status === false || d.status === "some") { run++; longestJunkRun = Math.max(longestJunkRun, run); }
+      else run = 0;
+    }
+    const elapsedWeeks = days.length ? days.length / 7 : 0;
+    const weekendLoad = logged.filter((d) => d.weekend).reduce((s, d) => s + load(d), 0);
+    // Per-weekday weighted load, Monday-first, to spot weekly patterns.
+    const weekdayLoad = [0, 0, 0, 0, 0, 0, 0];
+    for (const d of logged) weekdayLoad[(weekdayOf(d.iso) + 6) % 7] += load(d);
+    let peakWeekday = 0;
+    weekdayLoad.forEach((v, i) => { if (v > weekdayLoad[peakWeekday]) peakWeekday = i; });
+    return {
+      year,
+      elapsedDays: days.length,
+      loggedDays: logged.length,
+      junkLoad: Math.round(junkLoad * 10) / 10,
+      longestAvoidStreak: longestAvoid,
+      currentAvoidStreak: currentAvoid,
+      longestJunkRun,
+      // Averages need explicitly logged days — unlogged dates are unknown, not clean.
+      avgJunkPerWeek: logged.length && elapsedWeeks ? Math.round((junkLoad / elapsedWeeks) * 10) / 10 : null,
+      weekendShare: junkLoad ? weekendLoad / junkLoad : null,
+      weekdayLoad,
+      peakWeekday: junkLoad ? peakWeekday : null
+    };
   }
 
 
@@ -1237,9 +1301,16 @@
   function fmtDuration(min) {
     if (min == null || !isFinite(min)) return "—";
     if (min < 60) return Math.round(min) + " min";
-    const h = Math.floor(min / 60);
+    const totalHours = Math.floor(min / 60);
+    // Day-scale totals read better as days + hours (e.g. 143h 11m -> 5d 23h).
+    // Minutes are dropped once days are present.
+    if (totalHours >= 24) {
+      const days = Math.floor(totalHours / 24);
+      const hours = totalHours % 24;
+      return days + "d " + hours + "h";
+    }
     const m = Math.round(min % 60);
-    return m ? h + "h " + m + "m" : h + "h";
+    return m ? totalHours + "h " + m + "m" : totalHours + "h";
   }
   function fmtCal(n) {
     return fmtNum(n) + " kcal";
@@ -1285,7 +1356,7 @@
     MONTHS_SHORT, MONTHS_LONG,
     parse, toISO, addDays, todayISO, yearOf, monthOf, dayOf, dayOfYear, daysInMonth, weekdayOf,
     dayAggregates, workoutDays, streaks, weeklyStats, monthlyStats, yearlyStats, compareYears,
-    validISODate, foodHabitStats, foodHabitMonthStats, foodHabitRangeStats, foodHabitMonthSummary, foodHabitStatus,
+    validISODate, foodHabitStats, foodHabitMonthStats, foodHabitRangeStats, foodHabitMonthSummary, foodHabitStatus, foodHabitInsights,
     periodRecoveryStats, trainingRecoveryStats, trainingRecoveryMonthStats, allTimeRecoveryStats, workoutHistoryStats, bestTrainingDay, monthRange,
     typeBreakdown, measurementStats, measurementSeries, intensityForCalories,
     toCm, toKg, convertTo, latestOfType, calcBMI, bmiCategory, navyNeeds,

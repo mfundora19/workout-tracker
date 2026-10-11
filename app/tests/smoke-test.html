@@ -653,7 +653,7 @@ function dump() {
     // Food chart state is isolated from the browser's persisted log.
     ok("no comparison defaults with a single data year", Focus.UI.state.anaA === null && Focus.UI.state.anaB === null, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
     ok("Analytics replaces duplicate heatmap with monthly junk-food chart", !document.getElementById("acHeat") && !!document.querySelector("#acJunkFood svg") && document.getElementById("analyticsCharts").textContent.includes("Junk-food days") && document.getElementById("analyticsCharts").textContent.includes("logged days"));
-    ok("Analytics recovery summary labels elapsed rest/training days", document.querySelector(".analytics-recovery") && document.querySelector(".analytics-recovery").textContent.includes("rest days") && document.querySelector(".analytics-recovery").textContent.includes("training days · elapsed"));
+    ok("Analytics recovery summary labels rest days, streaks and weekly average", document.querySelector(".analytics-recovery") && document.querySelector(".analytics-recovery").textContent.includes("rest days") && document.querySelector(".analytics-recovery").textContent.includes("longest run, no junk food") && document.querySelector(".analytics-recovery").textContent.includes("avg junk-food days / week"));
     ok("Analytics hides junk-food bars when no food days are logged", !document.querySelector("#acJunkFood svg path[fill=\"var(--danger)\"]") && !document.querySelector("#acJunkFood svg path[fill=\"var(--warn)\"]"));
     Focus.Store.settings.noJunkFoodLog = {
       "2026-01-02": true,
@@ -662,8 +662,14 @@ function dump() {
     };
     Focus.UI.renderAnalytics();
     const foodChart = document.querySelector("#acJunkFood svg");
+    Focus.Store.settings.noJunkFoodLog = { "2026-01-02": true, "2026-01-03": "some", "2026-01-04": false, "2026-01-05": "some" };
+    Focus.UI.renderAnalytics();
     const foodBarColors = [...document.querySelectorAll("#acJunkFood svg path")].map((path) => path.getAttribute("fill"));
-    ok("Analytics charts partial and full junk-food days separately", foodChart && foodChart.getAttribute("aria-label") === "Full junk-food days vs Some junk food" && foodBarColors.includes("var(--danger)") && foodBarColors.includes("var(--warn)"), JSON.stringify({ label: foodChart && foodChart.getAttribute("aria-label"), colors: foodBarColors }));
+    ok("Analytics charts all three food states (full, some, none)", foodBarColors.length === 3 && [...foodBarColors].filter((c) => c === "var(--danger)").length === 1 && [...foodBarColors].filter((c) => c === "var(--warn)").length === 1 && [...foodBarColors].filter((c) => c === "var(--success)").length === 1, JSON.stringify({ colors: foodBarColors }));
+    const foodLegend = [...document.querySelectorAll(".food-chart-legend span")].map((s) => s.textContent);
+    ok("Analytics food legend names all three states", foodLegend.length === 3 && foodLegend.some((t) => t.includes("Full")) && foodLegend.some((t) => t.includes("Some")) && foodLegend.some((t) => t.includes("No junk")), foodLegend.join(" | "));
+    const foodCounts = document.querySelector(".food-habit-counts");
+    ok("Analytics food counts read Full/Some/None", !!foodCounts && foodCounts.textContent.includes("Full: 1") && foodCounts.textContent.includes("Some: 2") && foodCounts.textContent.includes("None: 1"), foodCounts ? foodCounts.textContent : "no counts");
     Focus.Store.settings.noJunkFoodLog = savedAnalyticsFoodLog;
     Focus.UI.renderAnalytics();
     ok("comparison row hidden with a single data year", document.getElementById("analyticsCompare").innerHTML.trim() === "" && !document.querySelector("#acCompareWk"), "cmp html: " + document.getElementById("analyticsCompare").innerHTML.slice(0, 40));
@@ -689,12 +695,16 @@ function dump() {
     ok("cumulative calories is in grid A", gridA && gridA.textContent.includes("Cumulative calories"), "moved next to duration");
 
     // --- goals: settings card, dashboard card, calendar badges ---
+    Focus.UI.state.settingsTab = "goals";
     Focus.UI.renderSettings();
     ok("settings has goal inputs and food-habit toggle enabled by default", !!document.getElementById("goalCal") && !!document.getElementById("goalDur") && !!document.getElementById("goalWk") && !!document.querySelector('[data-action="toggle-food-goal"][aria-pressed="true"]'));
+    ok("food goal uses the Don't-eat-junk-food label", document.getElementById("settingsBody").textContent.includes("Don't eat junk food"));
     await Focus.Store.setSettings({ goals: { calPerDay: 400, durPerDay: 60, workoutsPerWeek: 5 } });
     Focus.UI.renderDashboard();
     const goalCard = document.getElementById("dashGrid").querySelector(".stat");
     ok("dashboard shows a goals card", document.getElementById("dashGrid").textContent.includes("Goals") && document.getElementById("dashGrid").textContent.includes("/ 400 kcal"), "has Goals card");
+    ok("dashboard goals card lists the Don't-eat-junk-food daily goal", document.getElementById("dashGrid").textContent.includes("Don't eat junk food"));
+    ok("dashboard food-habit card uses the Don't-eat-junk-food label", document.getElementById("dashGrid").textContent.includes("🥗 Don't eat junk food"));
 
     // --- dashboard This week / This month multi-metric comparison cards ---
     Focus.UI.renderDashboard();
@@ -771,6 +781,7 @@ function dump() {
 
     // --- week-start setting defaults to Monday and renders both choices ---
     Focus.Store.settings.weekStartsOn = "monday";
+    Focus.UI.state.settingsTab = "preferences";
     Focus.UI.renderSettings();
     const weekStartRow = [...document.querySelectorAll(".setting-row")].find((r) => r.querySelector(".setting-label b")?.textContent === "Week starts on");
     ok("Settings week-start choice defaults to Monday", !!weekStartRow && !!weekStartRow.querySelector('[data-week-start="monday"].is-active[aria-pressed="true"]') && !!weekStartRow.querySelector('[data-week-start="sunday"]'), weekStartRow ? weekStartRow.textContent.replace(/\s+/g, " ") : "no week-start setting");
@@ -781,12 +792,16 @@ function dump() {
     Focus.UI.renderSettings();
 
     // --- animations: Settings toggle (default on), entrance + chart draw-in classes ---
+    Focus.UI.state.settingsTab = "preferences";
     Focus.UI.renderSettings();
     const animRow = [...document.querySelectorAll(".setting-row")].find((r) => {
       const b = r.querySelector(".setting-label b");
       return b && b.textContent === "Animations";
     });
     ok("Animations setting renders with On default", !!animRow && !!animRow.querySelector('[data-set-animations="on"].is-active'), animRow ? animRow.textContent.replace(/\s+/g, " ") : "no Animations row");
+    ok("Preferences offers a System theme choice", !!document.querySelector('[data-set-theme="system"]'), "no system theme");
+    Focus.UI.state.settingsTab = "notifications";
+    Focus.UI.renderSettings();
     const remRow = [...document.querySelectorAll(".setting-row")].find((r) => {
       const b = r.querySelector(".setting-label b");
       return b && b.textContent === "Backup reminder";
@@ -798,6 +813,8 @@ function dump() {
     });
     ok("Backup reminder interval input renders, default 10", !!daysRow && daysRow.querySelector("#setBackupDays") && daysRow.querySelector("#setBackupDays").value === "10", daysRow ? daysRow.textContent.replace(/\s+/g, " ") : "no Remind-every row");
     // privacy details collapse into a ⓘ button + popover (not a tall list in the card)
+    Focus.UI.state.settingsTab = "data";
+    Focus.UI.renderSettings();
     const privCard = document.getElementById("privacyInfoBtn") ? document.getElementById("privacyInfoBtn").closest(".card") : null;
     const privBtn = document.getElementById("privacyInfoBtn");
     ok("privacy collapses into a styled ⓘ info button", !!privCard && !privCard.querySelector(".about-list") && privCard.textContent.includes("Privacy") && !!privBtn && !!privBtn.querySelector("svg"), privCard ? privCard.textContent.replace(/\s+/g, " ").slice(0, 60) : "no privacy card");
@@ -808,12 +825,15 @@ function dump() {
     ok("privacy popover closes", !document.querySelector(".info-pop"));
     // About card shows the app version (app/js/version.js), with a sane fallback
     window.FOCUS_VERSION = { major: 2, minor: 5, patch: 12 };
+    Focus.UI.state.settingsTab = "about";
     Focus.UI.renderSettings();
     ok("About shows the version from version.js", document.getElementById("settingsBody").textContent.includes("2.5.12"), "missing 2.5.12");
     delete window.FOCUS_VERSION;
     Focus.UI.renderSettings();
     ok("About falls back to 1.0.0 without version.js", document.getElementById("settingsBody").textContent.includes("1.0.0"), "missing 1.0.0");
     // remind-every unit select: days/weeks/years, converting the value on switch
+    Focus.UI.state.settingsTab = "notifications";
+    Focus.UI.renderSettings();
     const remUnitSel = document.getElementById("setBackupUnit");
     const remInp = document.getElementById("setBackupDays");
     ok("remind every offers days/weeks/years, default days", !!remUnitSel && remUnitSel.value === "days" && [...remUnitSel.options].map((o) => o.value).join(",") === "days,weeks,years", remUnitSel ? remUnitSel.outerHTML : "no unit select");
@@ -927,25 +947,24 @@ function dump() {
     ok("qaMode persists across re-render", !document.getElementById("quickMeasForm").hidden && document.getElementById("quickAddForm").hidden, "measHidden=" + document.getElementById("quickMeasForm").hidden);
     Focus.UI.state.qaMode = "workout";
     Focus.UI.renderDashboard();
-    // modal new record: tabbed multi-entry (Weight / Waist / Neck / Other)
+    // modal new record: tabbed multi-entry (Weight / Waist / Other — neck lives in Settings › Profile)
     Focus.UI.openMeasurementForm({ date: "2026-08-11" });
-    ok("modal new record has section tabs", !!document.querySelector('[data-mtab="Weight"]') && !!document.querySelector('[data-mtab="Waist"]') && !!document.querySelector('[data-mtab="Neck"]') && !!document.querySelector('[data-mtab="Other"]'), "tabs");
+    ok("modal new record has section tabs", !!document.querySelector('[data-mtab="Weight"]') && !!document.querySelector('[data-mtab="Waist"]') && !document.querySelector('[data-mtab="Neck"]') && !!document.querySelector('[data-mtab="Other"]'), "tabs");
     ok("modal Weight section defaults to lb", document.getElementById("mUnit_Weight") && document.getElementById("mUnit_Weight").value === "lb", "unit=" + (document.getElementById("mUnit_Weight") || {}).value);
     ok("modal Other section defaults Weight/lb", document.getElementById("mfUnit") && document.getElementById("mfUnit").value === "lb", "unit=" + (document.getElementById("mfUnit") || {}).value);
     Focus.UI.closeModal();
 
-    // --- add weight + waist + neck in one submit ---
+    // --- add weight + waist in one submit (neck lives in Settings › Profile) ---
     const measBefore = Focus.Store.measurements.length;
     Focus.UI.openMeasurementForm({ date: "2026-08-12" });
     document.getElementById("mValue_Weight").value = "80";
     document.getElementById("mValue_Waist").value = "91";
-    document.getElementById("mValue_Neck").value = "38";
     document.getElementById("measForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     const backdrop = document.getElementById("modalBackdrop");
     for (let i = 0; i < 50 && !backdrop.hidden; i++) await new Promise((r) => setTimeout(r, 20));
-    const trio = Focus.Store.measurements.filter((m) => m.date === "2026-08-12");
-    ok("one submit adds weight + waist + neck", trio.length === 3 && trio.some((m) => m.type === "Weight" && m.value === 80) && trio.some((m) => m.type === "Waist" && m.value === 91) && trio.some((m) => m.type === "Neck" && m.value === 38), JSON.stringify(trio.map((m) => m.type + ":" + m.value)));
-    for (const m of trio) await Focus.Store.deleteMeasurement(m.id);
+    const duo = Focus.Store.measurements.filter((m) => m.date === "2026-08-12");
+    ok("one submit adds weight + waist", duo.length === 2 && duo.some((m) => m.type === "Weight" && m.value === 80) && duo.some((m) => m.type === "Waist" && m.value === 91), JSON.stringify(duo.map((m) => m.type + ":" + m.value)));
+    for (const m of duo) await Focus.Store.deleteMeasurement(m.id);
     ok("multi-measurement cleanup restores count", Focus.Store.measurements.length === measBefore, "before=" + measBefore + " after=" + Focus.Store.measurements.length);
 
     // --- calendar day panel: month insights and explicit food outcome controls ---
@@ -956,8 +975,10 @@ function dump() {
     Focus.UI.state.calDay = null;
     Focus.UI.renderCalendar();
     const monthSummary = document.querySelector("#dayPanel .month-summary");
+    const monthFoodSummary = document.querySelector("#dayPanel .food-summary:not(.month-training-highlight)");
     ok("Calendar month summary includes workout, elapsed rest, duration and food facts", !!monthSummary && monthSummary.textContent.includes("workout days") && monthSummary.textContent.includes("rest days · elapsed") && monthSummary.textContent.includes("duration") && monthSummary.textContent.includes("junk-food day"));
-    ok("Calendar month summary reports full, partial and avoidance outcomes", monthSummary && monthSummary.textContent.includes("1 full junk-food day") && monthSummary.textContent.includes("1 partial day") && monthSummary.textContent.includes("1 / 3 logged"));
+    ok("Calendar month summary reports full, partial and avoidance outcomes", monthSummary && monthSummary.textContent.includes("1 full junk-food day") && monthSummary.textContent.includes("1 partial day") && monthSummary.textContent.includes("1 / 3 logged") && monthFoodSummary.textContent.includes("1 full junk-food day"));
+    ok("Calendar month total weights a partial junk-food day as 0.5 (1 full + 1 partial = 1.5)", monthFoodSummary && monthFoodSummary.textContent.includes("1.5 junk-food days"), monthFoodSummary ? monthFoodSummary.textContent : "no summary");
     Focus.Store.settings.noJunkFoodLog = {};
     Focus.Store.settings.goals.avoidJunkFood = true;
     Focus.UI.renderCalendar();
@@ -968,6 +989,21 @@ function dump() {
     Focus.UI.renderCalendar();
     const partialFoodStatus = document.querySelector("#dayPanel .food-habit.is-partial .food-habit-status");
     ok("Calendar selected day shows partial status plus all correction and clear controls", partialFoodStatus && partialFoodStatus.textContent === "Some junk food" && document.querySelector('#dayPanel [data-action="food-log"][data-status="true"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="some"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="false"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="clear"]'));
+    Focus.UI.state.calMode = "month";
+    Focus.UI.state.calMonth = 1;
+    Focus.UI.state.calDay = "2024-02-03";
+    Focus.UI.renderCalendar();
+    Focus.UI.state.calMonth = 8;
+    Focus.UI.state.calDay = null;
+    Focus.UI.renderCalendar();
+    ok("Calendar month summary merges a partial junk-food day into the month total", monthFoodSummary.textContent.includes("1.5 junk-food days"));
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-03": "some" };
+    Focus.UI.state.calMode = "month";
+    Focus.UI.state.calDay = null;
+    Focus.UI.renderCalendar();
+    const partialOnlyFoodSummary = document.querySelector("#dayPanel .food-summary:not(.month-training-highlight)");
+    ok("Calendar month summary weights a single partial junk-food day as 0.5", partialOnlyFoodSummary && partialOnlyFoodSummary.textContent.includes("0.5 junk-food day"), partialOnlyFoodSummary ? partialOnlyFoodSummary.textContent : "no summary");
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": "some", "2026-08-04": false };
     Focus.UI.state.calMode = "year";
     Focus.UI.state.calDay = null;
 
@@ -1119,24 +1155,126 @@ function dump() {
     Focus.Store.settings.weightUnit = "kg";
     ok("unitDefault honours kg setting", Focus.UI.unitDefault("Weight") === "kg", "got " + Focus.UI.unitDefault("Weight"));
     Focus.Store.settings.weightUnit = "lb";
+    Focus.UI.state.settingsTab = "preferences";
     Focus.UI.renderSettings();
     ok("settings renders with unit segs", document.getElementById("settingsBody").querySelectorAll("[data-set-weightunit]").length === 2);
 
-    // --- settings: height + age body profile ---
+    // --- settings: height + age + neck body profile ---
     Focus.Store.settings.height = null; Focus.Store.settings.age = null; Focus.Store.settings.heightUnit = "cm";
+    Focus.Store.settings.neck = null; Focus.Store.settings.neckUnit = "cm";
+    Focus.UI.state.settingsTab = "profile";
     Focus.UI.renderSettings();
-    ok("settings has height + age profile fields", !!document.getElementById("setHeight") && !!document.getElementById("setAge") && !!document.getElementById("setHeightUnit") && !!document.querySelector('[data-action="save-profile"]'));
+    ok("settings has height + age + neck profile fields", !!document.getElementById("setHeight") && !!document.getElementById("setAge") && !!document.getElementById("setHeightUnit") && !!document.getElementById("setNeck") && !!document.getElementById("setNeckUnit") && !!document.querySelector('[data-action="save-profile"]'));
     Focus.Store.settings.height = 170; Focus.Store.settings.heightUnit = "cm"; Focus.Store.settings.age = 34;
+    Focus.Store.settings.neck = 38; Focus.Store.settings.neckUnit = "cm";
     Focus.UI.renderSettings();
-    ok("settings prefills saved height + age", document.getElementById("setHeight").value === "170" && document.getElementById("setAge").value === "34" && document.getElementById("setHeightUnit").value === "cm", document.getElementById("setHeight").value + " / " + document.getElementById("setAge").value);
+    ok("settings prefills saved height + age + neck", document.getElementById("setHeight").value === "170" && document.getElementById("setAge").value === "34" && document.getElementById("setHeightUnit").value === "cm" && document.getElementById("setNeck").value === "38" && document.getElementById("setNeckUnit").value === "cm", document.getElementById("setHeight").value + " / " + document.getElementById("setAge").value + " / " + document.getElementById("setNeck").value);
     Focus.UI.renderTools();
     ok("tools prefills height from settings profile", document.getElementById("bmiHeight").value === "170", document.getElementById("bmiHeight").value);
+    ok("tools prefills neck from settings profile", document.getElementById("bmiNeck").value === "38", document.getElementById("bmiNeck").value);
     Focus.UI.renderProgress();
     const compFromSettings = document.getElementById("progressCompCard").textContent;
     ok("progress BMI uses profile height (no Height measurement needed)", compFromSettings.includes("Current BMI") && compFromSettings.includes("23.4"), compFromSettings.slice(0, 130));
-    Focus.Store.settings.height = null; Focus.Store.settings.age = null;
+    const hadNeckRec = Focus.Store.measurements.some((m) => m.type === "Neck");
+    ok("progress body-fat uses profile neck", compFromSettings.includes("Est. body fat") && !compFromSettings.includes("Add Neck to estimate"), compFromSettings.slice(0, 160));
+    Focus.Store.settings.neck = null;
+    Focus.UI.renderProgress();
+    const compNoNeck = document.getElementById("progressCompCard").textContent;
+    ok("body-fat falls back to Neck records when the profile neck is empty", hadNeckRec ? !compNoNeck.includes("Add Neck to estimate") : compNoNeck.includes("Add Neck to estimate"), compNoNeck.slice(0, 160));
+    Focus.Store.settings.neck = 38;
+    // historic Neck records stay stored but never surface in Progress
+    const neckRec = await Focus.Store.addMeasurement({ date: "2026-08-02", type: "Neck", value: 38, unit: "cm" });
+    Focus.UI.renderProgress();
+    const chipLabelsNeck = Array.from(document.querySelectorAll("#progressHead .chip")).map((c) => c.textContent);
+    ok("neck never appears as a progress chip", !chipLabelsNeck.includes("Neck"), chipLabelsNeck.join(","));
+    await Focus.Store.deleteMeasurement(neckRec.id);
+    Focus.Store.settings.height = null; Focus.Store.settings.age = null; Focus.Store.settings.neck = null;
     Focus.UI.renderTools();
     ok("tools falls back to default height without profile", document.getElementById("bmiHeight").value === "175", document.getElementById("bmiHeight").value);
+
+    // --- duration formats as days + hours once totals pass 24h ---
+    ok("fmtDuration switches to days + hours at >= 24h",
+      S.fmtDuration(143 * 60 + 11) === "5d 23h" && S.fmtDuration(25 * 60 + 30) === "1d 1h"
+      && S.fmtDuration(24 * 60) === "1d 0h" && S.fmtDuration(23 * 60 + 59) === "23h 59m"
+      && S.fmtDuration(45) === "45 min" && S.fmtDuration(90) === "1h 30m",
+      [143 * 60 + 11, 25 * 60 + 30, 24 * 60, 23 * 60 + 59, 45, 90].map(S.fmtDuration).join(" | "));
+    Focus.UI.renderDashboard();
+    const dashYearStats = S.yearlyStats(Focus.Store.workouts, Focus.App.year());
+    ok("dashboard totals duration matches the shared formatter",
+      !dashYearStats.duration || document.getElementById("dashGrid").textContent.includes(S.fmtDuration(dashYearStats.duration)),
+      "duration=" + dashYearStats.duration);
+
+    // --- food-habit insights (pure stats, deterministic ref date) ---
+    const fi = S.foodHabitInsights({ "2026-01-01": true, "2026-01-02": true, "2026-01-03": false, "2026-01-04": "some", "2026-01-06": true }, 2026, "2026-01-07");
+    ok("food insights: streaks + weighted load", fi.elapsedDays === 7 && fi.loggedDays === 5 && fi.junkLoad === 1.5 && fi.longestAvoidStreak === 2 && fi.currentAvoidStreak === 1 && fi.longestJunkRun === 2, JSON.stringify(fi));
+    ok("food insights: weekly average + weekend share + peak day", fi.avgJunkPerWeek === 1.5 && Math.abs(fi.weekendShare - 1) < 1e-9 && fi.peakWeekday === 5, JSON.stringify({ avg: fi.avgJunkPerWeek, wknd: fi.weekendShare, peak: fi.peakWeekday }));
+    const fiEmpty = S.foodHabitInsights({}, 2026, "2026-01-07");
+    ok("food insights stay null-safe with no logged days", fiEmpty.loggedDays === 0 && fiEmpty.avgJunkPerWeek === null && fiEmpty.weekendShare === null && fiEmpty.peakWeekday === null);
+
+    // --- analytics renders the three food states + generated insights ---
+    const savedFoodLog = Focus.Store.settings.noJunkFoodLog;
+    const AY = Focus.App.year();
+    Focus.Store.settings.noJunkFoodLog = { [AY + "-01-10"]: true, [AY + "-01-11"]: true, [AY + "-01-12"]: true, [AY + "-01-13"]: false };
+    Focus.UI.renderAnalytics();
+    const anaInsights = [...document.querySelectorAll(".insights-list li")].map((li) => li.textContent);
+    ok("analytics generates food-habit insights", anaInsights.some((t) => t.includes("Longest run without junk food")) && anaInsights.some((t) => t.includes("Averaging")) && anaInsights.some((t) => t.includes("Peak day")), anaInsights.join(" | "));
+    const anaCounts = document.querySelector(".food-habit-counts");
+    ok("analytics counts all three states", !!anaCounts && anaCounts.textContent.includes("Full: 1") && anaCounts.textContent.includes("Some: 0") && anaCounts.textContent.includes("None: 3"), anaCounts ? anaCounts.textContent : "no counts");
+    Focus.Store.settings.noJunkFoodLog = savedFoodLog;
+    Focus.UI.renderAnalytics();
+
+    // --- settings sections: six tabs, each with its content ---
+    // (Tab clicks are handled by app.js delegation, which this harness
+    // intentionally excludes — so each section is rendered via state.)
+    Focus.UI.state.settingsTab = "profile";
+    Focus.UI.renderSettings();
+    ok("settings renders six section tabs", document.querySelectorAll(".settings-tabs .chip").length === 6, "tabs=" + document.querySelectorAll(".settings-tabs .chip").length);
+    const tabChecks = [
+      ["profile", () => !!document.getElementById("setHeight") && !!document.getElementById("setNeck")],
+      ["preferences", () => !!document.querySelector('[data-set-theme="system"]')],
+      ["goals", () => !!document.getElementById("goalCal") && !document.getElementById("setHeight")],
+      ["notifications", () => !!document.getElementById("setWorkoutTime")],
+      ["data", () => !!document.querySelector('[data-action="goto"][data-view="data"]')],
+      ["about", () => document.getElementById("settingsBody").textContent.includes("Version")]
+    ];
+    const tabMisses = [];
+    for (const [t, check] of tabChecks) {
+      Focus.UI.state.settingsTab = t;
+      Focus.UI.renderSettings();
+      if (!check()) tabMisses.push(t);
+    }
+    ok("all six settings tabs render their section", tabMisses.length === 0, "missing: " + tabMisses.join(","));
+    Focus.UI.state.settingsTab = "data";
+    Focus.UI.renderSettings();
+    ok("data tab links out to the Data view", !!document.querySelector('[data-action="goto"][data-view="data"]') && document.getElementById("settingsBody").textContent.includes("Stored data"));
+
+    // --- theme: explicit dark/light plus a system follower ---
+    const origTheme = Focus.Store.settings.theme;
+    Focus.UI.state.settingsTab = "preferences";
+    Focus.Store.settings.theme = "dark";
+    Focus.UI.renderSettings();
+    ok("explicit dark theme marks its button active", !!document.querySelector('[data-set-theme="dark"].is-active') && !document.querySelector('[data-set-theme="system"].is-active'));
+    Focus.Store.settings.theme = "system";
+    Focus.UI.renderSettings();
+    ok("system theme marks its button active", !!document.querySelector('[data-set-theme="system"].is-active'));
+    Focus.Store.settings.theme = origTheme;
+    Focus.UI.renderSettings();
+
+    // --- workout reminder: controls, validation, persistence ---
+    // (The on/off toggle lives in app.js delegation; the time input wires
+    // directly in renderSettings, so the change path is covered here.)
+    const origRemTime = Focus.Store.settings.workoutReminderTime;
+    Focus.UI.state.settingsTab = "notifications";
+    Focus.UI.renderSettings();
+    ok("notifications tab holds the workout reminder controls", !!document.querySelector('[data-set-workout-reminder="on"]') && !!document.querySelector('[data-set-workout-reminder="off"]') && !!document.getElementById("setWorkoutTime") && document.getElementById("setWorkoutTime").value === (origRemTime || "18:00"));
+    document.getElementById("setWorkoutTime").value = "";
+    document.getElementById("setWorkoutTime").dispatchEvent(new Event("change", { bubbles: true }));
+    ok("invalid reminder time is rejected without saving", Focus.Store.settings.workoutReminderTime === origRemTime);
+    document.getElementById("setWorkoutTime").value = "07:30";
+    document.getElementById("setWorkoutTime").dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 50));
+    ok("valid reminder time persists", Focus.Store.settings.workoutReminderTime === "07:30", "got " + Focus.Store.settings.workoutReminderTime);
+    await Focus.Store.setSettings({ workoutReminderTime: origRemTime });
     Focus.UI.renderProgress();
     ok("progress returns to incomplete state without height source", document.getElementById("progressCompCard").textContent.includes("Height"));
 

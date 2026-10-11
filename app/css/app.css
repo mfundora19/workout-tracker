@@ -539,6 +539,13 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .recovery-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: 11px; background: var(--surface-2); border-radius: 10px; }
 .recovery-kpis b { font-size: 19px; font-variant-numeric: tabular-nums; }
 .recovery-kpis span { font-size: 11px; color: var(--text-dim); }
+.food-habit-counts { margin: 8px 0 0; font-size: 12px; color: var(--text-dim); }
+.food-habit-counts b { font-variant-numeric: tabular-nums; }
+.insights-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.insights-list li { font-size: 12px; color: var(--text-dim); background: var(--surface-2); border-radius: 8px; padding: 7px 10px; line-height: 1.45; }
+.insights-list li b { color: var(--text); }
+.settings-tabs { margin-bottom: 14px; }
+.stat-pill { font-size: 12px; color: var(--text-dim); background: var(--surface-2); border-radius: 999px; padding: 6px 12px; white-space: nowrap; }
 
 /* Day popover */
 .day-panel { display: flex; flex-direction: column; gap: 10px; }

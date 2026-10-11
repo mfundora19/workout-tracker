@@ -73,10 +73,13 @@
     Store().workouts.forEach((w) => splitTypes(w.type).forEach((t) => set.add(t)));
     return Array.from(set).sort();
   }
-  // Preferred chip order in Progress: the body-fat trio first, then the rest.
-  const MEAS_CHIP_ORDER = ["Weight", "Waist", "Neck"];
+  // Preferred chip order in Progress. Neck lives in Settings › Profile now —
+  // historic Neck records stay stored (exports, body-fat fallback) but are
+  // never charted or edited in Progress.
+  const MEAS_CHIP_ORDER = ["Weight", "Waist"];
   function existingMeasTypes() {
     const set = new Set(Store().measurements.map((m) => m.type));
+    set.delete("Neck");
     const rest = Array.from(set).filter((t) => !MEAS_CHIP_ORDER.includes(t)).sort();
     return [...MEAS_CHIP_ORDER.filter((t) => set.has(t)), ...rest];
   }
@@ -378,7 +381,8 @@
 
   const MEAS_TYPE_OPTIONS = ["Weight", "Body Fat %", "Height", "Neck", "Waist", "Chest", "Hips", "Arm", "Thigh"];
   function measurementTypes() {
-    return Array.from(new Set([...MEAS_TYPE_OPTIONS, ...existingMeasTypes()]));
+    // Neck is profile data (Settings › Profile), not a Progress measurement.
+    return Array.from(new Set([...MEAS_TYPE_OPTIONS, ...existingMeasTypes()])).filter((t) => t !== "Neck");
   }
 
   function unitOptsHTML(selected) {
@@ -458,7 +462,7 @@
       </div>`;
     return `
       <h2>Add measurements</h2>
-      <p class="modal-sub">Log weight, waist and neck together — switch sections and fill in the ones you want.</p>
+      <p class="modal-sub">Log weight and waist together — switch sections and fill in the ones you want. Neck lives in Settings › Profile.</p>
       <form id="measForm">
         <div class="field">
           <label for="mfDate">Date *</label>
@@ -467,12 +471,10 @@
         <div class="seg seg-measure" role="tablist" aria-label="Measurement section">
           <button type="button" class="seg-btn is-active" data-mtab="Weight" role="tab" aria-selected="true">Weight</button>
           <button type="button" class="seg-btn" data-mtab="Waist" role="tab" aria-selected="false">Waist</button>
-          <button type="button" class="seg-btn" data-mtab="Neck" role="tab" aria-selected="false">Neck</button>
           <button type="button" class="seg-btn" data-mtab="Other" role="tab" aria-selected="false">Other</button>
         </div>
         ${section("Weight", "Weight", "e.g. 79.8", unitDefault("Weight"))}
         ${section("Waist", "Waist", "e.g. 91", unitDefault("Waist"))}
-        ${section("Neck", "Neck", "e.g. 38", unitDefault("Neck"))}
         <div class="mtab" data-mpanel="Other" role="tabpanel" hidden>
           <div class="form-grid">
             <div class="field">
@@ -527,8 +529,7 @@
         // New record: every filled section is saved in one go.
         const sections = [
           { type: "Weight", id: "Weight" },
-          { type: "Waist", id: "Waist" },
-          { type: "Neck", id: "Neck" }
+          { type: "Waist", id: "Waist" }
         ];
         const toAdd = [];
         for (const s of sections) {
@@ -587,8 +588,8 @@
     const status = St().foodHabitStatus(Store().settings.noJunkFoodLog, iso);
     const label = status === true ? "No junk food" : status === "some" ? "Some junk food" : status === false ? "Junk-food day" : "Not logged";
     const cls = status === true ? "is-avoided" : status === "some" ? "is-partial" : status === false ? "is-junk" : "is-unlogged";
-    return `<div class="food-habit ${compact ? "food-habit-compact" : ""} ${cls}" role="group" aria-label="Avoid junk food for ${iso}">
-      <div class="food-habit-copy"><b>🥗 Avoid junk food</b><span class="food-habit-status" role="status">${label}</span></div>
+    return `<div class="food-habit ${compact ? "food-habit-compact" : ""} ${cls}" role="group" aria-label="Don't eat junk food for ${iso}">
+      <div class="food-habit-copy"><b>🥗 Don't eat junk food</b><span class="food-habit-status" role="status">${label}</span></div>
       <div class="food-habit-actions">
         <button type="button" class="btn btn-sm ${status === true ? "btn-primary" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="true" aria-pressed="${status === true}">No junk food</button>
         <button type="button" class="btn btn-sm ${status === "some" ? "btn-warning" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="some" aria-pressed="${status === "some"}">Some junk</button>
@@ -1045,7 +1046,7 @@
   /** Progress toward the user's goals (set in Settings). Shown as a stat card. */
   function goalsCardHTML() {
     const g = Store().settings.goals || {};
-    const has = g.calPerDay != null || g.durPerDay != null || g.workoutsPerWeek != null;
+    const has = g.calPerDay != null || g.durPerDay != null || g.workoutsPerWeek != null || g.avoidJunkFood !== false;
     if (!has) {
       return statCard({
         title: "Goals", icon: "target", cls: "amber",
@@ -1064,12 +1065,18 @@
       if (goal == null) return null;
       return { label, value: `${St().fmtNum(cur)} / ${St().fmtNum(goal)} ${unit} ${met ? "✅" : "⏳"}`, emoji: icon };
     };
+    // The no-junk-food habit is a daily goal like the others: met only when
+    // today is explicitly logged as a no-junk-food day.
+    const foodMet = g.avoidJunkFood !== false
+      ? { label: "Don't eat junk food (today)", value: St().foodHabitStatus(Store().settings.noJunkFoodLog, today) === true ? "met ✅" : "open ⏳", emoji: "🥗" }
+      : null;
     return statCard({
       title: "Goals", icon: "target", cls: "amber",
       rows: [
         row("Calories (today)", "🔥", cal, g.calPerDay, "kcal", !!(hits && hits.calHit)),
         row("Duration (today)", "⏱️", dur, g.durPerDay, "min", !!(hits && hits.timeHit)),
-        row("Workouts (this week)", "🎯", wk, g.workoutsPerWeek, "", wk >= g.workoutsPerWeek)
+        row("Workouts (this week)", "🎯", wk, g.workoutsPerWeek, "", wk >= g.workoutsPerWeek),
+        foodMet
       ].filter(Boolean)
     });
   }
@@ -1291,13 +1298,42 @@
     body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
   }
 
+  /** Auto-generated Food Habits & Recovery insights (streaks, weekly average,
+   *  weekend pattern). Empty until at least one food day is logged. */
+  function foodInsightListHTML(fi) {
+    if (!fi || !fi.loggedDays) {
+      return `<p class="food-habit-note">Log food days on the dashboard or calendar to unlock streaks and weekly insights.</p>`;
+    }
+    const items = [];
+    const wdNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    if (fi.currentAvoidStreak >= 2) items.push(`🔥 Currently <b>${fi.currentAvoidStreak} days</b> without junk food — keep it going!`);
+    if (fi.longestAvoidStreak >= 2) items.push(`🏆 Longest run without junk food: <b>${fi.longestAvoidStreak} days</b>.`);
+    if (fi.longestJunkRun >= 3) items.push(`⚠️ Longest junk-food run: <b>${fi.longestJunkRun} days</b> in a row.`);
+    if (fi.avgJunkPerWeek != null) items.push(`📊 Averaging <b>${fi.avgJunkPerWeek} junk-food days</b> per week (partials count as half).`);
+    if (fi.weekendShare != null && fi.loggedDays >= 7) {
+      const pct = Math.round(fi.weekendShare * 100);
+      items.push(fi.weekendShare >= 0.6
+        ? `🗓️ Most junk-food days land on <b>weekends (${pct}%)</b>.`
+        : `🗓️ Junk food is spread through the week (weekends: <b>${pct}%</b>).`);
+    }
+    if (fi.peakWeekday != null) items.push(`📌 Peak day: <b>${wdNames[fi.peakWeekday]}</b>.`);
+    if (!items.length) return "";
+    return `<ul class="insights-list" aria-label="Food habit insights">${items.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+  }
+
   function foodHabitSummaryHTML(log, year, month, refDateISO) {
     const goals = Store().settings.goals || {};
     if (goals.avoidJunkFood === false) return "";
     const stats = St().foodHabitMonthStats(log, year, month, refDateISO);
     if (!stats || stats.elapsedDays === 0) return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>No elapsed days in this month yet.</span></div><div class="food-summary-rate"><b>—</b><span>avoidance · 0 logged</span></div><p>Future dates are excluded.</p></div>`;
     const rate = stats.avoidanceRate == null ? "—" : Math.round(stats.avoidanceRate * 100) + "%";
-    return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>${stats.junkFoodDays} full junk-food day${stats.junkFoodDays === 1 ? "" : "s"} · ${stats.partialJunkFoodDays} partial day${stats.partialJunkFoodDays === 1 ? "" : "s"} · ${stats.avoidedDays} no-junk-food day${stats.avoidedDays === 1 ? "" : "s"}</span></div><div class="food-summary-rate"><b>${rate}</b><span>fully avoided · ${stats.avoidedDays} / ${stats.loggedDays} logged</span></div>${stats.loggedDays ? `<p>${stats.unloggedDays} unlogged day${stats.unloggedDays === 1 ? "" : "s"} excluded from the rate.</p>` : `<p>No food days logged yet; unknown dates aren't counted.</p>`}</div>`;
+    // Full junk-food days count as 1; "some junk food" days count as 0.5.
+    const monthTotal = stats.junkFoodDays + stats.partialJunkFoodDays * 0.5;
+    const monthTotalLabel = monthTotal === 0 ? "—"
+      : `${monthTotal} junk-food day${monthTotal === 1 ? "" : "s"}`;
+
+    return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>${stats.junkFoodDays} full junk-food day${stats.junkFoodDays === 1 ? "" : "s"} · ${stats.partialJunkFoodDays} partial day${stats.partialJunkFoodDays === 1 ? "" : "s"} · ${stats.avoidedDays} no-junk-food day${stats.avoidedDays === 1 ? "" : "s"} · ${monthTotalLabel}</span></div><div class="food-summary-rate"><b>${rate}</b><span>fully avoided · ${stats.avoidedDays} / ${stats.loggedDays} logged</span></div>${stats.loggedDays ? `<p>${stats.unloggedDays} unlogged day${stats.unloggedDays === 1 ? "" : "s"} excluded from the rate.</p>` : `<p>No food days logged yet; unknown dates aren't counted.</p>`}</div>`;
+
   }
 
   /** Progress vs daily goals for a single day ('' when no goals are set).
@@ -1408,9 +1444,9 @@
   function renderTools() {
     const wt = Store().settings.weightUnit || "lb";
     const sex = Store().settings.sex || "male";
-    // Prefill from the user's latest recorded measurements (the same data the
-    // Progress view uses) so nothing has to be typed twice. Falls back to the
-    // classic example defaults when there are no records yet.
+    // Prefill from the Settings profile first (height, neck — they rarely
+    // change), then the latest recorded measurements, so nothing has to be
+    // typed twice. Falls back to the classic example defaults when empty.
     const ms = Store().measurements;
     const latestCm = (t) => {
       const r = St().latestOfType(ms, t);
@@ -1422,7 +1458,10 @@
     // from a recorded Height measurement, then the example default.
     const sH = Store().settings;
     const hCm = sH.height != null ? St().toCm(sH.height, sH.heightUnit || "cm") : latestCm("Height");
-    const nCm = latestCm("Neck");
+    // Neck is profile data (Settings › Profile); a historic Neck measurement is
+    // the fallback so old records keep prefilling the calculator.
+    const sNeck = Store().settings;
+    const nCm = sNeck.neck != null ? St().toCm(sNeck.neck, sNeck.neckUnit || "cm") : latestCm("Neck");
     const wstCm = latestCm("Waist");
     const hipCm = latestCm("Hips");
     const r1 = (x) => x == null ? null : Math.round(x * 10) / 10;
@@ -1667,6 +1706,16 @@
 
   /* Per-unit maximum interval for the backup reminder. */
   const REMINDER_MAX = { days: 365, weeks: 52, years: 10 };
+  /* Settings sections (tabs). Existing settings are migrated into these —
+   * nothing is dropped, only regrouped. */
+  const SETTINGS_TABS = [
+    ["profile", "👤 Profile"],
+    ["preferences", "🎨 Preferences"],
+    ["goals", "🎯 Goals"],
+    ["notifications", "🔔 Notifications"],
+    ["data", "🔒 Data & Privacy"],
+    ["about", "ℹ️ About"]
+  ];
   const PRIVACY_HTML = `
     <b>Privacy</b>
     <ul class="info-list">
@@ -1678,12 +1727,16 @@
 
   function renderSettings() {
     const s = Store().settings;
-    const theme = document.documentElement.getAttribute("data-theme") || "dark";
+    const themePref = s.theme === "light" || s.theme === "dark" ? s.theme : "system";
     const wt = s.weightUnit || "lb";
     const sex = s.sex || "male";
     const g = s.goals || {};
     const hCm = s.height != null ? St().toCm(s.height, s.heightUnit || "cm") : null;
     const hVal = hCm != null ? Math.round(hCm * 10) / 10 : "";
+    const nCm = s.neck != null ? St().toCm(s.neck, s.neckUnit || "cm") : null;
+    const nVal = nCm != null ? Math.round(nCm * 10) / 10 : "";
+    if (!state.settingsTab) state.settingsTab = "profile";
+    const tab = SETTINGS_TABS.some(([id]) => id === state.settingsTab) ? state.settingsTab : "profile";
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
@@ -1691,21 +1744,28 @@
     const remUnit = s.backupReminderUnit || "days";
     const remVal = s.backupReminderDays ?? 10;
     const weekStartsOn = s.weekStartsOn === "sunday" ? "sunday" : "monday";
+    const wRem = s.workoutReminder === true;
+    const wTime = s.workoutReminderTime || "18:00";
+    const dataSize = Math.max(1, Math.round(JSON.stringify(Store().exportBackup()).length / 1024));
     // App version comes from app/js/version.js (managed by bump-version.py), read
     // at render time so a new build is picked up without a hard refresh.
     const ver = window.FOCUS_VERSION || { major: 1, minor: 0, patch: 0 };
     const versionStr = String(ver.major) + "." + String(ver.minor) + "." + String(ver.patch);
     const curColor = (ACCENTS.find(([n]) => n === accent) || ACCENTS[0])[1];
     document.getElementById("settingsBody").innerHTML = `
+      <div class="chip-row settings-tabs" role="tablist" aria-label="Settings sections">
+        ${SETTINGS_TABS.map(([id, label]) => `<button type="button" class="chip ${tab === id ? "is-active" : ""}" role="tab" aria-selected="${tab === id}" data-action="settings-tab" data-tab="${id}">${label}</button>`).join("")}
+      </div>
       <div class="settings-grid">
-        <div class="card data-card">
-          <h3>Appearance</h3>
-          <p class="desc">The look of Focus. Your choice is saved locally and applies instantly.</p>
+        ${tab === "preferences" ? `<div class="card data-card">
+          <h3>Preferences</h3>
+          <p class="desc">The look and feel of Focus. Your choices are saved locally and apply instantly.</p>
           <div class="setting-row">
-            <div class="setting-label"><b>Theme</b><span>Dark is easy on the eyes; light is crisp.</span></div>
+            <div class="setting-label"><b>Theme</b><span>Dark is easy on the eyes; light is crisp; system follows your device.</span></div>
             <div class="seg" role="group" aria-label="Theme">
-              <button class="seg-btn ${theme === "dark" ? "is-active" : ""}" data-action="set-theme" data-set-theme="dark">🌙 Dark</button>
-              <button class="seg-btn ${theme === "light" ? "is-active" : ""}" data-action="set-theme" data-set-theme="light">☀️ Light</button>
+              <button class="seg-btn ${themePref === "dark" ? "is-active" : ""}" data-action="set-theme" data-set-theme="dark">🌙 Dark</button>
+              <button class="seg-btn ${themePref === "light" ? "is-active" : ""}" data-action="set-theme" data-set-theme="light">☀️ Light</button>
+              <button class="seg-btn ${themePref === "system" ? "is-active" : ""}" data-action="set-theme" data-set-theme="system">🖥️ System</button>
             </div>
           </div>            <div class="setting-row">
             <div class="setting-label"><b>Accent color</b><span>Charts, buttons and the calendar heat follow this color.</span></div>
@@ -1732,11 +1792,6 @@
               <button type="button" class="seg-btn ${weekStartsOn === "sunday" ? "is-active" : ""}" data-action="set-week-start" data-week-start="sunday" aria-pressed="${weekStartsOn === "sunday"}">Sunday</button>
             </div>
           </div>
-        </div>
-
-        <div class="card data-card">
-          <h3>Units & body</h3>
-          <p class="desc">Weight unit for new entries, plus your body profile — height is used by the BMI and body-fat estimates, so you only set it once.</p>
           <div class="setting-row">
             <div class="setting-label"><b>Weight unit</b><span>Only affects new records — existing ones keep their units.</span></div>
             <div class="seg" role="group" aria-label="Weight unit">
@@ -1744,6 +1799,11 @@
               <button class="seg-btn ${wt === "lb" ? "is-active" : ""}" data-action="set-weightunit" data-set-weightunit="lb">lb</button>
             </div>
           </div>
+        </div>` : ""}
+
+        ${tab === "profile" ? `<div class="card data-card">
+          <h3>Profile</h3>
+          <p class="desc">Your body profile — height and neck power the BMI and body-fat estimates, so you only set them once.</p>
           <div class="setting-row">
             <div class="setting-label"><b>Body profile</b><span>Used for the body-fat estimate (U.S. Navy method) in Tools and Progress.</span></div>
             <div class="seg" role="group" aria-label="Body profile">
@@ -1766,12 +1826,22 @@
             <input class="input" id="setAge" type="number" min="10" max="120" step="1" placeholder="e.g. 30" value="${s.age ?? ""}" style="width:90px" aria-label="Age">
           </div>
           <div class="setting-row">
-            <div class="setting-label"><b>Save profile</b><span>Height and age are applied to the BMI & body-fat tools.</span></div>
+            <div class="setting-label"><b>Neck</b><span>Used for the body-fat estimate (U.S. Navy method). Past Neck records still work as a fallback.</span></div>
+            <div class="input-with-unit" style="width:200px">
+              <input class="input" id="setNeck" type="number" step="any" min="0" placeholder="38" value="${nVal}" aria-label="Neck">
+              <select class="select" id="setNeckUnit" aria-label="Neck unit">
+                <option value="cm" ${s.neckUnit !== "in" ? "selected" : ""}>cm</option>
+                <option value="in" ${s.neckUnit === "in" ? "selected" : ""}>in</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Save profile</b><span>Height, neck and age are applied to the BMI & body-fat tools.</span></div>
             <button class="btn btn-primary" data-action="save-profile">${ICONS.check} Save</button>
           </div>
-        </div>
+        </div>` : ""}
 
-        <div class="card data-card">
+        ${tab === "goals" ? `<div class="card data-card">
           <h3>🎯 Goals</h3>
           <p class="desc">Set daily and weekly targets. Progress shows on the dashboard and lights up on the calendar when you beat them.</p>
           <div class="goal-form">
@@ -1797,19 +1867,31 @@
               </div>
             </div>
             <div class="setting-row food-goal-toggle">
-              <div class="setting-label"><b>🥗 Avoid junk food</b><span>Track each day you meet this habit. Unlogged dates stay unknown.</span></div>
-              <button type="button" class="seg-btn ${g.avoidJunkFood !== false ? "is-active" : ""}" data-action="toggle-food-goal" aria-pressed="${g.avoidJunkFood !== false}" aria-label="Avoid junk food daily goal ${g.avoidJunkFood !== false ? "on" : "off"}">${g.avoidJunkFood !== false ? "On" : "Off"}</button>
+              <div class="setting-label"><b>🥗 Don't eat junk food</b><span>Track each day you meet this habit. Unlogged dates stay unknown.</span></div>
+              <button type="button" class="seg-btn ${g.avoidJunkFood !== false ? "is-active" : ""}" data-action="toggle-food-goal" aria-pressed="${g.avoidJunkFood !== false}" aria-label="Don't eat junk food daily goal ${g.avoidJunkFood !== false ? "on" : "off"}">${g.avoidJunkFood !== false ? "On" : "Off"}</button>
             </div>
             <div class="goal-actions">
               <button class="btn btn-primary" data-action="save-goals">${ICONS.check} Save goals</button>
             </div>
           </div>
-        </div>
+        </div>` : ""}
 
-        <div class="card data-card">
+        ${tab === "notifications" ? `<div class="card data-card">
+          <h3>Notifications</h3>
+          <p class="desc">Gentle nudges to keep your tracking on rails. Browser notifications need permission — your browser will ask once.</p>
           <div class="setting-row">
-            <div class="setting-label"><b>Privacy</b><span>Focus is designed to be completely private.</span></div>
-            <button type="button" class="info-btn" id="privacyInfoBtn" aria-label="About privacy">${ICONS.info}</button>
+            <div class="setting-label"><b>Daily workout reminder</b><span>Shows a browser notification at your training time.</span></div>
+            <div class="seg" role="group" aria-label="Daily workout reminder">
+              <button type="button" class="seg-btn ${wRem ? "is-active" : ""}" data-action="set-workout-reminder" data-set-workout-reminder="on" aria-pressed="${wRem}">On</button>
+              <button type="button" class="seg-btn ${!wRem ? "is-active" : ""}" data-action="set-workout-reminder" data-set-workout-reminder="off" aria-pressed="${!wRem}">Off</button>
+            </div>
+          </div>
+          <div class="setting-row ${wRem ? "" : "is-disabled"}">
+            <div class="setting-label"><b>Remind me at</b><span>Your daily training time.</span></div>
+            <div class="remind-picker">
+              <input class="input" id="setWorkoutTime" type="time" value="${wTime}" ${wRem ? "" : "disabled"} aria-label="Workout reminder time">
+              <button class="btn btn-sm btn-ghost" data-action="test-reminder" ${wRem ? "" : "disabled"}>Send test</button>
+            </div>
           </div>
           <div class="setting-row">
             <div class="setting-label"><b>Backup reminder</b><span>Reminds you to download a JSON backup after your last one.</span></div>
@@ -1829,9 +1911,26 @@
               </select>
             </div>
           </div>
-        </div>
+        </div>` : ""}
 
-        <div class="card data-card">
+        ${tab === "data" ? `<div class="card data-card">
+          <h3>Data & privacy</h3>
+          <p class="desc">Your data never leaves this device. Export, import and deletion live in the Data view.</p>
+          <div class="setting-row">
+            <div class="setting-label"><b>Privacy</b><span>Focus is designed to be completely private.</span></div>
+            <button type="button" class="info-btn" id="privacyInfoBtn" aria-label="About privacy">${ICONS.info}</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Stored data</b><span>Workouts, measurements and settings in this browser.</span></div>
+            <span class="stat-pill">${St().fmtNum(w + m)} records · ${dataSize} KB</span>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Manage data</b><span>Backups, CSV/Excel/PDF export, import and deletion.</span></div>
+            <button class="btn" data-action="goto" data-view="data">${ICONS.database} Open Data</button>
+          </div>
+        </div>` : ""}
+
+        ${tab === "about" ? `<div class="card data-card">
           <h3>About</h3>
           <p class="desc">Focus — a personal, offline fitness tracker.</p>
           <ul class="about-list">
@@ -1840,7 +1939,7 @@
             <li><b>Storage</b> — your browser's IndexedDB</li>
             <li><b>Offline</b> — open <code>Focus-Workout-Tracker.html</code> and it just works</li>
           </ul>
-        </div>
+        </div>` : ""}
       </div>`;
     // Switching the height unit converts the typed value so the height stays
     // physically the same (175 cm -> 68.9 in), not 175 inches.
@@ -1851,6 +1950,17 @@
         const v = parseFloat(hInp.value);
         if (isFinite(v) && v > 0) {
           hInp.value = hSel.value === "in" ? Math.round(v / 2.54 * 10) / 10 : Math.round(v * 2.54 * 10) / 10;
+        }
+      });
+    }
+    // Same physical-value conversion for the neck input (38 cm -> 15 in).
+    const nInp = document.getElementById("setNeck");
+    const nSel = document.getElementById("setNeckUnit");
+    if (nInp && nSel) {
+      nSel.addEventListener("change", () => {
+        const v = parseFloat(nInp.value);
+        if (isFinite(v) && v > 0) {
+          nInp.value = nSel.value === "in" ? Math.round(v / 2.54 * 10) / 10 : Math.round(v * 2.54 * 10) / 10;
         }
       });
     }
@@ -1886,6 +1996,18 @@
         saveReminder();
       });
     }
+    // Workout reminder time applies instantly and reschedules the notification.
+    const wTimeInp = document.getElementById("setWorkoutTime");
+    if (wTimeInp) {
+      wTimeInp.addEventListener("change", () => {
+        const t = wTimeInp.value;
+        if (!/^\d{2}:\d{2}$/.test(t)) { Focus.UI.toast("Pick a valid time", "warn"); return; }
+        Focus.App.setSetting("workoutReminderTime", t).then(() => {
+          Focus.UI.toast(`Workout reminder at ${t}`);
+          if (Focus.App.rescheduleWorkoutReminder) Focus.App.rescheduleWorkoutReminder();
+        });
+      });
+    }
   }
 
   /* =====================================================================
@@ -1910,7 +2032,9 @@
     const hCm = sH.height != null ? St().toCm(sH.height, sH.heightUnit || "cm") : (hRec ? St().toCm(hRec.value, hRec.unit) : null);
     const wKg = wRec ? St().toKg(wRec.value, wRec.unit) : null;
     const bmi = St().calcBMI(hCm, wKg);
-    const nCm = (() => { const r = St().latestOfType(ms, "Neck"); return r ? St().toCm(r.value, r.unit) : null; })();
+    // Neck comes from the Settings profile first (it rarely changes); a historic
+    // Neck measurement is the fallback so old records keep working.
+    const nCm = sH.neck != null ? St().toCm(sH.neck, sH.neckUnit || "cm") : (() => { const r = St().latestOfType(ms, "Neck"); return r ? St().toCm(r.value, r.unit) : null; })();
     const wstCm = (() => { const r = St().latestOfType(ms, "Waist"); return r ? St().toCm(r.value, r.unit) : null; })();
     const hipCm = (() => { const r = St().latestOfType(ms, "Hips"); return r ? St().toCm(r.value, r.unit) : null; })();
     const have = { Neck: nCm != null, Waist: wstCm != null, Hips: hipCm != null };
@@ -1925,7 +2049,7 @@
             <div class="es-icon">${ICONS.scale}</div>
             <p>${sH.height != null
               ? "Record a <b>Weight</b> measurement — your height is saved in Settings — to see your current BMI"
-              : "Set your <b>Height</b> in Settings and record a <b>Weight</b> measurement to see your current BMI"}${sex === "female" ? " — add Neck + Waist + Hips for an estimated body fat %." : " — add Neck + Waist for an estimated body fat %."}</p>
+              : "Set your <b>Height</b> in Settings and record a <b>Weight</b> measurement to see your current BMI"}${sex === "female" ? " — add your neck in Settings › Profile plus Waist + Hips records for an estimated body fat %." : " — add your neck in Settings › Profile plus a Waist record for an estimated body fat %."}</p>
           </div>
         </div>`;
       return;
@@ -2185,6 +2309,7 @@
     const gA = Store().settings.goals || {};
     const foodLog = Store().settings.noJunkFoodLog || {};
     const foodStats = St().foodHabitStats(foodLog, year, St().todayISO());
+    const foodInsights = St().foodHabitInsights(foodLog, year, St().todayISO());
     const recoveryStats = St().trainingRecoveryStats(all, year, St().todayISO());
     const gsA = St().dailyGoalStatus(all, gA);
     const yearDays = new Set(all.filter((w) => St().yearOf(w.date) === year).map((w) => w.date));
@@ -2253,21 +2378,26 @@
       <div class="grid-2 analytics-insights-grid" style="margin-top:16px">
         <div class="card">
           <div class="card-title"><h3>Junk-food days · ${year}</h3><span class="sub">explicitly logged days only</span></div>
-          <div class="food-chart-legend" aria-label="Food log chart legend"><span><i style="--legend-color:var(--danger)"></i>Full junk-food day</span><span><i style="--legend-color:var(--warn)"></i>Some junk food</span></div>
+          <div class="food-chart-legend" aria-label="Food log chart legend"><span><i style="--legend-color:var(--danger)"></i>Full junk-food day</span><span><i style="--legend-color:var(--warn)"></i>Some junk food</span><span><i style="--legend-color:var(--success)"></i>No junk food</span></div>
           <div class="chart-wrap" id="acJunkFood"></div>
-          <p class="food-habit-note">Months with no logged dates are omitted. Partial and full junk-food days are shown separately.</p>
+          <p class="food-habit-counts" aria-live="polite">Full: <b>${foodStats.junkFoodDays}</b> · Some: <b>${foodStats.partialJunkFoodDays}</b> · None: <b>${foodStats.avoidedDays}</b></p>
+          <p class="food-habit-note">Months with no logged dates are omitted. Each logged day falls into exactly one of the three states.</p>
         </div>
-        <div class="card analytics-recovery">
-          <div class="card-title"><h3>Food habits & recovery · ${year}</h3><span class="sub">elapsed dates through yesterday</span></div>
+          <div class="card analytics-recovery">
+          <div class="card-title"><h3>Food habits & recovery · ${year}</h3><span class="sub">food through today · training through yesterday</span></div>
           <div class="recovery-kpis">
-            <div><b>${foodStats.junkFoodDays}</b><span>full junk-food days</span></div>
-            <div><b>${foodStats.partialJunkFoodDays}</b><span>partial junk-food days</span></div>
-            <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>fully avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged</span></div>
-            <div><b>${recoveryStats.elapsedDays ? recoveryStats.restDays : "—"}</b><span>rest days</span></div>
-            <div><b>${recoveryStats.elapsedDays ? Math.round(recoveryStats.workoutRate * 100) + "%" : "—"}</b><span>training days · elapsed</span></div>
-          </div>
-          <p class="food-habit-note">${foodStats.unloggedDays} unlogged dates are unknown, not successes or junk-food days. Avoidance rate uses only explicitly logged days.</p>
+          <div><b>${foodStats.junkFoodDays}</b><span>full junk-food days</span></div>
+          <div><b>${foodStats.partialJunkFoodDays}</b><span>partial junk-food days</span></div>
+          <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>fully avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged</span></div>
+          <div><b>${foodInsights.longestAvoidStreak}</b><span>longest run, no junk food</span></div>
+          <div><b>${foodInsights.avgJunkPerWeek == null ? "—" : foodInsights.avgJunkPerWeek}</b><span>avg junk-food days / week</span></div>
+          <div><b>${recoveryStats.elapsedDays ? recoveryStats.restDays : "—"}</b><span>rest days</span></div>
         </div>
+        ${foodInsightListHTML(foodInsights)}
+        <p class="food-habit-note">${foodStats.unloggedDays} unlogged dates are unknown, not successes or junk-food days. Avoidance rate uses only explicitly logged days. Partial junk-food days count as half toward the junk-food total.</p>
+      </div>
+
+
       </div>
 
       ${hasCmp ? `
@@ -2286,7 +2416,8 @@
     const labels = ms.map((m) => m.label);
     C().barChart(document.getElementById("acJunkFood"), labels, [
       { name: "Full junk-food days", values: foodStats.months.map((m) => m.loggedDays ? m.junkFoodDays : null), color: "var(--danger)" },
-      { name: "Some junk food", values: foodStats.months.map((m) => m.loggedDays ? m.partialJunkFoodDays : null), color: "var(--warn)" }
+      { name: "Some junk food", values: foodStats.months.map((m) => m.loggedDays ? m.partialJunkFoodDays : null), color: "var(--warn)" },
+      { name: "No junk food", values: foodStats.months.map((m) => m.loggedDays ? m.avoidedDays : null), color: "var(--success)" }
     ], { height: 180, valueFmt: (v) => v + " logged days", highlight: hl });
     C().barChart(document.getElementById("acMonthly"), labels, [{ name: "Workouts", values: ms.map((m) => m.workouts) }], { height: 180, valueFmt: (v) => v + " workouts", highlight: hl });
     C().barChart(document.getElementById("acCalories"), labels, [{ name: "kcal", values: ms.map((m) => m.calories), color: "var(--success)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal", highlight: hl });

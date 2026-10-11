@@ -168,7 +168,7 @@
       const [w, m, s] = await Promise.all([getAll("workouts"), getAll("measurements"), loadSettings()]);
       state.workouts = w.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
       state.measurements = m.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
-      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, backupReminder: true, backupReminderDays: 10, weekStartsOn: "monday", customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null, avoidJunkFood: true }, noJunkFoodLog: {} };
+      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, neck: null, neckUnit: "cm", accent: "violet", animations: true, backupReminder: true, backupReminderDays: 10, workoutReminder: false, workoutReminderTime: "18:00", weekStartsOn: "monday", customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null, avoidJunkFood: true }, noJunkFoodLog: {} };
       state.settings = Object.assign({}, defaults, s);
       if (state.settings.weekStartsOn !== "sunday" && state.settings.weekStartsOn !== "monday") state.settings.weekStartsOn = "monday";
       state.settings.goals = Object.assign({}, defaults.goals, s.goals || {});
