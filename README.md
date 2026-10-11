@@ -24,10 +24,10 @@ history of 92 workouts across Jan–Aug 2026).*
 - 📊 **Dashboard** — year totals, streaks, year-vs-year and goals KPI cards, then **This Week / This Month** cards that benchmark **9 metrics** against the previous period (hover any ▲/▼ pill to reveal the previous period's value), then the Workouts-per-month and cumulative-calories charts and recent activity
 - 📅 **Calendar** — GitHub-style heatmap with intensity levels, a month view with a day panel (tap a day to drill in, tap elsewhere to return to the month summary), and subtle marking of your best day and the current month
 - 📏 **Progress** — weight, waist, neck, height… any measurement, any frequency. Trend charts, a **Body composition** card (current BMI + estimated body fat %, computed from your records — no re-entry) and a summary with colored trend highlights
-- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a consistency heatmap (with a 🏆 best-month badge and 🔥/⏱️ goal chips; click a month to open it in the Calendar), and a year-over-year comparison (current vs previous year by default)
+- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, explicit monthly junk-food logs with logged-day avoidance rates, training/rest-day insights, daily goal hit rates, and a year-over-year comparison (current vs previous year by default); the calendar is the sole home for the consistency heatmap
 - 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
-- 🎯 **Goals** — a daily **calorie goal (🔥)** and a daily **duration goal (⏱️)** that complete independently, plus a weekly workout target; see them on the dashboard, as 🔥/⏱️ badges on goal days in the calendar (a day earns a gold ring only when every configured goal is met), and as separate hit-rate bars in Analytics
+- 🎯 **Goals** — daily **calorie (🔥)** and **duration (⏱️)** goals complete independently, plus a weekly workout target and a configurable **Avoid junk food (🥗)** daily habit goal. Log either outcome from the Dashboard or any Calendar day; unknown dates remain unlogged, and the explicit outcomes power monthly Analytics and Calendar insights.
 - ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
 
 ## Getting started
@@ -52,7 +52,7 @@ anywhere. Storage is per-browser, so to move data between browsers or computers:
 
 1. **Data → Export JSON backup** — a complete snapshot (workouts, measurements, settings), saved as `focus-workout-YYYY-MM-DD.json`.
 2. Move the file, then **Data → Import JSON backup** on the other side.
-   Imports are deduplicated — importing twice never creates duplicates.
+   Imports are deduplicated — importing twice never creates duplicates. Food-habit dates travel in the `settings.noJunkFoodLog` map; older backups without that optional key remain compatible, and imported dates only fill missing local entries.
 
 - **Export Excel** produces a spreadsheet-friendly copy with clean, human-readable sheets (`Overview`, `Workouts`, `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics`) that read perfectly in Google Sheets. A hidden `_AppData` sheet carries the internal record IDs and timestamps, so re-import is exact.
 - **Google Sheets archiving**: export → upload → archive; later download as `.xlsx` and import back. Imports show a preview (will add / will update / unchanged / invalid) and never delete local records — they match on stable ID, then identical content, then a human-edit key, and only add what's genuinely new.
@@ -168,6 +168,8 @@ calories by overwriting a day cell in a yearly grid, so the import assumed:
 - [x] Add a historical workout from a previous year
 - [x] Add, edit and delete a measurement
 - [x] Switch years, view calendar, drill into a month and a day
+- [x] Log/correct/clear a daily no-junk-food outcome from Dashboard or Calendar; verify unknown days stay out of analytics denominators
+- [x] Verify Analytics junk-food month chart and logged-day rate, Calendar month food/recovery summary, and Data workout/rest-day counts
 - [x] Day panel shows multiple workouts as horizontal cards
 - [x] Compare any two years in Analytics
 - [x] Export Excel — opens in Excel & Google Sheets; re-import → "0 new"

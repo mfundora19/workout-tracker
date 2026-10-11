@@ -267,6 +267,24 @@
       const id = target.dataset.id;
 
       switch (action) {
+        case "food-log": {
+          const status = target.dataset.status === "true" ? true : target.dataset.status === "false" ? false : null;
+          Focus.Store.setNoJunkFoodDay(target.dataset.date, status).then(() => {
+            Focus.UI.toast(status === true ? "No junk food logged 🥗" : status === false ? "Junk food logged" : "Food log cleared");
+            renderCurrent();
+          }).catch((err) => Focus.UI.toast(err.message, "warn"));
+          break;
+        }
+        case "toggle-food-goal": {
+          const goals = Object.assign({}, Focus.Store.settings.goals || {}, {
+            avoidJunkFood: !(Focus.Store.settings.goals && Focus.Store.settings.goals.avoidJunkFood !== false)
+          });
+          Focus.Store.setSettings({ goals }).then(() => {
+            Focus.UI.toast("Daily no-junk-food goal " + (goals.avoidJunkFood ? "on" : "off"));
+            renderCurrent();
+          });
+          break;
+        }
         case "goto":
           showView(target.dataset.view);
           break;
@@ -503,7 +521,8 @@
           const goals = {
             calPerDay: num(document.getElementById("goalCal") ? document.getElementById("goalCal").value : ""),
             durPerDay: num(document.getElementById("goalDur") ? document.getElementById("goalDur").value : ""),
-            workoutsPerWeek: num(document.getElementById("goalWk") ? document.getElementById("goalWk").value : "")
+            workoutsPerWeek: num(document.getElementById("goalWk") ? document.getElementById("goalWk").value : ""),
+            avoidJunkFood: Focus.Store.settings.goals ? Focus.Store.settings.goals.avoidJunkFood !== false : true
           };
           Focus.Store.setSettings({ goals }).then(() => {
             Focus.UI.toast("Goals saved 🎯 — check your dashboard and calendar");

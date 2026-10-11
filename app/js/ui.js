@@ -580,6 +580,23 @@
    * DASHBOARD
    * =================================================================== */
 
+  function foodHabitCardHTML(iso, compact) {
+    const goals = Store().settings.goals || {};
+    const enabled = goals.avoidJunkFood !== false;
+    if (!enabled) return "";
+    const status = St().foodHabitStatus(Store().settings.noJunkFoodLog, iso);
+    const label = status === true ? "No junk food" : status === false ? "Junk food eaten" : "Not logged";
+    const cls = status === true ? "is-avoided" : status === false ? "is-junk" : "is-unlogged";
+    return `<div class="food-habit ${compact ? "food-habit-compact" : ""} ${cls}" role="group" aria-label="Avoid junk food for ${iso}">
+      <div class="food-habit-copy"><b>🥗 Avoid junk food</b><span class="food-habit-status" role="status">${label}</span></div>
+      <div class="food-habit-actions">
+        <button type="button" class="btn btn-sm ${status === true ? "btn-primary" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="true" aria-pressed="${status === true}">No junk food</button>
+        <button type="button" class="btn btn-sm ${status === false ? "btn-danger" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="false" aria-pressed="${status === false}">Ate junk</button>
+        ${status !== null ? `<button type="button" class="btn btn-sm btn-ghost" data-action="food-log" data-date="${iso}" data-status="clear">Clear log</button>` : ""}
+      </div>
+    </div>`;
+  }
+
   function renderDashboard() {
     const year = Focus.App.year();
     const today = St().todayISO();
@@ -604,8 +621,11 @@
     const grid = document.getElementById("dashGrid");
     const parts = [];
 
-    // --- Quick add card ---
+    // --- Quick add card + today's explicit food-habit check-in ---
     parts.push(quickAddCardHTML());
+    if ((Store().settings.goals || {}).avoidJunkFood !== false) {
+      parts.push(`<div class="card food-habit-card">${foodHabitCardHTML(today, false)}<p class="food-habit-note">Your logged days power the food trends in Analytics.</p></div>`);
+    }
 
     // --- KPI stat cards (4, one row on desktop) ---
     const best = yStats.bestMonth;
@@ -656,6 +676,13 @@
       cur: wkStreak(wk.start, wk.end),
       prev: wkStreak(St().addDays(wk.start, -7), St().addDays(wk.end, -7))
     };
+    // Longest run of consecutive rest days (no workout) inside each week window.
+    // The still-running current week only counts days up to yesterday — today is
+    // not over and future days don't exist yet. Lower is better: 0 = trained daily.
+    const wkRest = {
+      cur: St().longestRestStreak(yearWk, wk.start, wk.end, today),
+      prev: St().longestRestStreak(yearWk, St().addDays(wk.start, -7), St().addDays(wk.end, -7), today)
+    };
     // Best day = the single day with the most calories in the period (date + kcal).
     const bestDayOf = (rows) => {
       let best = null;
@@ -680,6 +707,14 @@
       cur: bestDayOf(all.filter((w) => St().yearOf(w.date) === year && St().monthOf(w.date) === month)),
       prev: bestDayOf(all.filter((w) => St().yearOf(w.date) === prevMonthYear && St().monthOf(w.date) === prevMonthNum))
     };
+    const moRestCurRange = St().monthRange(year, month);
+    const moRestPrevRange = St().monthRange(prevMonthYear, prevMonthNum);
+    // Longest run of consecutive rest days in the current and previous month,
+    // capped at yesterday for the still-running current month.
+    const moRest = {
+      cur: St().longestRestStreak(all, moRestCurRange.start, moRestCurRange.end, today),
+      prev: St().longestRestStreak(all, moRestPrevRange.start, moRestPrevRange.end, today)
+    };
 
     parts.push(`<div class="dash-compare">
       ${periodCard({
@@ -689,8 +724,8 @@
         pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
         vs: "last week",
         period: "week",
-        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur }),
-        prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev, bestDay: wkBest.prev })
+        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur, restStreak: wkRest.cur }),
+        prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev, bestDay: wkBest.prev, restStreak: wkRest.prev })
       })}
       ${periodCard({
         title: "This month",
@@ -699,8 +734,8 @@
         pct: St().pctVsPrev(mStats.workouts, prevMonth.workouts),
         vs: "last month",
         period: "month",
-        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod, bestDay: moBest.cur }),
-        prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod, bestDay: moBest.prev })
+        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod, bestDay: moBest.cur, restStreak: moRest.cur }),
+        prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod, bestDay: moBest.prev, restStreak: moRest.prev })
       })}
     </div>`);
 
@@ -869,7 +904,7 @@
             ${pctPill(pct, vs, tip)}
           </div>
           <div class="stat-mini-grid">
-            ${metricTile("Workout days", cur.days, prev.days, (v) => St().fmtNum(v), period, "days")}
+            ${metricTile("Rest streak", cur.restStreak, prev.restStreak, (v) => v + " days", period, "", { lowerIsBetter: true, emptyWhenZero: false })}
             ${metricTile("Calories", cur.calories, prev.calories, (v) => St().fmtNum(v), period, "kcal")}
             ${metricTile("Duration", cur.duration, prev.duration, (v) => St().fmtDuration(v), period)}
             ${metricTile("Avg kcal / workout", cur.avgCal, prev.avgCal, (v) => St().fmtNum(v), period, "kcal")}
@@ -886,8 +921,9 @@
   /**
    * Normalize a week/month stats object for the metric tiles. Computes the
    * per-workout averages from the raw aggregates so both periods behave
-   * identically; opts: { daysInPeriod, bestStreak } for metrics that need
-   * the period length or a run-of-days computation the stats object lacks.
+   * identically; opts: { daysInPeriod, bestStreak, restStreak, bestDay } for
+   * metrics that need the period length or a run-of-days computation the
+   * stats object lacks.
    */
   function periodMetrics(s, opts) {
     const o = opts || {};
@@ -901,19 +937,28 @@
       calPerDay: o.daysInPeriod ? s.calories / o.daysInPeriod : null,
       timePerDay: o.daysInPeriod ? s.duration / o.daysInPeriod : null,
       bestDay: o.bestDay != null ? o.bestDay : null,
-      bestStreak: o.bestStreak != null ? o.bestStreak : (s.bestStreak != null ? s.bestStreak : null)
+      bestStreak: o.bestStreak != null ? o.bestStreak : (s.bestStreak != null ? s.bestStreak : null),
+      restStreak: o.restStreak != null ? o.restStreak : (s.restStreak != null ? s.restStreak : null)
     };
   }
 
-  /** Compact stat tile: label + current value + signed % pill vs the previous period. */
-  function metricTile(label, cur, prev, fmt, period, unit) {
+  /**
+   * Compact stat tile: label + current value + signed % pill vs the previous
+   * period. opts: { lowerIsBetter } flips the pill colors so a drop reads
+   * green (used for rest days, where less is good); { emptyWhenZero: false }
+   * keeps 0 meaningful instead of collapsing the tile to an em dash (a rest
+   * streak of 0 days means "trained every single day in the period").
+   */
+  function metricTile(label, cur, prev, fmt, period, unit, opts) {
+    const o = opts || {};
     const hasPrev = prev != null && prev > 0;
     // null current value (e.g. average with no workouts) or nothing recorded
     // in either period → em dash, no pill — never a misleading percentage.
-    if (cur == null || (cur <= 0 && !hasPrev)) return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">—</div></div>`;
-    const val = cur > 0 ? fmt(cur) : "0";
+    // Zero stays visible only when the caller says it is a real value.
+    if (cur == null || (cur <= 0 && !hasPrev && o.emptyWhenZero !== false)) return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">—</div></div>`;
+    const val = cur > 0 ? fmt(cur) : (o.emptyWhenZero === false ? fmt(cur) : "0");
     const tip = hasPrev ? { label: "Last " + period + ":", value: fmt(prev) + (unit ? " " + unit : "") } : null;
-    const pill = hasPrev ? pctPill(St().pctVsPrev(cur > 0 ? cur : 0, prev), "", tip) : "";
+    const pill = hasPrev ? pctPill(St().pctVsPrev(cur > 0 ? cur : 0, prev), "", tip, o.lowerIsBetter) : "";
     return `<div class="stat-mini"><div class="l">${esc(label)}</div><div class="v">${val} ${pill}</div></div>`;
   }
 
@@ -933,13 +978,17 @@
     return `<div class="stat-mini"><div class="l">Best day</div><div class="v">${val} ${pill}</div></div>`;
   }
 
-  /** Delta pill in the "2026 vs 2025" style — signed percentage, optional period label, and an optional hover tip revealing the previous period's actual value. */
-  function pctPill(pct, vs, tip) {
+  /** Delta pill in the "2026 vs 2025" style — signed percentage, optional period label, and an optional hover tip revealing the previous period's actual value. With lowerIsBetter, colors flip so a decrease reads green (e.g. rest days). */
+  function pctPill(pct, vs, tip, lowerIsBetter) {
     const suffix = vs ? " vs " + vs : "";
     const attrs = tip ? ` data-prev="${esc(tip.value)}" data-prev-label="${esc(tip.label)}"` : "";
     if (pct === 0) return `<span class="delta flat"${attrs}>±0%${suffix}</span>`;
-    const cls = pct > 0 ? "up" : "down";
-    return `<span class="delta ${cls}"${attrs}>${pct > 0 ? "▲" : "▼"} ${St().fmtDelta(pct)}%${suffix}</span>`;
+    const up = pct > 0;
+    // Base class follows the raw direction; with lowerIsBetter the good-down /
+    // bad-up marker overrides its colors (a falling rest streak reads green).
+    const cls = up ? "up" : "down";
+    const inv = lowerIsBetter ? (up ? " bad-up" : " good-down") : "";
+    return `<span class="delta ${cls}${inv}"${attrs}>${up ? "▲" : "▼"} ${St().fmtDelta(pct)}%${suffix}</span>`;
   }
 
   /* --- hover-to-reveal: previous period's value after a 0.3s hover on a pill --- */
@@ -1142,6 +1191,7 @@
     const today = St().todayISO();
     const sel = state.calDay;
     const g = Store().settings.goals || {};
+    const foodLog = Store().settings.noJunkFoodLog || {};
     // Independent per-day goal statuses (🔥 calories and ⏱️ time evaluated separately).
     const gs = St().dailyGoalStatus(all, g);
 
@@ -1188,20 +1238,24 @@
     if (g.calPerDay != null) gParts.push(`<b class="goal-hit-count cal">🔥 ${calHits} day${calHits === 1 ? "" : "s"} hit your calorie goal</b>`);
     if (g.durPerDay != null) gParts.push(`<b class="goal-hit-count time">⏱️ ${durHits} day${durHits === 1 ? "" : "s"} hit your duration goal</b>`);
     const gLine = gParts.length
-      ? `<div class="goal-summary">${calHits === 0 && durHits === 0
-        ? `<span class="goal-miss">No days hit your daily goals yet</span>`
-        : gParts.join(`<span class="goal-summary-sep">·</span>`)}</div>`
+      ? `<div class="goal-summary">${gParts.join(`<span class="goal-summary-sep">·</span>`)}</div>`
       : "";
     const dayPanel = sel ? dayPanelHTML(sel) : `
-      <div class="card">
+      <div class="card month-summary">
         <h3 style="margin-top:0">${St().MONTHS_LONG[month - 1]} ${year}</h3>
         <div class="day-total" style="margin:12px 0">
-          <div class="t"><b>${mStats.workouts}</b><span>workouts</span></div>
-          <div class="t"><b>${St().fmtNum(mStats.calories)}</b><span>kcal</span></div>
-          <div class="t"><b>${mStats.days}</b><span>days</span></div>
+          <div class="t"><b>${St().fmtNum(mStats.workouts)}</b><span>workouts</span></div>
+          <div class="t"><b>${St().fmtNum(mStats.days)}</b><span>workout days</span></div>
+          <div class="t"><b>${(() => { const r = St().trainingRecoveryMonthStats(all, year, month, today); return r.elapsedDays ? St().fmtNum(r.restDays) : "—"; })()}</b><span>rest days · elapsed</span></div>
         </div>
-        ${gLine}
-        <div style="font-size:13px;color:var(--text-dim)">Click a day to see its workouts and add records.</div>
+        <div class="day-total">
+          <div class="t"><b>${St().fmtNum(mStats.calories)}</b><span>kcal</span></div>
+          <div class="t"><b>${mStats.duration ? St().fmtDuration(mStats.duration) : "—"}</b><span>duration</span></div>
+          <div class="t"><b>${mStats.bestStreak ? mStats.bestStreak + "d" : "—"}</b><span>best workout streak</span></div>
+        </div>
+        ${gLine}        ${(() => { const range = St().monthRange(year, month); const top = St().bestTrainingDay(all, range.start, range.end); return `<div class="food-summary month-training-highlight"><div><b>🏅 Best training day</b><span>${top ? St().prettyDate(top.date) + " · " + top.workouts + " workouts · " + St().fmtNum(top.calories) + " kcal" : "No workout recorded this month."}</span></div></div>`; })()}
+        ${foodHabitSummaryHTML(foodLog, year, month, today)}
+        <div style="font-size:13px;color:var(--text-dim)">Click a day to see its workouts and log your food goal.</div>
         <div class="day-actions">
           <button class="btn btn-primary" data-action="quick-add">${ICONS.plus} Add workout</button>
           <button class="btn btn-ghost" data-action="add-measurement">${ICONS.scale} Add measurement</button>
@@ -1227,6 +1281,15 @@
 
     body.querySelector("#calMonthPrev").onclick = () => { state.calMonth = prevM; if (month === 1) Focus.App.setYear(prevY); state.calDay = null; renderCalendar(); };
     body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
+  }
+
+  function foodHabitSummaryHTML(log, year, month, refDateISO) {
+    const goals = Store().settings.goals || {};
+    if (goals.avoidJunkFood === false) return "";
+    const stats = St().foodHabitMonthStats(log, year, month, refDateISO);
+    if (!stats || stats.elapsedDays === 0) return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>No elapsed days in this month yet.</span></div><div class="food-summary-rate"><b>—</b><span>avoidance · 0 logged</span></div><p>Future dates are excluded.</p></div>`;
+    const rate = stats.avoidanceRate == null ? "—" : Math.round(stats.avoidanceRate * 100) + "%";
+    return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>${stats.junkFoodDays} junk-food day${stats.junkFoodDays === 1 ? "" : "s"} · ${stats.avoidedDays} no-junk-food day${stats.avoidedDays === 1 ? "" : "s"}</span></div><div class="food-summary-rate"><b>${rate}</b><span>avoidance · ${stats.loggedDays} logged / ${stats.elapsedDays} elapsed</span></div>${stats.loggedDays ? `<p>${stats.unloggedDays} unlogged day${stats.unloggedDays === 1 ? "" : "s"} excluded from the rate.</p>` : `<p>No food days logged yet; unknown dates aren't counted.</p>`}</div>`;
   }
 
   /** Progress vs daily goals for a single day ('' when no goals are set).
@@ -1262,6 +1325,7 @@
           <div class="t"><b>${cal.duration ? St().fmtDuration(cal.duration) : "—"}</b><span>time</span></div>
         </div>
         ${dayGoalsHTML(cal.calories, cal.duration, hits)}
+        ${foodHabitCardHTML(iso, true)}
         <div class="day-wk-list">
           ${all.map((w) => {
             return `
@@ -1716,6 +1780,10 @@
                 <span class="suffix">days</span>
               </div>
             </div>
+            <div class="setting-row food-goal-toggle">
+              <div class="setting-label"><b>🥗 Avoid junk food</b><span>Track each day you meet this habit. Unlogged dates stay unknown.</span></div>
+              <button type="button" class="seg-btn ${g.avoidJunkFood !== false ? "is-active" : ""}" data-action="toggle-food-goal" aria-pressed="${g.avoidJunkFood !== false}" aria-label="Avoid junk food daily goal ${g.avoidJunkFood !== false ? "on" : "off"}">${g.avoidJunkFood !== false ? "On" : "Off"}</button>
+            </div>
             <div class="goal-actions">
               <button class="btn btn-primary" data-action="save-goals">${ICONS.check} Save goals</button>
             </div>
@@ -2097,8 +2165,11 @@
     const tbWorkouts = all.filter((w) => St().yearOf(w.date) === year).length;
 
     // Daily-goal hit rate — calorie and time goals counted independently, as
-    // a share of the year's workout days.
+    // a share of the year's workout days; food goal uses explicitly logged days.
     const gA = Store().settings.goals || {};
+    const foodLog = Store().settings.noJunkFoodLog || {};
+    const foodStats = St().foodHabitStats(foodLog, year, St().todayISO());
+    const recoveryStats = St().trainingRecoveryStats(all, year, St().todayISO());
     const gsA = St().dailyGoalStatus(all, gA);
     const yearDays = new Set(all.filter((w) => St().yearOf(w.date) === year).map((w) => w.date));
     let calHitsY = 0, durHitsY = 0;
@@ -2108,19 +2179,21 @@
       if (s.calHit) calHitsY++;
       if (s.timeHit) durHitsY++;
     });
-    const hitRow = (icon, label, hits, color) => {
-      const pct = yearDays.size ? Math.round((hits / yearDays.size) * 100) : 0;
+    const hitRow = (icon, label, hits, color, denominator) => {
+      const total = denominator == null ? yearDays.size : denominator;
+      const pct = total ? Math.round((hits / total) * 100) : null;
       return `<div class="type-bar-row">
-        <div class="tbr-head"><span>${icon} ${label}</span><span class="tbr-meta"><b class="pct" style="color:${color}">${pct}%</b><span class="cnt">· ${hits}</span></span></div>
-        <div class="tbr-track"><span style="width:${Math.max(pct, 2.5)}%;background:${color}"></span></div>
+        <div class="tbr-head"><span>${icon} ${label}</span><span class="tbr-meta"><b class="pct" style="color:${color}">${pct == null ? "—" : pct + "%"}</b><span class="cnt">· ${hits} / ${total} ${denominator == null ? "workout days" : "logged days"}</span></span></div>
+        <div class="tbr-track"><span style="width:${pct == null ? 0 : Math.max(pct, 2.5)}%;background:${color}"></span></div>
       </div>`;
     };
     const goalRows = [];
     if (gA.calPerDay != null) goalRows.push(hitRow("🔥", "Calorie goal", calHitsY, "var(--warn)"));
     if (gA.durPerDay != null) goalRows.push(hitRow("⏱️", "Duration goal", durHitsY, "var(--info)"));
+    if (gA.avoidJunkFood !== false) goalRows.push(hitRow("🥗", "No junk-food goal", foodStats.avoidedDays, "var(--success)", foodStats.loggedDays));
     const goalCardHTML = goalRows.length
       ? `<div class="card">
-          <div class="card-title"><h3>Daily goals · hit rate</h3><span class="sub">of ${yearDays.size} workout day${yearDays.size === 1 ? "" : "s"}</span></div>
+          <div class="card-title"><h3>Daily goals · hit rate</h3><span class="sub">food goal uses logged days; other goals use ${yearDays.size} workout day${yearDays.size === 1 ? "" : "s"}</span></div>
           <div class="goal-hits">${goalRows.join("")}</div>
         </div>`
       : "";
@@ -2161,9 +2234,22 @@
         ${goalCardHTML}
       </div>
 
-      <div class="card" style="margin-top:16px">
-        <div class="card-title"><h3>Consistency heatmap · ${year}</h3><span class="sub">workout days</span></div>
-        <div id="acHeat">${yearHeatGrid(all, year, false)}</div>
+      <div class="grid-2 analytics-insights-grid" style="margin-top:16px">
+        <div class="card">
+          <div class="card-title"><h3>Junk-food days · ${year}</h3><span class="sub">explicitly logged days only</span></div>
+          <div class="chart-wrap" id="acJunkFood"></div>
+          <p class="food-habit-note">Months with no elapsed dates are omitted; zero means no junk-food day was logged in that month.</p>
+        </div>
+        <div class="card analytics-recovery">
+          <div class="card-title"><h3>Food habits & recovery · ${year}</h3><span class="sub">elapsed dates through yesterday</span></div>
+          <div class="recovery-kpis">
+            <div><b>${foodStats.junkFoodDays}</b><span>junk-food days</span></div>
+            <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged days</span></div>
+            <div><b>${recoveryStats.elapsedDays ? recoveryStats.restDays : "—"}</b><span>rest days</span></div>
+            <div><b>${recoveryStats.elapsedDays ? Math.round(recoveryStats.workoutRate * 100) + "%" : "—"}</b><span>training days · elapsed</span></div>
+          </div>
+          <p class="food-habit-note">${foodStats.unloggedDays} unlogged dates are unknown, not successes or junk-food days. Avoidance rate uses only explicitly logged days.</p>
+        </div>
       </div>
 
       ${hasCmp ? `
@@ -2180,6 +2266,7 @@
     `;
 
     const labels = ms.map((m) => m.label);
+    C().barChart(document.getElementById("acJunkFood"), labels, [{ name: "Junk-food days", values: foodStats.months.map((m) => m.loggedDays ? m.junkFoodDays : null), color: "var(--danger)" }], { height: 180, valueFmt: (v) => v + " junk-food days", highlight: hl });
     C().barChart(document.getElementById("acMonthly"), labels, [{ name: "Workouts", values: ms.map((m) => m.workouts) }], { height: 180, valueFmt: (v) => v + " workouts", highlight: hl });
     C().barChart(document.getElementById("acCalories"), labels, [{ name: "kcal", values: ms.map((m) => m.calories), color: "var(--success)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal", highlight: hl });
     C().barChart(document.getElementById("acDuration"), labels, [{ name: "min", values: ms.map((m) => m.duration), color: "var(--info)" }], { height: 180, valueFmt: (v) => St().fmtDuration(v) });
@@ -2226,7 +2313,8 @@
   function renderData() {
     const all = Store().workouts;
     const meas = Store().measurements;
-    const days = new Set(all.map((w) => w.date)).size;
+    const history = St().workoutHistoryStats(all);
+    const days = history.workoutDays;
     const years = new Set(all.map((w) => w.date.slice(0, 4)));
     meas.forEach((m) => years.add(m.date.slice(0, 4)));
     const set = Store().settings;
@@ -2241,10 +2329,10 @@
     document.getElementById("dataBody").innerHTML = `
       <div class="data-grid">
         <div class="card data-card">
-          <div class="data-card-head">${icon("activity")}<div><h3>Your Data</h3><p class="desc">Everything this app tracks, at a glance.</p></div></div>
+          <div class="data-card-head">${icon("activity")}<div><h3>Your Data</h3><p class="desc">Workout days and elapsed rest days, from ${history.startDate ? St().prettyDate(history.startDate) + " through " + St().prettyDate(history.endDate) : "your workout history"}.</p></div></div>
           <div class="data-stats">
-            <div class="s"><b>${St().fmtNum(all.length)}</b><span>Workouts</span></div>
             <div class="s"><b>${St().fmtNum(days)}</b><span>Workout days</span></div>
+            <div class="s"><b>${St().fmtNum(history.restDays)}</b><span>Resting days</span></div>
             <div class="s"><b>${St().fmtNum(meas.length)}</b><span>Measurements</span></div>
             <div class="s"><b>${curYear}</b><span>${curYear === new Date().getFullYear() ? "Current year" : "Year in focus"}</span></div>
           </div>
@@ -2334,7 +2422,7 @@
             toast("This file is not a valid Focus backup.", "error", 5000);
             return;
           }
-          showImportPreview(obj.workouts, obj.measurements, [], { source: "json", meta: {} });
+          showImportPreview(obj.workouts, obj.measurements, [], { source: "json", meta: {}, backupData: obj });
         } catch (e) {
           toast("Invalid JSON: " + e.message, "error", 5000);
         }
@@ -2400,7 +2488,10 @@
     const N = Focus.Store;
     const plan = N.planImport(workoutRows, measurementRows);
     const t = plan.totals;
-    if (!t.added && !t.updated && !t.invalid) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
+    const backupFoodDates = extra.source === "json" && extra.backupData && extra.backupData.settings && extra.backupData.settings.noJunkFoodLog
+      ? Object.keys(extra.backupData.settings.noJunkFoodLog).filter((iso) => St().validISODate(iso) && typeof extra.backupData.settings.noJunkFoodLog[iso] === "boolean").length
+      : 0;
+    if (!t.added && !t.updated && !t.invalid && !backupFoodDates) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
 
     const pW = plan.workouts, pM = plan.measurements;
     const srcLabel = extra.source === "appdata"
@@ -2420,6 +2511,7 @@
       <h2>Import preview</h2>
       <p class="modal-sub">${esc(srcLabel)}</p>
       <p class="modal-sub" style="color:var(--text-faint);margin-top:2px">Nothing is changed until you confirm.</p>
+      ${backupFoodDates ? `<p class="modal-sub">🥗 ${backupFoodDates} daily food outcome${backupFoodDates === 1 ? "" : "s"} will be restored (local entries win on date conflicts).</p>` : ""}
       <div class="imp-kind">
         <div class="ik"><span>Workouts</span><b class="add">+${pW.added.length}</b><b class="upd">↻${pW.updated.length}</b><b class="same">=${pW.skipped}</b><b class="bad">⚠${pW.invalid}</b></div>
         <div class="ik"><span>Measurements</span><b class="add">+${pM.added.length}</b><b class="upd">↻${pM.updated.length}</b><b class="same">=${pM.skipped}</b><b class="bad">⚠${pM.invalid}</b></div>
@@ -2446,19 +2538,22 @@
         </div>` : `<p class="modal-sub">(Nothing to preview)</p>`}
       <div class="modal-actions">
         <button class="btn btn-ghost" data-close>Cancel</button>
-        <button class="btn btn-primary" id="confirmImport">Import ${t.added + t.updated} record${t.added + t.updated === 1 ? "" : "s"}</button>
+        <button class="btn btn-primary" id="confirmImport">Import ${t.added + t.updated} record${t.added + t.updated === 1 ? "" : "s"}${backupFoodDates ? " + food log" : ""}</button>
       </div>`, {
       onOpen: (m) => {
         m.querySelector("#confirmImport").addEventListener("click", async () => {
           closeModal();
           try {
-            const res = await N.importRecords(workoutRows, measurementRows);
+            const res = extra.source === "json" && extra.backupData
+              ? await N.importBackup(extra.backupData)
+              : await N.importRecords(workoutRows, measurementRows);
             await N.setSetting("lastImportAt", new Date().toISOString());
             Focus.UI.renderData();
             const bits = [];
             if (res.added) bits.push(res.added + " added");
             if (res.updated) bits.push(res.updated + " updated");
             if (res.invalid) bits.push(res.invalid + " invalid");
+            if (backupFoodDates) bits.push(backupFoodDates + " food outcome" + (backupFoodDates === 1 ? "" : "s") + " restored where local dates were empty");
             toast("Import complete — " + (bits.join(", ") || "nothing to do") + ". Your dashboard has been updated.", "success", 5500);
           } catch (e) {
             toast("Import failed: " + e.message, "error", 5000);

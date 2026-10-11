@@ -510,11 +510,37 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .goal-row b { font-variant-numeric: tabular-nums; }
 .goal-row.ok b { color: var(--success); }
 
+/* Daily food habit check-in — one explicit outcome per date; unlogged is neutral. */
+.food-habit-card { padding: 14px 16px; }
+.food-habit { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.food-habit-copy { display: flex; flex-direction: column; gap: 3px; }
+.food-habit-copy b { font-size: 14px; }
+.food-habit-status { font-size: 12px; color: var(--text-faint); }
+.food-habit.is-avoided .food-habit-status { color: var(--success); font-weight: 700; }
+.food-habit.is-junk .food-habit-status { color: var(--danger); font-weight: 700; }
+.food-habit-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.food-habit-note { margin: 8px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.45; }
+.food-habit-compact { align-items: flex-start; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px; }
+.food-goal-toggle { grid-column: 1 / -1; padding: 8px 0 0; }
+.food-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin: 12px 0; padding: 11px 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
+.food-summary > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.food-summary b { font-size: 12.5px; }
+.food-summary span, .food-summary p { font-size: 11px; color: var(--text-dim); }
+.food-summary-rate { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.food-summary-rate > b { color: var(--success); font-size: 18px; }
+.food-summary p { grid-column: 1 / -1; margin: 0; color: var(--text-faint); }
+.recovery-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.recovery-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: 11px; background: var(--surface-2); border-radius: 10px; }
+.recovery-kpis b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.recovery-kpis span { font-size: 11px; color: var(--text-dim); }
+
 /* Day popover */
 .day-panel { display: flex; flex-direction: column; gap: 10px; }
 .day-panel h3 { margin: 0 0 2px; font-size: 16px; }
 .day-actions { display: flex; gap: 10px; margin-top: 12px; }
 .day-actions .btn { flex: 1; }
+.month-summary .day-total + .day-total { margin-top: 8px; }
+#dayPanel .btn:focus-visible, .food-habit .btn:focus-visible, .food-goal-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .day-total { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .day-total .t { background: var(--surface-2); border-radius: 11px; padding: 9px; text-align: center; }
 .day-total .t b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -962,6 +988,9 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 }
 .period-card .stat-mini .delta { font-size: 11px; padding: 1px 7px; }
 .period-card .delta[data-prev] { cursor: help; }
+/* Rest-streak tile: less is better, so a green pill means rest days fell and a red pill means they grew. */
+.delta.down.good-down { background: var(--success-soft); color: var(--success); }
+.delta.up.bad-up { background: var(--danger-soft); color: var(--danger); }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1200px) {
