@@ -320,10 +320,10 @@
       Object.assign(state.settings, obj);
       await saveSettings();
     },
-    /** Save an explicit daily food outcome; true = avoided, false = ate junk, null = clear. */
+    /** Save an explicit daily food outcome; true = avoided, "some" = partial, false = full junk-food day, null = clear. */
     async setNoJunkFoodDay(iso, status) {
       if (!isISODate(iso)) throw new Error("Choose a valid calendar date.");
-      if (status !== true && status !== false && status !== null) throw new Error("Choose a food outcome or clear the log.");
+      if (status !== true && status !== false && status !== "some" && status !== null) throw new Error("Choose a valid food outcome or clear the log.");
       const log = state.settings.noJunkFoodLog || (state.settings.noJunkFoodLog = {});
       if (status === null) delete log[iso];
       else log[iso] = status;
@@ -536,7 +536,7 @@
     const clean = {};
     if (!log || typeof log !== "object" || Array.isArray(log)) return clean;
     Object.keys(log).forEach((iso) => {
-      if (isISODate(iso) && (log[iso] === true || log[iso] === false)) clean[iso] = log[iso];
+      if (isISODate(iso) && (log[iso] === true || log[iso] === false || log[iso] === "some")) clean[iso] = log[iso];
     });
     return clean;
   }

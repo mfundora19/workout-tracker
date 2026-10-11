@@ -93,8 +93,8 @@
   }
 
   /**
-   * Food-habit totals for a calendar year. Only explicit boolean log entries
-   * count as logged; missing dates are unknown, never clean or junk-food days.
+   * Food-habit totals for a calendar year. Only explicit true, "some", or
+   * false outcomes count as logged; missing dates are unknown, never successes.
    * refDateISO makes partial years/months deterministic and excludes future
    * dates. avoidanceRate is null until at least one date was logged.
    */
@@ -102,7 +102,7 @@
     const ref = validISODate(refDateISO) ? refDateISO : todayISO();
     const dateLimit = year > yearOf(ref) ? null : year < yearOf(ref) ? String(year) + "-12-31" : ref;
     const months = [];
-    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, junkFoodDays = 0;
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0;
     for (let month = 1; month <= 12; month++) {
       const start = String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0") + "-01";
       const last = start.slice(0, 8) + String(daysInMonth(year, month)).padStart(2, "0");
@@ -110,11 +110,12 @@
       elapsedDays += stats.elapsedDays;
       loggedDays += stats.loggedDays;
       avoidedDays += stats.avoidedDays;
+      partialJunkFoodDays += stats.partialJunkFoodDays;
       junkFoodDays += stats.junkFoodDays;
       months.push({ month, label: MONTHS_SHORT[month - 1], ...stats });
     }
     return {
-      year, elapsedDays, loggedDays, avoidedDays, junkFoodDays,
+      year, elapsedDays, loggedDays, avoidedDays, partialJunkFoodDays, junkFoodDays,
       unloggedDays: elapsedDays - loggedDays,
       avoidanceRate: loggedDays ? avoidedDays / loggedDays : null,
       months
@@ -124,20 +125,22 @@
   /** Count logged outcomes for a date range; today and future are not elapsed yet. */
   function foodHabitRangeStats(log, startISO, endISO, refDateISO) {
     if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) {
-      return { elapsedDays: 0, loggedDays: 0, avoidedDays: 0, junkFoodDays: 0, unloggedDays: 0, avoidanceRate: null };
+      return { elapsedDays: 0, loggedDays: 0, avoidedDays: 0, partialJunkFoodDays: 0, junkFoodDays: 0, unloggedDays: 0, avoidanceRate: null };
     }
     const ref = validISODate(refDateISO) ? refDateISO : todayISO();
     const end = endISO < ref ? endISO : ref;
-    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, junkFoodDays = 0;
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, partialJunkFoodDays = 0, junkFoodDays = 0;
     if (end >= startISO) {
       for (let day = startISO; day <= end; day = addDays(day, 1)) {
         elapsedDays++;
-        if (!log || !Object.prototype.hasOwnProperty.call(log, day) || (log[day] !== true && log[day] !== false)) continue;
+        if (!log || !Object.prototype.hasOwnProperty.call(log, day) || (log[day] !== true && log[day] !== "some" && log[day] !== false)) continue;
         loggedDays++;
-        if (log[day]) avoidedDays++; else junkFoodDays++;
+        if (log[day] === true) avoidedDays++;
+        else if (log[day] === "some") partialJunkFoodDays++;
+        else junkFoodDays++;
       }
     }
-    return { elapsedDays, loggedDays, avoidedDays, junkFoodDays, unloggedDays: elapsedDays - loggedDays, avoidanceRate: loggedDays ? avoidedDays / loggedDays : null };
+    return { elapsedDays, loggedDays, avoidedDays, partialJunkFoodDays, junkFoodDays, unloggedDays: elapsedDays - loggedDays, avoidanceRate: loggedDays ? avoidedDays / loggedDays : null };
   }
 
   /**
@@ -270,7 +273,7 @@
     return totals;
   }
 
-  /** Daily food habit by month with explicit log rate. */
+  /** Daily food habit by month with explicit log rate and full/partial junk counts. */
   function foodHabitMonthSummary(log, year, month, refDateISO) {
     const item = foodHabitMonthStats(log, year, month, refDateISO);
     if (!item) return null;
@@ -282,7 +285,7 @@
 
   /** Daily food habit summary label data, kept separate from the UI. */
   function foodHabitStatus(log, iso) {
-    return log && Object.prototype.hasOwnProperty.call(log, iso) && (log[iso] === true || log[iso] === false)
+    return log && Object.prototype.hasOwnProperty.call(log, iso) && (log[iso] === true || log[iso] === false || log[iso] === "some")
       ? log[iso] : null;
   }
 

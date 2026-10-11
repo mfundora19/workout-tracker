@@ -268,9 +268,9 @@
 
       switch (action) {
         case "food-log": {
-          const status = target.dataset.status === "true" ? true : target.dataset.status === "false" ? false : null;
+          const status = target.dataset.status === "true" ? true : target.dataset.status === "some" ? "some" : target.dataset.status === "false" ? false : target.dataset.status === "clear" ? null : undefined;
           Focus.Store.setNoJunkFoodDay(target.dataset.date, status).then(() => {
-            Focus.UI.toast(status === true ? "No junk food logged 🥗" : status === false ? "Junk food logged" : "Food log cleared");
+            Focus.UI.toast(status === true ? "No junk food logged 🥗" : status === "some" ? "Some junk food logged" : status === false ? "Junk food logged" : "Food log cleared");
             renderCurrent();
           }).catch((err) => Focus.UI.toast(err.message, "warn"));
           break;

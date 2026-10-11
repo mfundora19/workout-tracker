@@ -585,13 +585,14 @@
     const enabled = goals.avoidJunkFood !== false;
     if (!enabled) return "";
     const status = St().foodHabitStatus(Store().settings.noJunkFoodLog, iso);
-    const label = status === true ? "No junk food" : status === false ? "Junk food eaten" : "Not logged";
-    const cls = status === true ? "is-avoided" : status === false ? "is-junk" : "is-unlogged";
+    const label = status === true ? "No junk food" : status === "some" ? "Some junk food" : status === false ? "Junk-food day" : "Not logged";
+    const cls = status === true ? "is-avoided" : status === "some" ? "is-partial" : status === false ? "is-junk" : "is-unlogged";
     return `<div class="food-habit ${compact ? "food-habit-compact" : ""} ${cls}" role="group" aria-label="Avoid junk food for ${iso}">
       <div class="food-habit-copy"><b>🥗 Avoid junk food</b><span class="food-habit-status" role="status">${label}</span></div>
       <div class="food-habit-actions">
         <button type="button" class="btn btn-sm ${status === true ? "btn-primary" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="true" aria-pressed="${status === true}">No junk food</button>
-        <button type="button" class="btn btn-sm ${status === false ? "btn-danger" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="false" aria-pressed="${status === false}">Ate junk</button>
+        <button type="button" class="btn btn-sm ${status === "some" ? "btn-warning" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="some" aria-pressed="${status === "some"}">Some junk</button>
+        <button type="button" class="btn btn-sm ${status === false ? "btn-danger" : "btn-ghost"}" data-action="food-log" data-date="${iso}" data-status="false" aria-pressed="${status === false}">Junk-food day</button>
         ${status !== null ? `<button type="button" class="btn btn-sm btn-ghost" data-action="food-log" data-date="${iso}" data-status="clear">Clear log</button>` : ""}
       </div>
     </div>`;
@@ -1289,7 +1290,7 @@
     const stats = St().foodHabitMonthStats(log, year, month, refDateISO);
     if (!stats || stats.elapsedDays === 0) return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>No elapsed days in this month yet.</span></div><div class="food-summary-rate"><b>—</b><span>avoidance · 0 logged</span></div><p>Future dates are excluded.</p></div>`;
     const rate = stats.avoidanceRate == null ? "—" : Math.round(stats.avoidanceRate * 100) + "%";
-    return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>${stats.junkFoodDays} junk-food day${stats.junkFoodDays === 1 ? "" : "s"} · ${stats.avoidedDays} no-junk-food day${stats.avoidedDays === 1 ? "" : "s"}</span></div><div class="food-summary-rate"><b>${rate}</b><span>avoidance · ${stats.loggedDays} logged / ${stats.elapsedDays} elapsed</span></div>${stats.loggedDays ? `<p>${stats.unloggedDays} unlogged day${stats.unloggedDays === 1 ? "" : "s"} excluded from the rate.</p>` : `<p>No food days logged yet; unknown dates aren't counted.</p>`}</div>`;
+    return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>${stats.junkFoodDays} full junk-food day${stats.junkFoodDays === 1 ? "" : "s"} · ${stats.partialJunkFoodDays} partial day${stats.partialJunkFoodDays === 1 ? "" : "s"} · ${stats.avoidedDays} no-junk-food day${stats.avoidedDays === 1 ? "" : "s"}</span></div><div class="food-summary-rate"><b>${rate}</b><span>fully avoided · ${stats.avoidedDays} / ${stats.loggedDays} logged</span></div>${stats.loggedDays ? `<p>${stats.unloggedDays} unlogged day${stats.unloggedDays === 1 ? "" : "s"} excluded from the rate.</p>` : `<p>No food days logged yet; unknown dates aren't counted.</p>`}</div>`;
   }
 
   /** Progress vs daily goals for a single day ('' when no goals are set).
@@ -2237,14 +2238,16 @@
       <div class="grid-2 analytics-insights-grid" style="margin-top:16px">
         <div class="card">
           <div class="card-title"><h3>Junk-food days · ${year}</h3><span class="sub">explicitly logged days only</span></div>
+          <div class="food-chart-legend" aria-label="Food log chart legend"><span><i style="--legend-color:var(--danger)"></i>Full junk-food day</span><span><i style="--legend-color:var(--warn)"></i>Some junk food</span></div>
           <div class="chart-wrap" id="acJunkFood"></div>
-          <p class="food-habit-note">Months with no elapsed dates are omitted; zero means no junk-food day was logged in that month.</p>
+          <p class="food-habit-note">Months with no logged dates are omitted. Partial and full junk-food days are shown separately.</p>
         </div>
         <div class="card analytics-recovery">
           <div class="card-title"><h3>Food habits & recovery · ${year}</h3><span class="sub">elapsed dates through yesterday</span></div>
           <div class="recovery-kpis">
-            <div><b>${foodStats.junkFoodDays}</b><span>junk-food days</span></div>
-            <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged days</span></div>
+            <div><b>${foodStats.junkFoodDays}</b><span>full junk-food days</span></div>
+            <div><b>${foodStats.partialJunkFoodDays}</b><span>partial junk-food days</span></div>
+            <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>fully avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged</span></div>
             <div><b>${recoveryStats.elapsedDays ? recoveryStats.restDays : "—"}</b><span>rest days</span></div>
             <div><b>${recoveryStats.elapsedDays ? Math.round(recoveryStats.workoutRate * 100) + "%" : "—"}</b><span>training days · elapsed</span></div>
           </div>
@@ -2266,7 +2269,10 @@
     `;
 
     const labels = ms.map((m) => m.label);
-    C().barChart(document.getElementById("acJunkFood"), labels, [{ name: "Junk-food days", values: foodStats.months.map((m) => m.loggedDays ? m.junkFoodDays : null), color: "var(--danger)" }], { height: 180, valueFmt: (v) => v + " junk-food days", highlight: hl });
+    C().barChart(document.getElementById("acJunkFood"), labels, [
+      { name: "Full junk-food days", values: foodStats.months.map((m) => m.loggedDays ? m.junkFoodDays : null), color: "var(--danger)" },
+      { name: "Some junk food", values: foodStats.months.map((m) => m.loggedDays ? m.partialJunkFoodDays : null), color: "var(--warn)" }
+    ], { height: 180, valueFmt: (v) => v + " logged days", highlight: hl });
     C().barChart(document.getElementById("acMonthly"), labels, [{ name: "Workouts", values: ms.map((m) => m.workouts) }], { height: 180, valueFmt: (v) => v + " workouts", highlight: hl });
     C().barChart(document.getElementById("acCalories"), labels, [{ name: "kcal", values: ms.map((m) => m.calories), color: "var(--success)" }], { height: 180, valueFmt: (v) => St().fmtNum(v) + " kcal", highlight: hl });
     C().barChart(document.getElementById("acDuration"), labels, [{ name: "min", values: ms.map((m) => m.duration), color: "var(--info)" }], { height: 180, valueFmt: (v) => St().fmtDuration(v) });
@@ -2489,7 +2495,7 @@
     const plan = N.planImport(workoutRows, measurementRows);
     const t = plan.totals;
     const backupFoodDates = extra.source === "json" && extra.backupData && extra.backupData.settings && extra.backupData.settings.noJunkFoodLog
-      ? Object.keys(extra.backupData.settings.noJunkFoodLog).filter((iso) => St().validISODate(iso) && typeof extra.backupData.settings.noJunkFoodLog[iso] === "boolean").length
+      ? Object.keys(extra.backupData.settings.noJunkFoodLog).filter((iso) => St().validISODate(iso) && (typeof extra.backupData.settings.noJunkFoodLog[iso] === "boolean" || extra.backupData.settings.noJunkFoodLog[iso] === "some")).length
       : 0;
     if (!t.added && !t.updated && !t.invalid && !backupFoodDates) { toast("Nothing to import — all records already exist unchanged.", "warn"); return; }
 

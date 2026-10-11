@@ -101,10 +101,10 @@ function dump() {
         S.restStreakEnd("2026-10-01", "2026-10-31", "2026-09-10"));
 
     // --- food habit + recovery analytics (explicit outcomes; unlogged stays unknown) ---
-    const habitLog = { "2024-02-01": true, "2024-02-02": false, "2024-02-03": null, "2024-02-30": true, "2024-03-01": true, "2024-03-02": false, "2024-03-05": true, "2024-03-06": false };
+    const habitLog = { "2024-02-01": true, "2024-02-02": false, "2024-02-03": null, "2024-02-30": true, "2024-03-01": true, "2024-03-02": false, "2024-03-03": "some", "2024-03-05": true, "2024-03-06": false };
     const habit = S.foodHabitStats(habitLog, 2024, "2024-03-03");
-    ok("food-habit stats count only explicit true/false dates", habit.elapsedDays === 63 && habit.loggedDays === 4 && habit.avoidedDays === 2 && habit.junkFoodDays === 2 && habit.unloggedDays === 59 && habit.avoidanceRate === 0.5, JSON.stringify(habit));
-    ok("food-habit leap February has 29 elapsed days and unknown future March dates excluded", habit.months[1].elapsedDays === 29 && habit.months[1].loggedDays === 2 && habit.months[2].elapsedDays === 3 && habit.months[2].loggedDays === 2, JSON.stringify([habit.months[1], habit.months[2]]));
+    ok("food-habit stats count full, partial, avoided, and unknown dates distinctly", habit.elapsedDays === 63 && habit.loggedDays === 5 && habit.avoidedDays === 2 && habit.partialJunkFoodDays === 1 && habit.junkFoodDays === 2 && habit.unloggedDays === 58 && habit.avoidanceRate === 0.4, JSON.stringify(habit));
+    ok("food-habit leap February has 29 elapsed days and partial March day is explicit", habit.months[1].elapsedDays === 29 && habit.months[1].loggedDays === 2 && habit.months[2].elapsedDays === 3 && habit.months[2].loggedDays === 3 && habit.months[2].partialJunkFoodDays === 1, JSON.stringify([habit.months[1], habit.months[2]]));
     ok("future year and empty logs remain unknown", S.foodHabitStats({ "2026-01-01": true }, 2027, "2026-06-01").elapsedDays === 0 && S.foodHabitStats({}, 2024, "2024-03-03").avoidanceRate === null);
     const recovery = S.trainingRecoveryStats([
       { date: "2024-03-01" }, { date: "2024-03-01" }, { date: "2024-03-03" }, { date: "2024-03-09" }
@@ -496,21 +496,23 @@ function dump() {
     await Focus.Store.setNoJunkFoodDay("2024-02-01", true);
     await Focus.Store.setNoJunkFoodDay("2024-02-02", false);
     await Focus.Store.setNoJunkFoodDay("2024-02-02", true);
-    ok("food outcome can be created and corrected", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-02"] === true);
+    await Focus.Store.setNoJunkFoodDay("2024-02-03", "some");
+    ok("food outcome can be created, corrected, and partially logged", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-02"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-03"] === "some");
     let invalidFoodDate = false, invalidFoodStatus = false;
     try { await Focus.Store.setNoJunkFoodDay("2024-02-30", true); } catch (e) { invalidFoodDate = true; }
-    try { await Focus.Store.setNoJunkFoodDay("2024-02-03", "true"); } catch (e) { invalidFoodStatus = true; }
-    ok("food log rejects invalid dates and non-boolean statuses", invalidFoodDate && invalidFoodStatus);
+    try { await Focus.Store.setNoJunkFoodDay("2024-02-04", "true"); } catch (e) { invalidFoodStatus = true; }
+    ok("food log rejects invalid dates and unsupported statuses", invalidFoodDate && invalidFoodStatus);
     const foodBackup = Focus.Store.exportBackup();
-    ok("JSON backup includes explicit food log outcomes", foodBackup.settings.noJunkFoodLog["2024-02-01"] === true && foodBackup.settings.noJunkFoodLog["2024-02-02"] === true);
+    ok("JSON backup includes full, partial, and avoided food outcomes", foodBackup.settings.noJunkFoodLog["2024-02-01"] === true && foodBackup.settings.noJunkFoodLog["2024-02-02"] === true && foodBackup.settings.noJunkFoodLog["2024-02-03"] === "some");
     foodBackup.settings.noJunkFoodLog["2024-02-01"] = false;
-    foodBackup.settings.noJunkFoodLog["2024-02-04"] = false;
+    foodBackup.settings.noJunkFoodLog["2024-02-04"] = "some";
     await Focus.Store.importBackup(foodBackup);
-    ok("backup restores missing food dates but local dates win conflicts", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-04"] === false);
+    ok("backup restores missing partial-food dates but local dates win conflicts", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-04"] === "some");
     await Focus.Store.setNoJunkFoodDay("2024-02-01", null);
-    ok("food log can be cleared without a false/true placeholder", !Object.prototype.hasOwnProperty.call(Focus.Store.settings.noJunkFoodLog, "2024-02-01"));
+    await Focus.Store.setNoJunkFoodDay("2024-02-03", null);
+    ok("full and partial food outcomes can be cleared", !Object.prototype.hasOwnProperty.call(Focus.Store.settings.noJunkFoodLog, "2024-02-01") && !Object.prototype.hasOwnProperty.call(Focus.Store.settings.noJunkFoodLog, "2024-02-03"));
     await Focus.Store.importBackup({ app: "focus", kind: "backup", version: 1, settings: {}, workouts: [], measurements: [] });
-    ok("older JSON backups without a food-log key still import", Focus.Store.settings.noJunkFoodLog["2024-02-04"] === false);
+    ok("older JSON backups without a food-log key still import", Focus.Store.settings.noJunkFoodLog["2024-02-04"] === "some");
 
     // --- independent daily goals: calorie and time complete on their own ---
     const gTest = [
@@ -634,12 +636,26 @@ function dump() {
 
     // --- analytics comparison: only years with data, never future, hidden until a 2nd year ---
     Focus.UI.state.anaA = null; Focus.UI.state.anaB = null;
+    const savedAnalyticsFoodLog = Object.assign({}, Focus.Store.settings.noJunkFoodLog || {});
+    Focus.Store.settings.noJunkFoodLog = {};
     Focus.UI.renderAnalytics();
     // seed has workouts only in the current year -> no comparison at all
+    // Food chart state is isolated from the browser's persisted log.
     ok("no comparison defaults with a single data year", Focus.UI.state.anaA === null && Focus.UI.state.anaB === null, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
     ok("Analytics replaces duplicate heatmap with monthly junk-food chart", !document.getElementById("acHeat") && !!document.querySelector("#acJunkFood svg") && document.getElementById("analyticsCharts").textContent.includes("Junk-food days") && document.getElementById("analyticsCharts").textContent.includes("logged days"));
     ok("Analytics recovery summary labels elapsed rest/training days", document.querySelector(".analytics-recovery") && document.querySelector(".analytics-recovery").textContent.includes("rest days") && document.querySelector(".analytics-recovery").textContent.includes("training days · elapsed"));
-    ok("Analytics hides zero junk-food bars for months with no logged food", !document.querySelector("#acJunkFood svg path[fill=\"var(--danger)\"]"));
+    ok("Analytics hides junk-food bars when no food days are logged", !document.querySelector("#acJunkFood svg path[fill=\"var(--danger)\"]") && !document.querySelector("#acJunkFood svg path[fill=\"var(--warn)\"]"));
+    Focus.Store.settings.noJunkFoodLog = {
+      "2026-01-02": true,
+      "2026-01-03": "some",
+      "2026-01-04": false
+    };
+    Focus.UI.renderAnalytics();
+    const foodChart = document.querySelector("#acJunkFood svg");
+    const foodBarColors = [...document.querySelectorAll("#acJunkFood svg path")].map((path) => path.getAttribute("fill"));
+    ok("Analytics charts partial and full junk-food days separately", foodChart && foodChart.getAttribute("aria-label") === "Full junk-food days vs Some junk food" && foodBarColors.includes("var(--danger)") && foodBarColors.includes("var(--warn)"), JSON.stringify({ label: foodChart && foodChart.getAttribute("aria-label"), colors: foodBarColors }));
+    Focus.Store.settings.noJunkFoodLog = savedAnalyticsFoodLog;
+    Focus.UI.renderAnalytics();
     ok("comparison row hidden with a single data year", document.getElementById("analyticsCompare").innerHTML.trim() === "" && !document.querySelector("#acCompareWk"), "cmp html: " + document.getElementById("analyticsCompare").innerHTML.slice(0, 40));
     // add a second year (plus a future-dated workout) -> comparison appears with only valid years
     const cmpA = await Focus.Store.addWorkout({ date: "2025-01-10", type: "Other", calories: 500 });
@@ -902,7 +918,7 @@ function dump() {
     ok("multi-measurement cleanup restores count", Focus.Store.measurements.length === measBefore, "before=" + measBefore + " after=" + Focus.Store.measurements.length);
 
     // --- calendar day panel: month insights and explicit food outcome controls ---
-    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": false };
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": "some", "2026-08-04": false };
     Focus.Store.settings.goals.avoidJunkFood = true;
     Focus.UI.state.calMode = "month";
     Focus.UI.state.calMonth = 8;
@@ -910,16 +926,17 @@ function dump() {
     Focus.UI.renderCalendar();
     const monthSummary = document.querySelector("#dayPanel .month-summary");
     ok("Calendar month summary includes workout, elapsed rest, duration and food facts", !!monthSummary && monthSummary.textContent.includes("workout days") && monthSummary.textContent.includes("rest days · elapsed") && monthSummary.textContent.includes("duration") && monthSummary.textContent.includes("junk-food day"));
-    ok("Calendar month summary reports logged-day denominator", monthSummary && monthSummary.textContent.includes("2 logged / 12 elapsed"));
+    ok("Calendar month summary reports full, partial and avoidance outcomes", monthSummary && monthSummary.textContent.includes("1 full junk-food day") && monthSummary.textContent.includes("1 partial day") && monthSummary.textContent.includes("1 / 3 logged"));
     Focus.Store.settings.noJunkFoodLog = {};
     Focus.Store.settings.goals.avoidJunkFood = true;
     Focus.UI.renderCalendar();
     const emptyFoodSummary = document.querySelector("#dayPanel .food-summary:not(.month-training-highlight)");
     ok("Calendar month with no food entries labels the rate unknown", emptyFoodSummary && emptyFoodSummary.textContent.includes("No food days logged yet") && emptyFoodSummary.querySelector(".food-summary-rate b").textContent === "—");
-    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": false };
-    Focus.UI.state.calDay = "2026-08-02";
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": "some", "2026-08-04": false };
+    Focus.UI.state.calDay = "2026-08-03";
     Focus.UI.renderCalendar();
-    ok("Calendar selected day shows food status, correction and clear controls", document.querySelector("#dayPanel .food-habit.is-avoided") && document.querySelector('#dayPanel [data-action="food-log"][data-status="false"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="clear"]'));
+    const partialFoodStatus = document.querySelector("#dayPanel .food-habit.is-partial .food-habit-status");
+    ok("Calendar selected day shows partial status plus all correction and clear controls", partialFoodStatus && partialFoodStatus.textContent === "Some junk food" && document.querySelector('#dayPanel [data-action="food-log"][data-status="true"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="some"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="false"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="clear"]'));
     Focus.UI.state.calMode = "year";
     Focus.UI.state.calDay = null;
 

@@ -55,8 +55,8 @@
 - Test: `app/tests/smoke-test.html`
 
 **Interfaces:**
-- Consumes: ISO date string and `true`, `false`, or `null` status; backup `.settings.noJunkFoodLog` is optional.
-- Produces: `Store.setNoJunkFoodDay(iso, status)` validates the calendar date, writes a boolean by ISO date or deletes the date for `null`, saves existing settings, and notifies listeners. `Store.importBackup` imports a backup log by filling missing keys only, so conflict-free restoration never deletes or overwrites a pre-existing local date.
+- Consumes: ISO date string and `true` (no junk), `"some"` (partial junk), `false` (full junk-food day), or `null` (clear); backup `.settings.noJunkFoodLog` is optional.
+- Produces: `Store.setNoJunkFoodDay(iso, status)` validates the calendar date, writes `true`, `"some"`, or `false` by ISO date and deletes the date for `null`, saves existing settings, and notifies listeners. `Store.importBackup` imports a backup log by filling missing keys only, so conflict-free restoration never deletes or overwrites a pre-existing local date.
 
 - [ ] Add failing tests for invalid dates/statuses, save/edit/clear, exported backup inclusion, older backups without the key, and merge behavior where local values win conflicts.
 - [ ] Implement a strict local ISO calendar-date validator and the store setter.
@@ -75,8 +75,8 @@
 - Test: `app/tests/smoke-test.html`
 
 **Interfaces:**
-- Consumes: `settings.goals.avoidJunkFood` (default `true`) and `settings.noJunkFoodLog[iso]` (`true`, `false`, or absent); the action handler delegates persistence to `Store.setNoJunkFoodDay`.
-- Produces: Dashboard today card and Calendar selected-day panel show labeled **No junk food**, **Junk food eaten**, or **Not logged**, buttons to choose either outcome, and a **Clear log** action when a result exists. Settings presents a labeled, accessible daily-goal toggle.
+- Consumes: `settings.goals.avoidJunkFood` (default `true`) and `settings.noJunkFoodLog[iso]` (`true` = avoided, `"some"` = partial junk, `false` = full junk-food day, or absent); the action handler delegates persistence to `Store.setNoJunkFoodDay`.
+- Produces: Dashboard today card and Calendar selected-day panel show labeled **No junk food**, **Some junk food**, **Junk-food day**, or **Not logged**, buttons for all three outcomes, and a **Clear log** action when a result exists. Settings presents a labeled, accessible daily-goal toggle.
 
 - [ ] Add tests for default-enabled goal setting, dashboard today controls, month day-panel controls, saving each choice, edit/clear, and UI-safe text labels.
 - [ ] Implement delegated UI actions and rerender after persistence without leaving a stale selected date.

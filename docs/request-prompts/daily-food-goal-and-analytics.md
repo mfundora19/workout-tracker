@@ -15,7 +15,7 @@ You are working in **Focus — Workout & Fitness Tracker**, a private, offline-f
 ### 1. Daily no-junk-food goal and habit log
 
 - Add **Avoid junk food** as a first-class daily goal, enabled by default and configurable with the existing Goals controls.
-- Let the user record the outcome for a specific calendar date: **No junk food** or **Junk food eaten**. Provide a clear unlogged state and a way to clear/correct an entry; do not silently interpret historical, unlogged dates as either success or junk-food consumption.
+- Let the user record a date-specific outcome with three choices: **No junk food** (avoided all day), **Some junk food** (ate a little, but not a full junk-food day), and **Junk-food day** (ate junk food as a full day outcome). Provide a clear unlogged state and a way to clear/correct an entry. Do not conflate the partial outcome with either fully avoided or a full junk-food day.
 - Make today's status easy to record from the Dashboard. Make any date easy to record or edit from Calendar's selected-day panel. Keep all controls accessible by keyboard and with clear accessible names/status text.
 - Persist the date-keyed status locally and include it in the app's existing JSON backup/restore data model. Existing backups without this field must continue loading safely. Imported records must not accidentally erase existing habit logs.
 - Treat one date as at most one habit outcome regardless of how many workouts exist on it.
@@ -23,21 +23,22 @@ You are working in **Focus — Workout & Fitness Tracker**, a private, offline-f
 ### 2. Shared habit analytics engine
 
 - Implement reusable, deterministic pure calculations following the existing analytics-engine conventions (no DOM, storage, or current-date dependence unless a date is passed explicitly).
-- Calculate monthly/yearly outcomes from explicitly logged dates: junk-food days, no-junk-food days, logged days, unlogged days, and avoidance rate (`no-junk-food days / logged days`, or null when there are no logged dates).
+- Calculate monthly/yearly outcomes from explicitly logged dates: fully avoided days, partial junk-food days, full junk-food days, logged days, unlogged days, and full-avoidance rate (`No junk food days / logged days`, or null when there are no logged dates).
+- A partial day counts as a logged outcome, but not as a no-junk-food success or a full junk-food day. Report it separately rather than hiding it inside either category.
 - Handle month boundaries, leap years, future dates, duplicate workout dates, empty periods, and partial months without counting unlogged dates as failures. Provide trend/comparison values that remain interpretable for months with different numbers of logged days.
 - Reuse the engine in Analytics, the month-summary card, and Dashboard rather than duplicating business rules inside renderers.
 
 ### 3. Analytics redesign
 
 - Remove the **Consistency heatmap** from Analytics; the Calendar remains the sole place for that heatmap.
-- Use the vacated space for distinct, actionable analytics instead of a duplicate calendar visualization. At minimum show a month-by-month **Junk-food days** view and a clear logged-day/avoidance-rate summary, with wording that does not imply unknown dates are successes or failures.
+- Use the vacated space for distinct, actionable analytics instead of a duplicate calendar visualization. At minimum show a month-by-month view that distinguishes full and partial junk-food days, plus a clear logged-day/full-avoidance-rate summary. Use a legend and wording that does not imply unknown dates are successes or failures.
 - Add one additional useful training/recovery insight (for example workout-day frequency, rest-day count, longest gap between workout days, or a training/recovery ratio) only where supported by stored data and calculated through reusable pure logic.
-- Keep configured daily goal tracking visible in Analytics alongside calorie and duration goal hit rates. The no-junk-food goal should show its outcome/avoidance rate, explicitly identify its denominator (logged days), and distinguish no log from a logged junk-food day.
+- Keep configured daily goal tracking visible in Analytics alongside calorie and duration goal hit rates. The no-junk-food goal should show its outcome/avoidance rate, explicitly identify its denominator (logged days), and distinguish no log from partial and full junk-food days.
 - Retain the existing charts and year-selection/year-comparison behavior; keep layouts professional and responsive in both themes.
 
 ### 4. Calendar selected-month insights
 
-- When Calendar is showing a whole month (no individual day selected), enrich its right-side month card with compact, useful facts based on that exact selected month: workouts, distinct workout days, rest days for elapsed/completed dates, calories, duration where available, best workout day or training streak, and no-junk-food outcomes when the goal/log data exists.
+- When Calendar is showing a whole month (no individual day selected), enrich its right-side month card with compact, useful facts based on that exact selected month: workouts, distinct workout days, rest days for elapsed/completed dates, calories, duration where available, best workout day or training streak, and food outcomes broken down into avoided, partial, and full junk-food days when the goal/log data exists.
 - For a current partial month, do not count future dates as rest days or as missing/unlogged habit entries. Label habit denominators and leave unsupported values as “—” or an honest empty state.
 - Keep the selected-day drill-in behavior intact and ensure the summary card returns when the user clears the selected day.
 
@@ -58,10 +59,11 @@ You are working in **Focus — Workout & Fitness Tracker**, a private, offline-f
 
 ## Acceptance checklist
 
-- A user can configure the no-junk-food daily goal and explicitly record either outcome for today or a past calendar date, then correct or clear it.
+- A user can configure the no-junk-food daily goal and explicitly record **No junk food**, **Some junk food**, or **Junk-food day** for today or a past calendar date, then correct or clear the outcome.
+- Partial junk-food days are counted as logged but kept separate from full junk-food days and no-junk-food successes.
 - Unlogged dates remain unknown and are never counted as clean or junk-food days.
 - The status survives app reload and JSON backup/restore while older backup files remain compatible.
-- Analytics has no Consistency heatmap, shows meaningful monthly junk-food counts/rates with explicit logged-day denominators, and includes a second supported training/recovery analysis.
-- Calendar's whole-month card contains accurate month-specific metrics and food-habit outcomes, while partial months exclude future dates.
+- Analytics has no Consistency heatmap, shows meaningful monthly full/partial junk-food counts with explicit logged-day denominators, and includes a second supported training/recovery analysis.
+- Calendar's whole-month card contains accurate month-specific metrics and full/partial/avoided food outcomes, while partial months exclude future dates.
 - Data → Your Data presents distinct **Resting days** and **Workout days**, not duplicate workout totals.
 - Existing styling, offline behavior, existing features, and smoke tests remain intact; the complete smoke suite and browser-facing checks pass.
