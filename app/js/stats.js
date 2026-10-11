@@ -93,6 +93,22 @@
   }
 
   /**
+   * Default completion date for a challenge: a day inside the challenge's own
+   * month and year, so logging an old goal lands in that month instead of today.
+   * A month already behind us lands on its last day (you finished it by then);
+   * the current month and any future month land on today. Passing todayIso keeps
+   * it deterministic; an unusable month/year falls back to today.
+   */
+  function suggestedCompletionDate(month, year, todayIso) {
+    const today = validISODate(todayIso) ? todayIso : todayISO();
+    const m = Number(month), y = Number(year);
+    if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y)) return today;
+    const ty = yearOf(today), tm = monthOf(today);
+    if (y > ty || (y === ty && m >= tm)) return today;
+    return y + "-" + String(m).padStart(2, "0") + "-" + String(daysInMonth(y, m)).padStart(2, "0");
+  }
+
+  /**
    * Food-habit totals for a calendar year. Only explicit true, "some", or
    * false outcomes count as logged; missing dates are unknown, never successes.
    * refDateISO makes partial years/months deterministic and excludes future
@@ -1364,6 +1380,7 @@
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
     monthDayMap, availableYears, workoutYears, longestStreakInSet, longestRestStreak, restStreakEnd, backupReminderDue, REMINDER_UNIT_DAYS, dailyGoalStatus,
+    suggestedCompletionDate,
     weekStartIndex, weekStartOffset, weekdayLabels,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };

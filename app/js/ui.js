@@ -11,6 +11,19 @@
   const St = () => Focus.Stats;
   const C = () => Focus.Charts;
 
+  /* Monthly challenges (and the badges they earn) are opt-out: they show unless
+   * the user switched them off in Settings › Preferences. The stored challenges
+   * are always kept — the switch only hides the feature's surfaces. */
+  const challengesOn = () => Store().settings.challengesEnabled !== false;
+
+  /* Two kinds of challenge: the classic monthly goal (labelled with its month)
+   * and named special editions (World Mental Health Day, and so on). Both keep
+   * the same month/year slot, completion date and badge pipeline. */
+  const isSpecialChallenge = (challenge) => Store().challengeKindOf(challenge) === "special";
+  const challengeLabel = (challenge) => (isSpecialChallenge(challenge) ? challenge.name : St().MONTHS_LONG[challenge.month - 1]);
+  /** One-line description of a challenge for tooltips/aria — never empty. */
+  const challengeTip = (challenge) => (isSpecialChallenge(challenge) ? challenge.name : St().MONTHS_LONG[challenge.month - 1]) + " " + challenge.year + ": " + challenge.description;
+
   /* ---------------- shared state ---------------- */
 
   const state = {
@@ -23,7 +36,10 @@
     importPending: null,
     qaMode: "workout",
     accentOpen: false,
-    dashEnter: false
+    dashEnter: false,
+    // Year groups the user opened/closed by hand (year -> bool), so re-renders
+    // keep their choice. Years without an entry follow the default below.
+    challengeYearOpen: {}
   };
 
   /* Set when the Dashboard view is shown — the next render plays the staggered
@@ -622,6 +638,10 @@
 
     const grid = document.getElementById("dashGrid");
     const parts = [];
+    // Earned badges live in the KPI cards below (year totals + year-over-year),
+    // not in a panel of their own.
+    const badgesYear = challengesOn() ? Store().challenges.filter((challenge) => challenge.completed && challenge.year === year).length : 0;
+    const badgesPrev = challengesOn() ? Store().challenges.filter((challenge) => challenge.completed && challenge.year === year - 1).length : 0;
 
     // --- Quick add card + today's explicit food-habit check-in ---
     parts.push(quickAddCardHTML());
@@ -644,7 +664,8 @@
           { label: "Calories", value: yStats.calories ? St().fmtNum(yStats.calories) : "0" },
           { label: "Duration", value: yStats.duration ? St().fmtDuration(yStats.duration) : "—" },
           { label: "Avg workouts / month", value: St().fmtNum(yStats.avgWorkoutsPerMonth, 1) },
-          { label: "Best month", value: best ? best.label + " (" + St().fmtNum(best.days) + "d)" : "—" }
+          { label: "Best month", value: best ? best.label + " (" + St().fmtNum(best.days) + "d)" : "—" },
+          ...(challengesOn() ? [{ label: "Challenge badges", value: St().fmtNum(badgesYear), emoji: "🏆" }] : [])
         ]
       })}
       ${statCard({
@@ -662,7 +683,8 @@
           { label: "Workouts", value: St().fmtNum(yStats.workouts) + " vs " + St().fmtNum(prev.workouts), delta: cmpDelta },
           { label: "Calories", value: St().fmtNum(yStats.calories) + " vs " + St().fmtNum(prev.calories), delta: yStats.calories - prev.calories },
           { label: "Workout days", value: St().fmtNum(yStats.days) + " vs " + St().fmtNum(prev.days), delta: yStats.days - prev.days },
-          { label: "Longest streak", value: yStats.longestStreak + " vs " + prev.longestStreak }
+          { label: "Longest streak", value: yStats.longestStreak + " vs " + prev.longestStreak },
+          ...(challengesOn() ? [{ label: "Challenge badges", value: St().fmtNum(badgesYear) + " vs " + St().fmtNum(badgesPrev), delta: badgesYear - badgesPrev }] : [])
         ]
       })}
       ${goalsCardHTML()}
@@ -1113,6 +1135,13 @@
   function renderCalendar() {
     const year = Focus.App.year();
     const all = Store().workouts;
+    const completedChallenges = challengesOn() ? Store().challenges.filter((challenge) => challenge.completed) : [];
+    const completedByMonth = new Map();
+    completedChallenges.forEach((challenge) => {
+      const key = `${challenge.year}-${String(challenge.month).padStart(2, "0")}`;
+      if (!completedByMonth.has(key)) completedByMonth.set(key, []);
+      completedByMonth.get(key).push(challenge);
+    });
     const seg = document.querySelectorAll("#calModeSeg .seg-btn");
     seg.forEach((b) => b.classList.toggle("is-active", b.dataset.calMode === state.calMode));
     document.getElementById("calLegend").innerHTML = `
@@ -1122,13 +1151,13 @@
 
     const body = document.getElementById("calendarBody");
     if (state.calMode === "year") {
-      body.innerHTML = yearHeatGrid(all, year, true);
+      body.innerHTML = yearHeatGrid(all, year, true, completedByMonth);
     } else {
       renderMonthView();
     }
   }
 
-  function yearHeatGrid(all, year, interactive) {
+  function yearHeatGrid(all, year, interactive, completedByMonth = new Map()) {
     const ms = St().monthlyStats(all, year);
     const g = Store().settings.goals || {};
     // Independent per-day goal statuses (🔥 calories and ⏱️ time evaluated separately).
@@ -1174,9 +1203,12 @@
         g.calPerDay != null && calCnt ? `<span class="goal-chip cal" title="Days that hit your calorie goal">🔥 ${calCnt}</span>` : "",
         g.durPerDay != null && durCnt ? `<span class="goal-chip time" title="Days that hit your duration goal">⏱️ ${durCnt}</span>` : ""
       ].filter(Boolean).join("");
+      const monthChallenges = completedByMonth.get(`${year}-${String(i + 1).padStart(2, "0")}`) || [];
+      const challenge = monthChallenges[0];
+      const shield = challenge ? `<span class="challenge-shield" style="--badge-color:${challengeColor(challenge.month)}" role="img" aria-label="${monthChallenges.length} completed challenge${monthChallenges.length === 1 ? "" : "s"}: ${esc(monthChallenges.map((c) => challengeTip(c)).join("; "))}" title="${esc(monthChallenges.map((c) => challengeTip(c) + (c.completionDate ? " · " + St().prettyDate(c.completionDate) : "")).join("; "))}">${SHIELD_ICON}</span>${monthChallenges.length > 1 ? `<small class="challenge-shield-count">+${monthChallenges.length - 1}</small>` : ""}` : "";
       return `
         <div class="card month-card ${isCur ? "is-current" : ""}" data-action="openmonth" data-month="${i + 1}">
-          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span></div>
+          <div class="month-head"><strong>${m.label}</strong><span class="${m.days ? "" : "rest"}">${m.days ? m.days + "d · " + St().fmtNum(m.calories) + " kcal" : "rest"}</span>${shield}</div>
           <div class="heat">${cells.join("")}</div>
           <div class="month-foot">${foot}</div>
         </div>`;
@@ -1207,6 +1239,7 @@
     const sel = state.calDay;
     const g = Store().settings.goals || {};
     const foodLog = Store().settings.noJunkFoodLog || {};
+    const monthChallenge = challengesOn() ? Store().challenges.find((challenge) => challenge.completed && challenge.year === year && challenge.month === month) : null;
     // Independent per-day goal statuses (🔥 calories and ⏱️ time evaluated separately).
     const gs = St().dailyGoalStatus(all, g);
 
@@ -1281,7 +1314,7 @@
       <div class="cal-toolbar" style="justify-content:space-between;margin-top:0">
         <div class="year-picker" style="padding:3px">
           <button class="icon-btn" id="calMonthPrev">${ICONS.back}</button>
-          <span style="font-weight:700;min-width:130px;text-align:center">${St().MONTHS_LONG[month - 1]} ${year}</span>
+          <span class="challenge-month-label" style="font-weight:700;min-width:130px;text-align:center">${St().MONTHS_LONG[month - 1]} ${year}${monthChallenge ? `<span style="--badge-color:${challengeColor(month)}" role="img" aria-label="${isSpecialChallenge(monthChallenge) ? "Special edition completed: " : "Monthly challenge completed: "}${esc(challengeTip(monthChallenge))}" title="${esc(challengeTip(monthChallenge))}${monthChallenge.completionDate ? " · completed " + esc(St().prettyDate(monthChallenge.completionDate)) : ""}">${SHIELD_ICON}</span>` : ""}</span>
           <button class="icon-btn" id="calMonthNext">${ICONS.back.replace('M15 18l-6-6 6-6', 'M9 6l6 6-6 6')}</button>
         </div>
         <button class="btn btn-ghost btn-sm" data-action="cal-year">Back to year view</button>
@@ -1716,6 +1749,11 @@
     ["data", "🔒 Data & Privacy"],
     ["about", "ℹ️ About"]
   ];
+  // One vivid hue per month. Every entry sits at a mid lightness so the white
+  // badge numerals clear ~3:1 or better on all twelve (see .challenge-month-dot).
+  const CHALLENGE_COLORS = ["#d2425c", "#d9633f", "#d2751a", "#a87f0a", "#7e9623", "#3e9b5c", "#1f9683", "#2a8cbf", "#3f6fc4", "#6a5ac9", "#9c4fbe", "#c04587"];
+  const challengeColor = (month) => CHALLENGE_COLORS[(Number(month) - 1 + 12) % 12];
+  const SHIELD_ICON = '<span class="challenge-shield" aria-hidden="true"><svg viewBox="0 0 24 26"><path d="M12 1 22 5v7c0 6.5-4.2 10.5-10 13C6.2 22.5 2 18.5 2 12V5l10-4z"/><path d="m7.5 12.5 3 3 6-6"/></svg></span>';
   const PRIVACY_HTML = `
     <b>Privacy</b>
     <ul class="info-list">
@@ -1742,6 +1780,7 @@
     const w = Store().workouts.length, m = Store().measurements.length;
     const accent = s.accent || "violet";
     const anim = s.animations !== false;
+    const challengesEnabled = s.challengesEnabled !== false;
     const rem = s.backupReminder !== false;
     const remUnit = s.backupReminderUnit || "days";
     const remVal = s.backupReminderDays ?? 10;
@@ -1785,6 +1824,13 @@
             <div class="seg" role="group" aria-label="Animations">
               <button class="seg-btn ${anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="on">✨ On</button>
               <button class="seg-btn ${!anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="off">Off</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>🏆 Challenges &amp; badges</b><span>Monthly goals and special editions, each with a badge for every one you complete. Turn it off and its views, badges and summaries disappear — nothing you logged is deleted.</span></div>
+            <div class="seg" role="group" aria-label="Challenges and badges">
+              <button type="button" class="seg-btn ${challengesEnabled ? "is-active" : ""}" data-action="set-challenges" data-set-challenges="on" aria-pressed="${challengesEnabled}">On</button>
+              <button type="button" class="seg-btn ${!challengesEnabled ? "is-active" : ""}" data-action="set-challenges" data-set-challenges="off" aria-pressed="${!challengesEnabled}">Off</button>
             </div>
           </div>
           <div class="setting-row">
@@ -2156,12 +2202,15 @@
     const future = analysis.insights.future.map((x) => `<li>${esc(x)}</li>`).join("");
     const previousValue = analysis.lastChange == null ? "No previous reading" : `${analysis.lastChange > 0 ? "+" : ""}${fmt(analysis.lastChange)} since ${esc(St().prettyDate(analysis.lastChangeDate))}`;
     const projectionValue = analysis.projections.threeMonths == null ? "More readings needed" : `${fmt(analysis.projections.threeMonths)} in 3 months`;
+    const targetValue = state.progType === "Weight" && analysis.goalETA && profile.goals && profile.goals.weight != null
+      ? St().convertTo(profile.goals.weight, profile.goals.goalWeightUnit || profile.weightUnit || "lb", unit) : null;
+    const targetDate = targetValue == null ? null : `${fmt(targetValue)} by ${esc(analysis.goalETA.label)}`;
 
     statsCard.innerHTML = `
       <div class="progress-story">
       <div class="card progress-journey">
         <div class="card-title"><h3>Your ${esc(state.progType)} Journey</h3><span class="sub">${analysis.count} reading${analysis.count === 1 ? "" : "s"} · ${esc(St().prettyDate(analysis.first.date))} → ${esc(St().prettyDate(analysis.latest.date))}</span></div>
-        <p class="progress-narrative">${headline}</p>
+        <p class="progress-narrative">${headline}${targetDate ? `<span class="journey-target">Goal forecast: ${targetDate}</span>` : ""}</p>
         <div class="progress-key-stats">
           <div class="stat-mini"><div class="l">Average</div><div class="v">${fmt(analysis.average)}</div></div>
           <div class="stat-mini"><div class="l">Lowest</div><div class="v">${fmt(analysis.lowest.value)} <small>${esc(St().shortDate(analysis.lowest.date))}</small></div></div>
@@ -2191,29 +2240,57 @@
   function renderProgressChart(analysis) {
     const card = document.getElementById("progressChartCard");
     const title = `${esc(analysis.type)} over time`;
+    const year = Focus.App.year();
+    const months = Array.from({ length: 13 }, (_, index) => ({
+      year: year + Math.floor(index / 12), month: index % 12 + 1,
+      date: new Date(year + Math.floor(index / 12), index % 12, 1, 12)
+    }));
+    const monthLabel = (point) => point.date.toLocaleDateString(undefined, { month: "short" });
     card.innerHTML = `<div class="card"><div class="card-title"><h3>${title}</h3><span class="sub">${analysis.count} readings${analysis.count > 1 ? " · fitted trend + 6-month projection" : ""}</span></div><div class="chart-wrap" id="progChart"></div><div class="progress-chart-legend"><span><i class="actual"></i>Reading</span>${analysis.count > 1 ? '<span><i class="fit"></i>Trend</span><span><i class="forecast"></i>Projection</span>' : ""}</div></div>`;
     const plot = document.getElementById("progChart");
     if (!analysis.count) { plot.innerHTML = `<div class="chart-empty">Add a ${esc(analysis.type.toLowerCase())} reading to start your trend.</div>`; return; }
-    const allDates = [...new Set([...analysis.records.map((r) => r.date), ...(analysis.projectionLine || []).map((p) => p.date)])].sort();
-    const datePos = new Map(allDates.map((d) => [d, (new Date(d + "T12:00:00").getTime() - new Date(allDates[0] + "T12:00:00").getTime()) / 86400000]));
-    const byDate = new Map(analysis.records.map((r) => [r.date, r.value]));
-    const trendByDate = new Map((analysis.trendLine || []).map((p) => [p.date, p.trend]));
-    const projections = new Map((analysis.projectionLine || []).map((p) => [p.date, p.value]));
+    const rangeStart = `${year}-01-01`;
+    const rangeEnd = `${year + 1}-02-01`;
+    const inRange = (iso) => iso >= rangeStart && iso < rangeEnd;
+    const records = analysis.records.filter((r) => inRange(r.date));
+    const futureProjections = (analysis.projectionLine || []).filter((p) => inRange(p.date) && p.date > analysis.latest.date);
+    const trendByDate = new Map((analysis.trendLine || []).map((point) => [point.date, point.trend]));
+    const points = [
+      ...records.map((record) => ({ date: record.date, actual: record.value, trend: trendByDate.get(record.date) ?? null, projection: null })),
+      ...futureProjections.map((point) => ({ date: point.date, actual: null, trend: null, projection: point.value }))
+    ].sort((a, b) => a.date.localeCompare(b.date) || (a.actual == null ? 1 : -1));
+    const chartPosition = (iso) => {
+      const d = new Date(iso + "T12:00:00");
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      return (d.getFullYear() - year) * 12 + d.getMonth() + (d.getDate() - 1) / daysInMonth;
+    };
+    if (!points.some((point) => point.actual != null)) {
+      plot.innerHTML = `<div class="chart-empty">No ${esc(analysis.type.toLowerCase())} readings in ${year} or January ${year + 1}.</div>`;
+      return;
+    }
     const hasTrend = analysis.count > 1;
+    const chartLabels = points.map((point) => St().prettyDate(point.date));
     const series = [
-      { name: "Reading", values: allDates.map((d) => byDate.has(d) ? byDate.get(d) : null), color: "var(--accent)" },
+      { name: "Reading", values: points.map((point) => point.actual), color: "var(--accent)" },
       ...(hasTrend ? [
-        { name: "Trend", values: allDates.map((d) => trendByDate.has(d) ? trendByDate.get(d) : null), color: "var(--success)" },
-        { name: "Projection", values: allDates.map((d) => projections.has(d) ? projections.get(d) : null), color: "var(--warn)" }
+        { name: "Trend", values: points.map((point) => point.trend), color: "var(--success)" },
+        { name: "Projection", values: points.map((point) => point.projection), color: "var(--warn)" }
       ] : [])
     ];
-    const chartLabels = allDates.map((d, i) => i % Math.max(1, Math.ceil(allDates.length / 7)) === 0 || i === allDates.length - 1 ? St().shortDate(d) : "");
+    const currentISO = St().todayISO();
+    const currentDate = new Date(currentISO + "T12:00:00");
+    const currentX = (currentDate.getFullYear() - year) * 12 + currentDate.getMonth() + (currentDate.getDate() - 1) / new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const xTicks = months.map((month, index) => ({
+      value: index,
+      label: index === 0 || index === 12 ? `${monthLabel(month)} ’${String(month.year).slice(-2)}` : monthLabel(month)
+    }));
+    const plottedValues = points.flatMap((point) => [point.actual, point.trend, point.projection]).filter(Number.isFinite);
     C().lineChart(plot, chartLabels, series, {
       height: 235, area: false, fillId: "progress-" + analysis.type.replace(/\W/g, ""),
-      xValues: allDates.map((d) => datePos.get(d)),
+      xValues: points.map((point) => chartPosition(point.date)), xDomain: [0, 12], xTicks,
       valueFmt: (v) => St().fmtNum(v, 1) + (analysis.unit ? " " + esc(analysis.unit) : ""),
-      dashedSeries: hasTrend ? [2] : [],
-      yMin: Math.min(...analysis.records.map((r) => r.value), ...(analysis.projectionLine || []).map((p) => p.value)) * 0.98
+      dashedSeries: hasTrend ? [2] : [], currentX: currentX >= 0 && currentX <= 12 ? currentX : null,
+      yMin: plottedValues.length ? Math.min(...plottedValues) * 0.98 : undefined
     });
   }
 
@@ -2227,14 +2304,318 @@
     const meter = (value, max, color) => `<div class="composition-meter" role="meter" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${value}"><span style="width:${Math.max(0, Math.min(100, value / max * 100))}%;background:${color}"></span></div>`;
     const bmi = composition.bmi == null ? `<div class="comp-tile comp-missing"><b>BMI</b><p>Height and weight are needed.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bmi, 1)}</b><span>BMI</span></div><div class="bmi-cat ${esc(composition.bmiCategory.cls)}">${esc(composition.bmiCategory.label)}</div>${meter(composition.bmi, 40, "var(--accent)")}</div>`;
     const bf = composition.bodyFat == null ? `<div class="comp-tile comp-missing"><b>Estimated body fat</b><p>Add Neck + Waist${profileSex() === "female" ? " + Hips" : ""} measurements/profile values.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bodyFat, 1)}%</b><span>U.S. Navy estimate <button type="button" class="info-btn" data-info-btn aria-label="About body-fat ranges">ⓘ</button></span></div><div class="bmi-cat ${esc(composition.bodyFatCategory.cls)}">${esc(composition.bodyFatCategory.label)}</div>${meter(composition.bodyFat, 50, "var(--success)")}</div>`;
-    const mass = composition.leanMass == null ? "" : `<div class="stat-mini"><div class="l">Lean mass</div><div class="v">${St().fmtNum(composition.leanMass, 1)} <small>${esc(composition.massUnit)}</small></div></div><div class="stat-mini"><div class="l">Fat mass</div><div class="v">${St().fmtNum(composition.fatMass, 1)} <small>${esc(composition.massUnit)}</small></div></div>`;
+    const massInfo = (key, label, value, description) => `<div class="stat-mini composition-help" tabindex="0" role="button" aria-label="${label} information" aria-describedby="composition-tip-${key}" data-composition-tip="${key}"><div class="l">${label}</div><div class="v">${St().fmtNum(value, 1)} <small>${esc(composition.massUnit)}</small></div><span class="measure-tooltip" id="composition-tip-${key}" role="tooltip" hidden>${esc(description)}</span></div>`;
+    const mass = composition.leanMass == null ? "" : `${massInfo("lean", "Lean mass", composition.leanMass, "Lean mass is everything in your body that isn’t fat—including muscle, bone, water, and organs. It’s the ‘good’ weight you want to maintain or increase.")}${massInfo("fat", "Fat mass", composition.fatMass, "Fat mass is the total weight of fat in your body. While some fat is essential, reducing excess fat mass is often a goal for better health.")}`;
     const waistRatio = composition.waistHeightRatio == null ? "" : `<div class="stat-mini"><div class="l">Waist / height</div><div class="v">${St().fmtNum(composition.waistHeightRatio, 2)} <small>${composition.waistHeightRatio < 0.5 ? "below 0.5" : "0.5 or higher"}</small></div></div>`;
     el.innerHTML = `<div class="card data-card comp-card"><div class="card-title"><h3>Body composition</h3><span class="sub">Latest valid measurements · estimates only</span></div><div class="comp-grid">${bmi}${bf}</div><div class="composition-extras">${mass}${waistRatio}</div><p class="comp-note">${esc(composition.interpretation)}</p></div>`;
+    bindCompositionTooltips(el);
     const infoBtn = el.querySelector("[data-info-btn]");
     if (infoBtn) infoBtn.addEventListener("click", (e) => { e.stopPropagation(); openInfoPopover(infoBtn, profileSex()); });
   }
 
+  function bindCompositionTooltips(root) {
+    root.querySelectorAll("[data-composition-tip]").forEach((anchor) => {
+      const tip = anchor.querySelector(".measure-tooltip");
+      let timer = null;
+      let pointerInside = false;
+      let escapeHandler = null;
+      const hide = () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+        tip.hidden = true;
+        if (escapeHandler) { document.removeEventListener("keydown", escapeHandler); escapeHandler = null; }
+      };
+      const show = (delay) => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          timer = null;
+          tip.hidden = false;
+          escapeHandler = (event) => { if (event.key === "Escape") hide(); };
+          document.addEventListener("keydown", escapeHandler);
+          const rect = anchor.getBoundingClientRect();
+          const width = Math.min(260, window.innerWidth - 24);
+          const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+          tip.style.width = width + "px";
+          tip.style.left = left + "px";
+          tip.style.top = (rect.top - tip.offsetHeight - 8 >= 8 ? rect.top - tip.offsetHeight - 8 : Math.min(window.innerHeight - tip.offsetHeight - 8, rect.bottom + 8)) + "px";
+        }, delay);
+      };
+      anchor.addEventListener("mouseenter", () => { pointerInside = true; show(1000); });
+      anchor.addEventListener("mouseleave", () => { pointerInside = false; hide(); });
+      anchor.addEventListener("focus", () => show(1000));
+      anchor.addEventListener("blur", hide);
+      anchor.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (tip.hidden) show(0);
+        else if (!pointerInside && document.activeElement !== anchor) hide();
+      });
+      anchor.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") hide();
+        if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
+          event.preventDefault();
+          if (tip.hidden) show(0); else hide();
+        }
+      });
+    });
+  }
+
   function profileSex() { return Store().settings.sex === "female" ? "female" : "male"; }
+
+  function challengeFormHTML(challenge = {}) {
+    const now = new Date();
+    const kind = Store().challengeKindOf(challenge);
+    const special = kind === "special";
+    const year = challenge.year || now.getFullYear();
+    const month = challenge.month || now.getMonth() + 1;
+    return `<h2>${challenge.id ? "Edit" : "Add"} challenge</h2>
+      <p class="modal-sub">Track a challenge from Apple Watch or set your own target — monthly goals or a one-off special edition.</p>
+      <form id="challengeForm">
+        <div class="field"><label for="challengeKind">Challenge type</label><select class="select" id="challengeKind">
+          <option value="monthly" ${special ? "" : "selected"}>Monthly challenge</option>
+          <option value="special" ${special ? "selected" : ""}>Special edition (limited)</option>
+        </select><small class="field-hint" id="challengeKindHint">${special ? "A named one-off challenge — badges show a ★ and the month it ran in." : "One goal per month, labelled with the month (January, February, …)."}</small></div>
+        <div class="field" id="challengeNameField" ${special ? "" : "hidden"}><label for="challengeName">Challenge name *</label><input class="input" id="challengeName" type="text" maxlength="120" value="${esc(challenge.name || "")}" placeholder="e.g. World Mental Health Day" ${special ? "required" : ""}><small class="field-hint">e.g. World Mental Health Day, New Year Kick-off</small></div>
+        <div class="form-grid">
+          <div class="field"><label for="challengeMonth">Month</label><select class="select" id="challengeMonth">${St().MONTHS_LONG.map((name, index) => `<option value="${index + 1}" ${month === index + 1 ? "selected" : ""}>${name}</option>`).join("")}</select></div>
+          <div class="field"><label for="challengeYear">Year</label><input class="input" id="challengeYear" type="number" min="1900" max="9999" step="1" value="${year}" required></div>
+        </div>
+        <div class="field"><label for="challengeDescription">Challenge description *</label><textarea class="textarea" id="challengeDescription" maxlength="500" rows="3" required placeholder="e.g. Close all rings 30 times">${esc(challenge.description || "")}</textarea></div>
+        <label class="challenge-complete-toggle" for="challengeCompleted">
+          <input id="challengeCompleted" class="challenge-checkbox" type="checkbox" ${challenge.completed ? "checked" : ""} aria-controls="challengeCompletionField">
+          <span class="challenge-checkbox-mark" aria-hidden="true">${ICONS.check}</span>
+          <span class="challenge-toggle-copy"><b>Mark as complete</b><small>Record when you earned this challenge.</small></span>
+        </label>
+        <div class="field challenge-completion-field" id="challengeCompletionField" ${challenge.completed ? "" : "hidden"}>
+          <label for="challengeCompletionDate">Completion date</label>
+          <input class="input" id="challengeCompletionDate" type="date" value="${esc(challenge.completionDate || St().suggestedCompletionDate(month, year, St().todayISO()))}" ${challenge.completed ? "required" : ""}>
+          <small class="field-hint" id="challengeDateHint">Defaults into the challenge’s own month — pick the exact day you earned it.</small>
+        </div>
+        <p class="form-error" id="challengeError" hidden></p>
+        <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">${challenge.id ? "Save challenge" : "Add challenge"}</button></div>
+      </form>`;
+  }
+
+  function openChallengeForm(challenge = {}) {
+    openModal(challengeFormHTML(challenge), {
+      onOpen: (modal) => {
+        const checkbox = modal.querySelector("#challengeCompleted");
+        const field = modal.querySelector("#challengeCompletionField");
+        const date = modal.querySelector("#challengeCompletionDate");
+        // The completion date defaults into the challenge's own month and year, so
+        // logging an old (or long-running) challenge doesn't start at today. A date
+        // the user typed — or one that was already stored — is never overwritten.
+        const monthSelect = modal.querySelector("#challengeMonth");
+        const yearInput = modal.querySelector("#challengeYear");
+        const dateHint = modal.querySelector("#challengeDateHint");
+        let autoDate = !challenge.completionDate;
+        const suggestedDate = () => St().suggestedCompletionDate(Number(monthSelect.value), Number(yearInput.value), St().todayISO());
+        const applySuggestedDate = () => {
+          const month = Number(monthSelect.value), year = Number(yearInput.value);
+          dateHint.textContent = Number.isInteger(month) && month >= 1 && month <= 12
+            ? `Defaults into ${St().MONTHS_LONG[month - 1]} ${yearInput.value} — pick the exact day you earned it.`
+            : "Pick the exact day you earned this challenge.";
+          if (autoDate) date.value = suggestedDate();
+        };
+        const syncCompletionField = () => {
+          field.hidden = !checkbox.checked;
+          date.required = checkbox.checked;
+          if (checkbox.checked) syncChallengeCompletion();
+        };
+        const syncChallengeCompletion = () => {
+          autoDate = true;
+          applySuggestedDate();
+        };
+        const reapplySuggestedDate = () => {
+          const month = Number(monthSelect.value), year = Number(yearInput.value);
+          dateHint.textContent = Number.isInteger(month) && month >= 1 && month <= 12
+            ? `Defaults into ${St().MONTHS_LONG[month - 1]} ${yearInput.value} — pick the exact day you earned it.`
+            : "Pick the exact day you earned this challenge.";
+          if (autoDate) date.value = suggestedDate();
+        };
+        date.addEventListener("input", () => { autoDate = false; });
+        monthSelect.addEventListener("change", reapplySuggestedDate);
+        yearInput.addEventListener("input", reapplySuggestedDate);
+        checkbox.addEventListener("change", syncCompletionField);
+        syncCompletionField();
+
+        // Selecting "special edition" reveals the name field (and its caret/jump
+        // target stays stable because the month/year row never moves).
+        const kindSelect = modal.querySelector("#challengeKind");
+        const nameField = modal.querySelector("#challengeNameField");
+        const nameInput = modal.querySelector("#challengeName");
+        const kindHint = modal.querySelector("#challengeKindHint");
+        const syncKindField = () => {
+          const special = kindSelect.value === "special";
+          nameField.hidden = !special;
+          nameInput.required = special;
+          kindHint.textContent = special
+            ? "A named one-off challenge — badges show a ★ and the month it ran in."
+            : "One goal per month, labelled with the month (January, February, …).";
+        };
+        kindSelect.addEventListener("change", syncKindField);
+        syncKindField();
+      },
+      onSubmit: async (form, { close }) => {
+        const kind = form.querySelector("#challengeKind").value === "special" ? "special" : "monthly";
+        const name = form.querySelector("#challengeName").value.trim();
+        const description = form.querySelector("#challengeDescription").value.trim();
+        const month = Number(form.querySelector("#challengeMonth").value);
+        const year = Number(form.querySelector("#challengeYear").value);
+        const completed = form.querySelector("#challengeCompleted").checked;
+        const completionDateInput = form.querySelector("#challengeCompletionDate");
+        const fail = (message) => {
+          const error = form.querySelector("#challengeError");
+          error.textContent = message;
+          error.hidden = false;
+        };
+        if (kind === "special" && (!name || name.length > 120)) {
+          fail("Give the special challenge a name (1–120 characters).");
+          return;
+        }
+        if (!description || description.length > 500) {
+          fail("Enter a challenge description of 1–500 characters.");
+          return;
+        }
+        if (!Number.isInteger(month) || month < 1 || month > 12) {
+          fail("Choose a month from January to December.");
+          return;
+        }
+        if (!Number.isInteger(year) || year < 1900 || year > 9999) {
+          fail("Enter a year from 1900 to 9999.");
+          return;
+        }
+        if (completed && (!completionDateInput || !St().validISODate(completionDateInput.value))) {
+          fail("Choose a valid completion date.");
+          return;
+        }
+        try {
+          const payload = { kind, name, month, year, description, completed, completionDate: completed ? (completionDateInput && completionDateInput.value || St().todayISO()) : null };
+          if (challenge.id) await Store().updateChallenge(challenge.id, payload);
+          else await Store().addChallenge(payload);
+          close();
+          if (Focus.App.currentView === "challenges") renderChallenges();
+          else if (Focus.App.currentView === "dashboard") renderDashboard();
+          else if (Focus.App.currentView === "calendar") renderCalendar();
+          else if (Focus.App.currentView === "analytics") renderAnalytics();
+          else if (Focus.App.currentView === "settings") renderSettings();
+          toast(challenge.id ? "Challenge updated" : kind === "special" ? "Special challenge added ★" : "Challenge added 🏆");
+        } catch (error) {
+          fail(error.message);
+        }
+      }
+    });
+  }
+
+  /**
+   * Mark a challenge complete (or back to in progress). Completing stamps the same
+   * default the form offers — a day inside the challenge's own month, so ticking off
+   * an old goal from the list doesn't record today as the completion date.
+   */
+  function toggleChallengeComplete(challenge) {
+    // updateChallenge() mutates the same record, so read the current state first —
+    // otherwise the toast reports the direction backwards.
+    const wasCompleted = challenge.completed === true;
+    const completedOn = wasCompleted
+      ? null
+      : St().suggestedCompletionDate(challenge.month, challenge.year, St().todayISO());
+    return Store().updateChallenge(challenge.id, { completed: !wasCompleted, completionDate: completedOn })
+      .then(() => { toast(wasCompleted ? "Challenge marked in progress" : "Challenge complete! Badge earned 🏆"); });
+  }
+
+  function renderChallenges() {
+    const body = document.getElementById("challengesBody");
+    if (body) body.innerHTML = challengesOn() ? renderChallengesSettings() : challengesOffHTML();
+  }
+
+  /** Shown on the Challenges view while the feature is switched off in Settings. */
+  function challengesOffHTML() {
+    return `<div class="card data-card challenge-management">
+      <div class="empty-state">
+        <div class="es-icon">🏆</div>
+        <h3>Challenges are off</h3>
+        <p>Monthly and special challenges, and their badges, stay out of your dashboard, calendar and analytics. Nothing was deleted — everything you logged is still here.</p>
+        <button type="button" class="btn btn-primary" data-action="set-challenges" data-set-challenges="on">Turn challenges back on</button>
+      </div>
+    </div>`;
+  }
+
+  /** One challenge row (month dot, label, meta, actions). */
+  function challengeItemHTML(challenge) {
+    const special = isSpecialChallenge(challenge);
+    const monthName = St().MONTHS_LONG[challenge.month - 1];
+    const status = challenge.completed
+      ? `Completed${challenge.completionDate ? " " + esc(St().prettyDate(challenge.completionDate)) : ""}`
+      : "In progress";
+    const headline = special ? esc(challenge.name) : esc(challenge.description);
+    // A special edition leads with its name and keeps the description as detail;
+    // monthly challenges already lead with the description.
+    const meta = special
+      ? `${monthName} ${challenge.year} · ${esc(challenge.description)} · ${status}`
+      : `${monthName} ${challenge.year} · ${status}`;
+    return `<article class="challenge-item${special ? " is-special" : ""}">
+      <div class="challenge-item-main"><span class="challenge-month-dot" style="--badge-color:${challengeColor(challenge.month)}" aria-hidden="true">${special ? "★" : challenge.month}</span><div><b>${headline}</b>${special ? '<em class="challenge-kind-tag">Special edition</em>' : ""}<small>${meta}</small></div></div>
+      <div class="challenge-item-actions">
+        <button type="button" class="btn btn-sm ${challenge.completed ? "challenge-complete is-complete" : "btn-ghost"}" data-action="toggle-challenge-complete" data-id="${esc(challenge.id)}" aria-pressed="${challenge.completed}">${challenge.completed ? "✓ Completed" : "Mark complete"}</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-action="edit-challenge" data-id="${esc(challenge.id)}">Edit</button>
+        <button type="button" class="btn btn-sm btn-danger" data-action="delete-challenge" data-id="${esc(challenge.id)}">Remove</button>
+      </div>
+    </article>`;
+  }
+
+  /** A year group is open by default only for the selected year; a hand toggle
+   *  in state.challengeYearOpen wins over the default so re-renders keep it. */
+  function isChallengeYearOpen(year) {
+    const key = String(year);
+    if (key in state.challengeYearOpen) return !!state.challengeYearOpen[key];
+    return Number(key) === Focus.App.year();
+  }
+
+  /** Flip one year group open/closed and repaint the Challenges view. */
+  function toggleChallengeYear(year) {
+    const key = String(year);
+    state.challengeYearOpen[key] = !isChallengeYearOpen(key);
+    renderChallenges();
+  }
+
+  /** Year sub-groups inside one kind section (newest year first). Only the
+   *  selected year's group starts expanded; the rest collapse to a header
+   *  with a completion count until opened. `prefix` keeps element ids unique
+   *  when monthly and special sections share a year. */
+  function challengeYearGroupsHTML(challenges, prefix) {
+    const groups = new Map();
+    challenges.forEach((challenge) => {
+      const key = String(challenge.year);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(challenge);
+    });
+    return [...groups.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).map(([year, list]) => {
+      const open = isChallengeYearOpen(year);
+      const done = list.filter((challenge) => challenge.completed).length;
+      const gid = `challenge-year-${prefix || "y"}-${esc(year)}`;
+      return `
+      <section class="challenge-year-group${open ? " is-open" : ""}">
+        <button type="button" class="challenge-year-head" data-action="toggle-challenge-year" data-year="${esc(year)}" aria-expanded="${open}" aria-controls="${gid}">
+          <span class="challenge-year-title">${year}</span>
+          <span class="challenge-year-meta">${done}/${list.length} complete</span>
+          <span class="challenge-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div class="challenge-list" id="${gid}"${open ? "" : " hidden"}>${list.map(challengeItemHTML).join("")}</div>
+      </section>`;
+    }).join("");
+  }
+
+  function renderChallengesSettings() {
+    const all = Store().challenges;
+    const monthly = all.filter((challenge) => !isSpecialChallenge(challenge));
+    const special = all.filter(isSpecialChallenge);
+    // Grouped by kind: the monthly goals section is always there (it is the
+    // default type), while special editions only appear once one exists.
+    const monthlySection = `<section class="challenge-kind-group" data-challenge-kind="monthly"><div class="challenge-kind-head"><h3>Monthly challenges</h3><span>One goal per month — badges show the month and year.</span></div>${monthly.length ? challengeYearGroupsHTML(monthly, "m") : '<p class="challenge-kind-empty">No monthly challenges yet. Every month you complete earns a badge.</p>'}</section>`;
+    const specialSection = special.length
+      ? `<section class="challenge-kind-group is-special" data-challenge-kind="special"><div class="challenge-kind-head"><h3><span aria-hidden="true">★</span> Special editions</h3><span>Limited-edition challenges you name yourself — badges show a ★ and the month they ran in.</span></div>${challengeYearGroupsHTML(special, "s")}</section>`
+      : "";
+    return `<div class="card data-card challenge-management"><div class="card-title"><div><h3>Challenges</h3><p class="desc">Manage monthly goals and special editions, and celebrate each completed challenge.</p></div><button type="button" class="btn btn-primary" data-action="add-challenge">${ICONS.plus} Add challenge</button></div>
+      ${all.length ? `${monthlySection}${specialSection}` : '<div class="empty-state"><div class="es-icon">🏆</div><h3>No challenges yet</h3><p>Add a monthly challenge to start collecting badges — or a special edition for a one-off day like World Mental Health Day.</p></div>'}</div>`;
+  }
 
   function renderProgressTable(analysis) {
     const allRecs = analysis.records.slice().reverse();
@@ -2487,8 +2868,24 @@
           <div class="goal-hits">${goalRows.join("")}</div>
         </div>`
       : "";
+    const yearChallenges = Store().challenges.filter((challenge) => challenge.year === year).slice().sort((a, b) => a.month - b.month);
+    const completedChallenges = yearChallenges.filter((challenge) => challenge.completed);
+    // The month we are living through is not a failed one — it is still running,
+    // so it reads as "in progress" instead of sitting next to the finished months.
+    const curMonthNum = Number(St().todayISO().slice(5, 7));
+    const isCurrentMonth = (challenge) => year === curYear && !challenge.completed && challenge.month === curMonthNum;
+    const inProgressChallenges = yearChallenges.filter(isCurrentMonth);
+    const challengeStatus = (challenge) => `${challengeTip(challenge)} · ${challenge.completed ? "completed" + (challenge.completionDate ? " " + St().prettyDate(challenge.completionDate) : "") : isCurrentMonth(challenge) ? "in progress" : "not completed"}`;
+    // Special editions are not months, so their chip is a ★ instead of a month abbreviation.
+    const challengeChipLabel = (challenge) => (isSpecialChallenge(challenge) ? "★" : St().MONTHS_SHORT[challenge.month - 1]);
+    const challengePct = yearChallenges.length ? Math.round(completedChallenges.length / yearChallenges.length * 100) : 0;
+    const challengeSummaryHTML = !challengesOn() ? "" : `<section class="card analytics-challenges" aria-labelledby="analyticsChallengesTitle">
+      <div class="analytics-challenges-head"><div><h3 id="analyticsChallengesTitle">Challenges · ${year}</h3><p class="desc">Your progress on this year’s monthly goals and special editions.</p></div><button type="button" class="btn btn-sm btn-ghost" data-action="goto-challenges">Manage</button></div>
+      ${yearChallenges.length ? `<div class="analytics-challenge-progress"><b>${completedChallenges.length}<span> / ${yearChallenges.length} complete</span></b>${inProgressChallenges.length ? `<span class="analytics-challenge-note">${inProgressChallenges.length} in progress</span>` : ""}<span class="analytics-challenge-rate">${challengePct}%</span></div><div class="analytics-challenge-track" role="meter" aria-label="Challenges completed" aria-valuemin="0" aria-valuemax="${yearChallenges.length}" aria-valuenow="${completedChallenges.length}"><span style="width:${challengePct}%"></span></div><div class="analytics-challenge-months">${yearChallenges.map((challenge) => `<span class="analytics-challenge-month ${challenge.completed ? "is-complete" : isCurrentMonth(challenge) ? "is-progress" : "is-pending"}${isSpecialChallenge(challenge) ? " is-special" : ""}" style="--badge-color:${challengeColor(challenge.month)}" role="img" title="${esc(challengeStatus(challenge))}" aria-label="${esc(challengeStatus(challenge))}"><i aria-hidden="true">${challenge.completed ? ICONS.check : ""}</i>${esc(challengeChipLabel(challenge))}${isCurrentMonth(challenge) ? "<em>in progress</em>" : ""}</span>`).join("")}</div>` : `<p class="analytics-challenge-empty">No challenges tracked for ${year} yet.</p>`}
+    </section>`;
 
     wrap.innerHTML = `
+      ${challengeSummaryHTML}
       <div class="grid-2">
         <div class="card">
           <div class="card-title"><h3>Workouts per month · ${year}</h3><span class="sub">frequency</span></div>
@@ -2941,8 +3338,8 @@
     esc, el, icon, ICONS,
     openModal, closeModal, toast, confirmDialog, closeInfoPopover,
     markDashEnter, showBackupBanner, hideBackupBanner,
-    openWorkoutForm, openMeasurementForm, openMeasurementList, unitDefault,
-    renderDashboard, renderCalendar, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
+    openWorkoutForm, openMeasurementForm, openMeasurementList, openChallengeForm, toggleChallengeComplete, toggleChallengeYear, unitDefault,
+    renderDashboard, renderCalendar, renderChallenges, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor
   };
 })();

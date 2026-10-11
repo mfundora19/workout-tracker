@@ -11,13 +11,13 @@
 <script src="../lib/fonts/fonts.js"></script>
 <script src="../js/seed-data.js"></script>
 <script src="../js/version.js"></script>
-<script src="../js/store.js?v=10"></script>
-<script src="../js/stats.js?v=10"></script>
+<script src="../js/store.js?v=11"></script>
+<script src="../js/stats.js?v=11"></script>
 <script src="../js/progressEngine.js?v=1"></script>
-<script src="../js/charts.js?v=11"></script>
+<script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=11"></script>
+<script src="../js/ui.js?v=16"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -590,6 +590,7 @@ function dump() {
       <div id="calModeSeg"><button class="seg-btn is-active" data-cal-mode="year">Year</button><button class="seg-btn" data-cal-mode="month">Month</button></div>
       <div id="calLegend"></div>
       <div id="calendarBody"></div>
+      <div id="challengesBody"></div>
       <div id="toolsBody"></div>
       <div id="progressHead"></div><div class="grid-2 progress-grid"><div class="progress-left"><div id="progressChartCard"></div><div id="progressCompCard"></div></div><div id="progressStatsCard"></div></div><div id="progressTable"></div>
       <div id="analyticsCompare"></div><div id="analyticsCharts"></div>
@@ -619,6 +620,268 @@ function dump() {
     Focus.UI.closeModal();
     await Focus.Store.deleteWorkout(yogaW.id);
     ok("cleanup back to 92 after picker tests", Focus.Store.workouts.length === 92);
+
+    // --- monthly challenge persistence, validation, UI, calendar, and badges ---
+    ok("challenge store starts empty", Focus.Store.challenges.length === 0);
+    let badChallengeRejected = false;
+    try { await Focus.Store.addChallenge({ month: 13, year: 2026, description: "Invalid month" }); } catch (e) { badChallengeRejected = /month/i.test(e.message); }
+    ok("challenge rejects out-of-range month", badChallengeRejected);
+    badChallengeRejected = false;
+    try { await Focus.Store.addChallenge({ month: 1, year: 2026, description: "   " }); } catch (e) { badChallengeRejected = /description/i.test(e.message); }
+    ok("challenge rejects empty description", badChallengeRejected);
+    const originalTodayISO = S.todayISO;
+    S.todayISO = () => "2026-08-12";
+    const janChallenge = await Focus.Store.addChallenge({ month: 1, year: 2026, description: "Close all rings", completed: true });
+    const febChallenge = await Focus.Store.addChallenge({ month: 2, year: 2026, description: "Walk 10k steps", completed: false });
+    ok("challenge add assigns id, timestamps, and completion date", !!janChallenge.id && !!janChallenge.createdAt && !!janChallenge.updatedAt && janChallenge.completionDate === "2026-08-12");
+    ok("challenges sort by descending year then month", Focus.Store.challenges[0].month === 2 && Focus.Store.challenges[1].month === 1);
+    const createdAt = janChallenge.createdAt;
+    const updatedChallenge = await Focus.Store.updateChallenge(janChallenge.id, { description: "Close every ring", completed: false });
+    ok("challenge update preserves id/createdAt and clears completion date", updatedChallenge.id === janChallenge.id && updatedChallenge.createdAt === createdAt && Date.parse(updatedChallenge.updatedAt) >= Date.parse(createdAt) && !updatedChallenge.completed && updatedChallenge.completionDate === null);
+    await Focus.Store.updateChallenge(janChallenge.id, { completed: true, completionDate: "2026-01-31" });
+    Focus.UI.renderChallenges();
+    ok("challenge management groups challenges by year and offers actions", document.querySelectorAll("#challengesBody .challenge-year-group").length === 1 && document.querySelectorAll("#challengesBody [data-action='edit-challenge']").length === 2 && !!document.querySelector("#challengesBody [data-action='add-challenge']"));
+    // Earned badges live in the KPI cards now: the year's totals row and the
+    // year-over-year row (January completed, February still open → 1 vs 0).
+    const dashBadgeRows = () => {
+      const found = { totals: "", vs: "" };
+      document.querySelectorAll("#dashGrid .dash-stats .card.stat").forEach((card) => {
+        const label = (card.querySelector(".stat-label") || {}).textContent || "";
+        const row = Array.from(card.querySelectorAll("div")).find((d) => d.textContent.includes("Challenge badges"));
+        if (!row) return;
+        if (label === Focus.App.year() + " totals") found.totals = row.textContent;
+        else if (label === Focus.App.year() + " vs " + (Focus.App.year() - 1)) found.vs = row.textContent;
+      });
+      return found;
+    };
+    Focus.UI.renderDashboard();
+    ok("dashboard totals card counts the selected year's earned badges", /Challenge badges/.test(dashBadgeRows().totals) && dashBadgeRows().totals.trim().endsWith("1"), dashBadgeRows().totals);
+    ok("dashboard year-over-year card compares badge counts", /1 vs 0/.test(dashBadgeRows().vs), dashBadgeRows().vs);
+    const backupWithChallenges = Focus.Store.exportBackup();
+    ok("JSON backup includes monthly challenges", backupWithChallenges.monthlyChallenges.length === 2 && backupWithChallenges.monthlyChallenges.some((challenge) => challenge.id === janChallenge.id));
+    const badCompletion = await Focus.Store.updateChallenge(janChallenge.id, { completionDate: "2026-02-31" }).then(() => false, () => true);
+    ok("challenge rejects invalid completion date", badCompletion);
+    Focus.UI.state.calMode = "year"; Focus.App.currentView = "calendar";
+    Focus.UI.renderCalendar();
+    ok("calendar year view shows completed challenge shield on matching month", !!document.querySelector("#calendarBody .month-card[data-month='1'] .challenge-shield") && !document.querySelector("#calendarBody .month-card[data-month='2'] .challenge-shield"));
+    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 1;
+    Focus.UI.renderCalendar();
+    ok("calendar month view shows completed challenge shield in its header", !!document.querySelector("#calendarBody .challenge-month-label .challenge-shield"));
+    Focus.UI.openChallengeForm({ month: 2, year: 2026, description: "Date field interaction", completed: false });
+    const completeBox = document.getElementById("challengeCompleted");
+    const completionField = document.getElementById("challengeCompletionField");
+    const completionDate = document.getElementById("challengeCompletionDate");
+    ok("completion date starts hidden and optional", completionField.hidden && !completionDate.required);
+    completeBox.checked = true;
+    completeBox.dispatchEvent(new Event("change", { bubbles: true }));
+    // "Today" is mocked as 2026-08-12, so a February 2026 challenge defaults into
+    // its own (past) month — the last day of it — rather than to today.
+    ok("checking complete reveals a required date defaulted into the challenge's month", !completionField.hidden && completionDate.required && completionDate.value === "2026-02-28", completionDate.value);
+    ok("the date hint names the challenge's month", /February 2026/.test(document.getElementById("challengeDateHint").textContent), document.getElementById("challengeDateHint").textContent);
+
+    // --- the default follows the month/year you are entering, until you edit it ---
+    ok("suggestedCompletionDate: past month lands on its last day", S.suggestedCompletionDate(3, 2025, "2026-08-12") === "2025-03-31", S.suggestedCompletionDate(3, 2025, "2026-08-12"));
+    ok("suggestedCompletionDate: leap February is 29 days", S.suggestedCompletionDate(2, 2024, "2026-08-12") === "2024-02-29", S.suggestedCompletionDate(2, 2024, "2026-08-12"));
+    ok("suggestedCompletionDate: the current month lands on today", S.suggestedCompletionDate(8, 2026, "2026-08-12") === "2026-08-12", S.suggestedCompletionDate(8, 2026, "2026-08-12"));
+    ok("suggestedCompletionDate: a future month also lands on today", S.suggestedCompletionDate(12, 2026, "2026-08-12") === "2026-08-12", S.suggestedCompletionDate(12, 2026, "2026-08-12"));
+    ok("suggestedCompletionDate: unusable input falls back to today", S.suggestedCompletionDate(0, 2026, "2026-08-12") === "2026-08-12" && S.suggestedCompletionDate(2, "nope", "2026-08-12") === "2026-08-12");
+    const monthField = document.getElementById("challengeMonth");
+    monthField.value = "8";
+    monthField.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("moving to the live month re-defaults the date to today", completionDate.value === "2026-08-12", completionDate.value);
+    document.getElementById("challengeYear").value = "2024";
+    document.getElementById("challengeYear").dispatchEvent(new Event("input", { bubbles: true }));
+    ok("moving to an older year re-defaults into that month", completionDate.value === "2024-08-31", completionDate.value);
+    completionDate.value = "2024-08-05";
+    completionDate.dispatchEvent(new Event("input", { bubbles: true }));
+    monthField.value = "9";
+    monthField.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("a date you typed is never overwritten by a later month change", completionDate.value === "2024-08-05", completionDate.value);
+    completionDate.value = "2026-02-28";
+    completeBox.checked = false;
+    completeBox.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("unchecking complete hides and disables date requirement", completionField.hidden && !completionDate.required);
+    Focus.UI.closeModal();
+    Focus.UI.openChallengeForm({ month: 2, year: 2026, description: "Date field interaction", completed: false });
+    document.getElementById("challengeDescription").value = "Date field interaction";
+    document.getElementById("challengeCompleted").checked = true;
+    document.getElementById("challengeCompleted").dispatchEvent(new Event("change", { bubbles: true }));
+    document.getElementById("challengeCompletionDate").value = "2026-02-28";
+    document.getElementById("challengeForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    const datedChallenge = Focus.Store.challenges.find((challenge) => challenge.description === "Date field interaction");
+    ok("challenge form persists the chosen completion date", !!datedChallenge && datedChallenge.completed && datedChallenge.completionDate === "2026-02-28");
+    if (datedChallenge) await Focus.Store.deleteChallenge(datedChallenge.id);
+    const toggleButton = document.querySelector("#challengesBody [data-action='toggle-challenge-complete'][data-id='" + febChallenge.id + "']");
+    ok("challenge list includes completion toggle", !!toggleButton && toggleButton.getAttribute("aria-pressed") === "false");
+    // Marking complete from the list (app.js delegates here) stamps the challenge's
+    // own month, not today.
+    const oldMarch = await Focus.Store.addChallenge({ month: 3, year: 2025, description: "Old March goal" });
+    await Focus.UI.toggleChallengeComplete(oldMarch);
+    const markedOld = Focus.Store.challenges.find((challenge) => challenge.id === oldMarch.id);
+    ok("marking a past challenge complete stamps a date in its own month", markedOld.completed && markedOld.completionDate === "2025-03-31", JSON.stringify(markedOld));
+    Focus.UI.renderChallenges();
+    ok("the list shows the stamped date", /March 2025/.test(document.getElementById("challengesBody").textContent) && /March 31, 2025/.test(document.getElementById("challengesBody").textContent));
+    ok("marking complete toasts the earned-badge message", /Badge earned/.test(document.getElementById("toastRegion").textContent), document.getElementById("toastRegion").textContent);
+    await Focus.UI.toggleChallengeComplete(markedOld);
+    ok("unmarking a challenge clears its completion date again", !markedOld.completed && markedOld.completionDate === null, JSON.stringify(markedOld));
+    ok("unmarking toasts the in-progress message", /marked in progress/.test(document.getElementById("toastRegion").textContent), document.getElementById("toastRegion").textContent);
+    await Focus.UI.toggleChallengeComplete(markedOld);
+    ok("re-marking keeps using the challenge's own month", markedOld.completed && markedOld.completionDate === "2025-03-31", JSON.stringify(markedOld));
+    await Focus.UI.toggleChallengeComplete(markedOld);
+    await Focus.Store.deleteChallenge(oldMarch.id);
+    ok("cleanup removed the old-march challenge", !Focus.Store.challenges.some((challenge) => challenge.id === oldMarch.id));
+    // Year groups: the selected year starts expanded, other years collapsed.
+    const savedYear = Focus.Store.settings.selectedYear;
+    await Focus.Store.setSetting("selectedYear", 2026);
+    const histChallenge = await Focus.Store.addChallenge({ month: 5, year: 2025, description: "Old May goal", completed: true, completionDate: "2025-05-31" });
+    Focus.App.currentView = "challenges";
+    Focus.UI.renderChallenges();
+    ok("year groups start with the selected year expanded and the rest collapsed", document.querySelectorAll("#challengesBody .challenge-year-group").length === 2 && document.querySelector("#challengesBody [data-action='toggle-challenge-year'][data-year='2026']").getAttribute("aria-expanded") === "true" && !document.querySelector("#challenge-year-m-2026").hidden && document.querySelector("#challengesBody [data-action='toggle-challenge-year'][data-year='2025']").getAttribute("aria-expanded") === "false" && document.querySelector("#challenge-year-m-2025").hidden);
+    ok("a collapsed year still reports its completion count", /1\/1 complete/.test(document.querySelector("#challengesBody [data-action='toggle-challenge-year'][data-year='2025']").textContent));
+    Focus.UI.toggleChallengeYear("2025");
+    ok("toggling a collapsed year expands it", document.querySelector("#challengesBody [data-action='toggle-challenge-year'][data-year='2025']").getAttribute("aria-expanded") === "true" && !document.querySelector("#challenge-year-m-2025").hidden && /Old May goal/.test(document.querySelector("#challenge-year-m-2025").textContent));
+    Focus.UI.toggleChallengeYear("2025");
+    ok("toggling an expanded year collapses it again", document.querySelector("#challenge-year-m-2025").hidden);
+    await Focus.Store.deleteChallenge(histChallenge.id);
+    if (savedYear === undefined || savedYear === null) delete Focus.Store.settings.selectedYear;
+    else await Focus.Store.setSetting("selectedYear", savedYear);
+    Focus.App.currentView = "analytics";
+    Focus.UI.renderAnalytics();
+    const analyticsChallenges = document.querySelector("#analyticsCharts .analytics-challenges");
+    ok("analytics includes yearly challenge progress summary", !!analyticsChallenges && analyticsChallenges.querySelector("h3").textContent === "Challenges · 2026" && analyticsChallenges.textContent.includes("complete") && !!analyticsChallenges.querySelector("[role='meter']"));
+    ok("analytics challenge summary shows months and completion status", analyticsChallenges.querySelectorAll(".analytics-challenge-month").length === 2 && analyticsChallenges.querySelector(".analytics-challenge-month.is-complete"));
+    // The month we are living through reads as "in progress", never as a miss.
+    const liveChallenge = await Focus.Store.addChallenge({ month: 8, year: 2026, description: "August streak" });
+    Focus.UI.renderAnalytics();
+    const liveChip = document.querySelector("#analyticsCharts .analytics-challenge-month.is-progress");
+    ok("analytics marks the current month as in progress", !!liveChip && document.querySelectorAll("#analyticsCharts .analytics-challenge-month.is-progress").length === 1 && liveChip.textContent.includes("in progress") && /^August/.test(liveChip.getAttribute("title") || "") && /in progress/.test(liveChip.getAttribute("aria-label") || "") && !liveChip.classList.contains("is-complete"), liveChip ? liveChip.getAttribute("title") : "no progress chip");
+    const liveNote = document.querySelector("#analyticsCharts .analytics-challenge-note");
+    ok("analytics progress row calls out the live month", !!liveNote && liveNote.textContent === "1 in progress" && document.querySelector("#analyticsCharts .analytics-challenge-month.is-pending").textContent.includes("Feb"), liveNote ? liveNote.textContent : "no note");
+    await Focus.Store.deleteChallenge(liveChallenge.id);
+    Focus.UI.renderAnalytics();
+    ok("analytics drops the in-progress note when the live month has no challenge", !document.querySelector("#analyticsCharts .analytics-challenge-note") && !document.querySelector("#analyticsCharts .analytics-challenge-month.is-progress"));
+    Focus.App.currentView = "challenges";
+    Focus.UI.renderChallenges();
+    const exportBefore = Focus.Store.exportBackup();
+    const cloneBackup = JSON.parse(JSON.stringify(exportBefore));
+    await Focus.Store.deleteChallenge(janChallenge.id);
+    const restoreResult = await Focus.Store.importBackup(cloneBackup);
+    ok("JSON backup restores monthly challenges additively", restoreResult.challengesAdded === 1 && Focus.Store.challenges.some((challenge) => challenge.id === janChallenge.id));
+    const restoredCount = Focus.Store.challenges.length;
+    const duplicateRestore = await Focus.Store.importBackup(cloneBackup);
+    ok("re-importing a challenge backup does not duplicate challenges", duplicateRestore.challengesAdded === 0 && Focus.Store.challenges.length === restoredCount);
+    const badgesBefore = dashBadgeRows().totals;
+    await Focus.Store.updateChallenge(febChallenge.id, { completed: true, completionDate: "2024-02-29" });
+    Focus.UI.renderDashboard();
+    ok("completing a challenge immediately bumps the totals badge count", badgesBefore.trim().endsWith("1") && dashBadgeRows().totals.trim().endsWith("2") && /2 vs 0/.test(dashBadgeRows().vs), dashBadgeRows().totals + " / " + dashBadgeRows().vs);
+    const imported = await Focus.Store.importChallenges([janChallenge, { id: "bad-row", month: 0, year: 2026, description: "Bad" }, janChallenge]);
+    ok("challenge backup import deduplicates IDs and skips malformed rows", imported.added === 0 && imported.skipped === 3);
+    await Focus.Store.deleteChallenge(febChallenge.id);
+    await Focus.Store.deleteChallenge(janChallenge.id);
+    Focus.Store.challenges.splice(0, Focus.Store.challenges.length);
+    S.todayISO = originalTodayISO;
+    Focus.App.currentView = "dashboard";
+    Focus.UI.renderDashboard();
+    ok("challenge cleanup zeroes the dashboard badge rows", Focus.Store.challenges.length === 0 && dashBadgeRows().totals.trim().endsWith("0") && /0 vs 0/.test(dashBadgeRows().vs), dashBadgeRows().totals + " / " + dashBadgeRows().vs);
+
+    // --- challenge kinds: the month-labelled default and named special editions ---
+    let kindRejected = false;
+    try { await Focus.Store.addChallenge({ kind: "weekly", month: 3, year: 2026, description: "Unknown kind" }); } catch (e) { kindRejected = /type/i.test(e.message); }
+    ok("challenge rejects an unknown kind", kindRejected);
+    kindRejected = false;
+    try { await Focus.Store.addChallenge({ kind: "special", name: "   ", month: 10, year: 2026, description: "Nameless special" }); } catch (e) { kindRejected = /name/i.test(e.message); }
+    ok("special challenge requires a name", kindRejected);
+    Focus.App.currentView = "challenges";
+    Focus.UI.renderChallenges();
+    ok("no kind groups render while there are no challenges", !document.querySelector("#challengesBody [data-challenge-kind='special']") && !document.querySelector("#challengesBody [data-challenge-kind='monthly']"));
+
+    const monthlyOnly = await Focus.Store.addChallenge({ month: 3, year: 2026, name: "Dropped name", description: "March streak" });
+    ok("challenges default to monthly and drop a stray name", monthlyOnly.kind === "monthly" && monthlyOnly.name === "");
+    Focus.UI.renderChallenges();
+    ok("the special editions group stays hidden while only monthly challenges exist", !document.querySelector("#challengesBody [data-challenge-kind='special']") && !!document.querySelector("#challengesBody [data-challenge-kind='monthly']"));
+
+    const specialChallenge = await Focus.Store.addChallenge({ kind: "special", name: "  World Mental Health Day  ", month: 10, year: 2026, description: "Walk 10k and check in on a friend", completed: true, completionDate: "2026-10-10" });
+    ok("special challenge stores its kind, trimmed name and completion date", specialChallenge.kind === "special" && specialChallenge.name === "World Mental Health Day" && specialChallenge.completionDate === "2026-10-10", JSON.stringify({ kind: specialChallenge.kind, name: specialChallenge.name }));
+    Focus.UI.renderChallenges();
+    const monthlyKind = document.querySelector("#challengesBody [data-challenge-kind='monthly']");
+    const specialKind = document.querySelector("#challengesBody [data-challenge-kind='special']");
+    ok("challenges view groups monthly goals and special editions by type", !!monthlyKind && !!specialKind && /March streak/.test(monthlyKind.textContent) && /World Mental Health Day/.test(specialKind.textContent) && !/World Mental Health Day/.test(monthlyKind.textContent));
+    const specialRow = specialKind.querySelector(".challenge-item.is-special");
+    ok("special rows lead with the name, keep the date, and carry a tag", !!specialRow && specialRow.querySelector("b").textContent === "World Mental Health Day" && /Walk 10k/.test(specialRow.textContent) && /October 2026/.test(specialRow.textContent) && /Completed/.test(specialRow.textContent) && !!specialRow.querySelector(".challenge-kind-tag"));
+    const legacyImport = await Focus.Store.importChallenges([{ id: "legacy-monthly-row", month: 4, year: 2026, description: "Legacy goal" }]);
+    ok("challenges saved before kinds existed import as monthly", legacyImport.added === 1 && Focus.Store.challenges.find((entry) => entry.id === "legacy-monthly-row").kind === "monthly");
+    await Focus.Store.deleteChallenge("legacy-monthly-row");
+
+    Focus.App.currentView = "dashboard"; Focus.UI.renderDashboard();
+    ok("a completed special edition counts toward the totals badge row", /Challenge badges/.test(dashBadgeRows().totals) && dashBadgeRows().totals.trim().endsWith("1"), dashBadgeRows().totals);
+
+    Focus.App.currentView = "analytics"; Focus.UI.renderAnalytics();
+    const specialChip = document.querySelector("#analyticsCharts .analytics-challenge-month.is-special");
+    ok("analytics gives a special edition a ★ chip named in its tooltip", !!specialChip && specialChip.textContent.includes("★") && /World Mental Health Day/.test(specialChip.getAttribute("title") || ""), specialChip ? specialChip.getAttribute("title") : "no special chip");
+
+    Focus.UI.openChallengeForm({});
+    const kindSelect = document.getElementById("challengeKind");
+    const nameField = document.getElementById("challengeNameField");
+    ok("the form defaults to a monthly challenge with the name field hidden", kindSelect.value === "monthly" && nameField.hidden === true && document.getElementById("challengeName").required === false);
+    kindSelect.value = "special";
+    kindSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    ok("choosing special edition reveals a required name field", nameField.hidden === false && document.getElementById("challengeName").required === true);
+    document.getElementById("challengeName").value = "New Year Kick-off";
+    document.getElementById("challengeDescription").value = "30 workouts in January";
+    document.getElementById("challengeMonth").value = "1";
+    document.getElementById("challengeYear").value = "2027";
+    document.getElementById("challengeForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    const formSpecial = Focus.Store.challenges.find((challenge) => challenge.name === "New Year Kick-off");
+    ok("the form saves a named special edition with the same completion rules", !!formSpecial && formSpecial.kind === "special" && formSpecial.year === 2027 && formSpecial.completionDate === null, JSON.stringify(formSpecial));
+    if (formSpecial) await Focus.Store.deleteChallenge(formSpecial.id);
+    Focus.UI.openChallengeForm(specialChallenge);
+    ok("editing a special edition preselects its type and name", document.getElementById("challengeKind").value === "special" && document.getElementById("challengeName").value === "World Mental Health Day" && document.getElementById("challengeNameField").hidden === false);
+    Focus.UI.closeModal();
+    await Focus.Store.updateChallenge(specialChallenge.id, { kind: "monthly" });
+    const switchedBack = Focus.Store.challenges.find((challenge) => challenge.id === specialChallenge.id);
+    ok("switching a special edition back to monthly clears its name", switchedBack.kind === "monthly" && switchedBack.name === "");
+
+    await Focus.Store.deleteChallenge(specialChallenge.id);
+    await Focus.Store.deleteChallenge(monthlyOnly.id);
+    Focus.Store.challenges.splice(0, Focus.Store.challenges.length);
+    Focus.App.currentView = "dashboard";
+    Focus.UI.renderDashboard();
+    ok("kind tests clean up to an empty challenge store", Focus.Store.challenges.length === 0 && dashBadgeRows().totals.trim().endsWith("0"));
+
+    // --- monthly challenges are opt-out (Settings › Preferences) ---
+    // resetAll() keeps settings, and the suite may share its origin with the app,
+    // where the Settings toggle would have written this key. Clear it so the
+    // assertion below really tests the absent-key default (on).
+    delete Focus.Store.settings.challengesEnabled;
+    ok("challenges are on until the user turns them off", Focus.Store.settings.challengesEnabled === undefined);
+    const optOutChallenge = await Focus.Store.addChallenge({ month: 6, year: 2026, description: "Opt-out check", completed: true, completionDate: "2026-06-10" });
+    Focus.App.currentView = "dashboard"; Focus.UI.renderDashboard();
+    ok("dashboard shows badge rows while challenges are on", /Challenge badges/.test(dashBadgeRows().totals) && /Challenge badges/.test(dashBadgeRows().vs) && dashBadgeRows().totals.trim().endsWith("1"), dashBadgeRows().totals + " / " + dashBadgeRows().vs);
+    Focus.App.currentView = "analytics"; Focus.UI.renderAnalytics();
+    ok("analytics shows the challenge summary while challenges are on", !!document.querySelector("#analyticsCharts .analytics-challenges"));
+    Focus.App.currentView = "calendar"; Focus.UI.state.calMode = "year"; Focus.UI.renderCalendar();
+    ok("calendar marks completed challenges while challenges are on", !!document.querySelector("#calendarBody .challenge-shield"));
+
+    await Focus.Store.setSetting("challengesEnabled", false);
+    Focus.App.currentView = "dashboard"; Focus.UI.renderDashboard();
+    ok("dashboard drops the badge rows when challenges are off", !/Challenge badges/.test(document.getElementById("dashGrid").textContent));
+    Focus.App.currentView = "analytics"; Focus.UI.renderAnalytics();
+    ok("analytics drops the challenge summary when challenges are off", !document.querySelector("#analyticsCharts .analytics-challenges"));
+    Focus.App.currentView = "calendar"; Focus.UI.renderCalendar();
+    ok("calendar drops challenge shields when challenges are off", !document.querySelector("#calendarBody .challenge-shield"));
+    Focus.App.currentView = "challenges"; Focus.UI.renderChallenges();
+    const offBody = document.getElementById("challengesBody");
+    ok("challenges view explains the opt-out and offers to re-enable", !!offBody.querySelector(".empty-state") && /are off/i.test(offBody.textContent) && !!offBody.querySelector("[data-action='set-challenges'][data-set-challenges='on']") && !offBody.querySelector("[data-action='add-challenge']"));
+    ok("switching the feature off keeps the stored challenges", Focus.Store.challenges.length === 1 && Focus.Store.challenges[0].id === optOutChallenge.id);
+    ok("the opt-out travels in the JSON backup", Focus.Store.exportBackup().settings.challengesEnabled === false);
+
+    await Focus.Store.setSetting("challengesEnabled", true);
+    Focus.App.currentView = "dashboard"; Focus.UI.renderDashboard();
+    ok("badge rows return when challenges are switched back on", /Challenge badges/.test(dashBadgeRows().totals) && dashBadgeRows().totals.trim().endsWith("1"), dashBadgeRows().totals);
+    await Focus.Store.deleteChallenge(optOutChallenge.id);
+    delete Focus.Store.settings.challengesEnabled;
 
     // --- workout identity: emoji legacy types never create a second record ---
     ok("normalizeTypes strips leading emoji (🚶➡️ Walk -> Walk)", Focus.Store.normalizeTypes("🚶\u200d➡️ Walk") === "Walk", JSON.stringify(Focus.Store.normalizeTypes("🚶\u200d➡️ Walk")));
@@ -1160,6 +1423,21 @@ function dump() {
     const compTxt = document.getElementById("progressCompCard").textContent;
     ok("comp card shows BMI 22.1 from records", compTxt.includes("BMI") && compTxt.includes("22.1") && compTxt.includes("Normal weight"), compTxt.slice(0, 140));
     ok("comp card shows BF 21.5 + combined class", compTxt.includes("U.S. Navy estimate") && compTxt.includes("21.5") && compTxt.includes("Normal / Healthy"), compTxt.slice(0, 160));
+    const leanTip = document.querySelector('#progressCompCard [data-composition-tip="lean"]');
+    const fatTip = document.querySelector('#progressCompCard [data-composition-tip="fat"]');
+    ok("lean/fat mass labels expose accessible delayed-tooltip targets", !!leanTip && !!fatTip && leanTip.getAttribute("aria-describedby") === "composition-tip-lean" && fatTip.getAttribute("aria-describedby") === "composition-tip-fat");
+    ok("lean/fat tooltips include the explanations", /muscle, bone, water, and organs/.test(leanTip.querySelector('[role="tooltip"]').textContent) && /reducing excess fat mass/.test(fatTip.querySelector('[role="tooltip"]').textContent));
+    ok("composition tooltips are initially hidden", leanTip.querySelector('[role="tooltip"]').hidden && fatTip.querySelector('[role="tooltip"]').hidden);
+    leanTip.dispatchEvent(new MouseEvent("mouseenter"));
+    await new Promise((r) => setTimeout(r, 1050));
+    ok("lean-mass tooltip appears after one-second hover", !leanTip.querySelector('[role="tooltip"]').hidden);
+    leanTip.dispatchEvent(new MouseEvent("mouseleave"));
+    ok("lean-mass tooltip hides immediately on leave", leanTip.querySelector('[role="tooltip"]').hidden);
+    fatTip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 10));
+    ok("fat-mass tooltip supports a tap toggle", !fatTip.querySelector('[role="tooltip"]').hidden);
+    fatTip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    ok("fat-mass tap toggles the tooltip closed", fatTip.querySelector('[role="tooltip"]').hidden);
     const hRec2 = Focus.Store.measurements.find((m) => m.type === "Height");
     const nRec2 = Focus.Store.measurements.find((m) => m.type === "Neck");
     await Focus.Store.deleteMeasurement(hRec2.id);
@@ -1173,6 +1451,7 @@ function dump() {
     ok("progress view-all button retains full record count", !!document.querySelector("#progressTable [data-action='view-all-measurements']") && document.querySelector("#progressTable [data-action='view-all-measurements']").textContent.includes("29"));
     ok("Progress summary groups insights into past, present and future", [...document.querySelectorAll("#progressStatsCard .insight-groups h4")].map((h) => h.textContent).join("|") === "How you did|How you’re doing|How you’ll do");
     ok("Progress chart shows actual, trend and projection series", document.querySelectorAll("#progChart svg path.ln").length >= 3 && document.querySelector("#progChart svg path.ln-projection[stroke-dasharray='7 5']"));
+    ok("Progress chart uses 13 current/next-year month ticks", document.querySelectorAll("#progChart svg text").length >= 18 && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’26") && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’27") && [...document.querySelectorAll("#progChart svg text")].filter((tick) => /^(Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.test(tick.textContent)).length === 11);
     ok("Progress chart adds six future projection dates", Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight.projectionLine.length === 7);
     Focus.UI.openMeasurementList("Waist");
     ok("view-all modal lists every record", document.querySelectorAll("#modal .preview-scroll tbody tr").length === 29, "rows=" + document.querySelectorAll("#modal .preview-scroll tbody tr").length);

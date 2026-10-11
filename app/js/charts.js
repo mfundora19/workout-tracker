@@ -173,8 +173,9 @@
     const projectionFrom = Number.isInteger(opts.projectionFrom) ? opts.projectionFrom : null;
     const dashedSeries = new Set(opts.dashedSeries || []);
     const rawX = Array.isArray(opts.xValues) && opts.xValues.length === labels.length ? opts.xValues.map(Number) : null;
-    const xMin = rawX ? Math.min(...rawX) : 0;
-    const xMax = rawX ? Math.max(...rawX) : Math.max(1, labels.length - 1);
+    const xDomain = Array.isArray(opts.xDomain) && opts.xDomain.length === 2 && opts.xDomain.every(Number.isFinite) ? opts.xDomain : null;
+    const xMin = xDomain ? xDomain[0] : rawX ? Math.min(...rawX) : 0;
+    const xMax = xDomain ? xDomain[1] : rawX ? Math.max(...rawX) : Math.max(1, labels.length - 1);
     const H = opts.height || 240;
     const W = 640;
     const pad = { t: 14, r: 10, b: 26, l: 44 };
@@ -205,11 +206,13 @@
       svg.appendChild(t);
     }
 
-    const xOf = (i) => {
-      const position = rawX ? (xMax === xMin ? 0.5 : (rawX[i] - xMin) / (xMax - xMin)) : (n === 1 ? 0.5 : i / Math.max(1, n - 1));
-      return pad.l + position * plotW;
-    };
+    const xAt = (value) => pad.l + ((value - xMin) / Math.max(1e-9, xMax - xMin)) * plotW;
+    const xOf = (i) => rawX ? xAt(rawX[i]) : pad.l + (n === 1 ? plotW / 2 : (i / Math.max(1, n - 1)) * plotW);
     const yOf = (v) => pad.t + plotH - ((v - domainMin) / nice) * plotH;
+    if (rawX && Number.isFinite(opts.currentX) && opts.currentX >= xMin && opts.currentX <= xMax) {
+      const x = xAt(opts.currentX);
+      svg.appendChild(el("line", { x1: x, y1: pad.t, x2: x, y2: pad.t + plotH, stroke: accent, "stroke-width": 1.5, "stroke-dasharray": "3 4", opacity: 0.7, class: "chart-current-marker" }));
+    }
 
     const defs = el("defs", {});
     const hasNull = series.some((s) => s.values.some((v) => v == null));
@@ -264,15 +267,23 @@
 
     if (animsOn()) svg.setAttribute("class", "anim-line");
 
-    // Thin x labels so dense date labels (e.g. weekly measurements) never overlap:
-    // aim for ~7 labels, always including the last one.
-    const every = Math.max(1, Math.ceil(n / 7));
-    labels.forEach((lb, i) => {
-      if (i % every !== 0 && i !== n - 1) return;
-      const t = el("text", { x: xOf(i), y: H - 8, "text-anchor": "middle", "font-size": 10.5, fill: textFaint });
-      t.textContent = String(xLabels[i]);
-      svg.appendChild(t);
-    });
+    // Fixed x ticks support calendar axes; otherwise thin dense point labels to ~7.
+    if (Array.isArray(opts.xTicks)) {
+      opts.xTicks.forEach((tick) => {
+        if (!tick || !Number.isFinite(tick.value) || tick.value < xMin || tick.value > xMax) return;
+        const t = el("text", { x: xAt(tick.value), y: H - 8, "text-anchor": "middle", "font-size": 10, fill: textFaint });
+        t.textContent = String(tick.label);
+        svg.appendChild(t);
+      });
+    } else {
+      const every = Math.max(1, Math.ceil(n / 7));
+      labels.forEach((lb, i) => {
+        if (i % every !== 0 && i !== n - 1) return;
+        const t = el("text", { x: xOf(i), y: H - 8, "text-anchor": "middle", "font-size": 10.5, fill: textFaint });
+        t.textContent = String(xLabels[i]);
+        svg.appendChild(t);
+      });
+    }
 
     container.innerHTML = "";
     container.appendChild(svg);

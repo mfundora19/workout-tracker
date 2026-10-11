@@ -9,6 +9,7 @@
   const VIEW_META = {
     dashboard: ["Dashboard", "Your year at a glance"],
     calendar: ["Calendar", "Workout days, intensity and streaks"],
+    challenges: ["Challenges", "Monthly goals, special editions and badges"],
     progress: ["Progress", "Body measurements and trends"],
     analytics: ["Analytics", "Charts and year-over-year insights"],
     data: ["Data", "Export, backup and restore your data"],
@@ -73,6 +74,7 @@
     }
 
     initTheme();
+    applyChallengePref();
     initNav();
     initYearControl();
     initQuickAdd();
@@ -110,6 +112,12 @@
 
   function applyMotionPref() {
     document.documentElement.classList.toggle("no-anim", Focus.Store.settings.animations === false);
+  }
+
+  /* Monthly challenges & badges are opt-out (Settings › Preferences). The flag
+   * lives on <html> so the static nav entry hides with a CSS rule too. */
+  function applyChallengePref() {
+    document.documentElement.setAttribute("data-challenges", Focus.Store.settings.challengesEnabled === false ? "off" : "on");
   }
 
   /* Daily workout reminder: one Notification at the configured time, then
@@ -200,6 +208,7 @@
     const v = App.currentView;
     if (v === "dashboard") Focus.UI.renderDashboard();
     else if (v === "calendar") Focus.UI.renderCalendar();
+    else if (v === "challenges") Focus.UI.renderChallenges();
     else if (v === "progress") Focus.UI.renderProgress();
     else if (v === "analytics") Focus.UI.renderAnalytics();
     else if (v === "data") Focus.UI.renderData();
@@ -309,6 +318,35 @@
       const id = target.dataset.id;
 
       switch (action) {
+        case "toggle-challenge-year":
+          Focus.UI.toggleChallengeYear(target.dataset.year);
+          break;
+        case "goto-challenges":
+          showView("challenges");
+          break;
+        case "add-challenge":
+          Focus.UI.openChallengeForm();
+          break;
+        case "edit-challenge": {
+          const challenge = Focus.Store.challenges.find((entry) => entry.id === id);
+          if (challenge) Focus.UI.openChallengeForm(challenge);
+          break;
+        }
+        case "toggle-challenge-complete": {
+          const challenge = Focus.Store.challenges.find((entry) => entry.id === id);
+          // The stamping date rule lives in Focus.UI.toggleChallengeComplete so the
+          // form and the list can never drift apart.
+          if (challenge) Focus.UI.toggleChallengeComplete(challenge).catch((error) => Focus.UI.toast(error.message || "Could not update challenge", "error"));
+          break;
+        }
+        case "delete-challenge": {
+          const challenge = Focus.Store.challenges.find((entry) => entry.id === id);
+          if (!challenge) break;
+          const special = Focus.Store.challengeKindOf(challenge) === "special";
+          const when = `${S().MONTHS_LONG[challenge.month - 1]} ${challenge.year}`;
+          Focus.UI.confirmDialog({ title: special ? "Remove special challenge?" : "Remove monthly challenge?", message: special ? `Remove the “${challenge.name}” special edition (${when})? This cannot be undone.` : `Remove “${challenge.description}” from ${when}? This cannot be undone.`, confirmLabel: "Remove challenge", onConfirm: () => Focus.Store.deleteChallenge(id).then(() => Focus.UI.toast("Challenge removed", "warn")).catch((error) => Focus.UI.toast(error.message || "Could not remove challenge", "error")) });
+          break;
+        }
         case "food-log": {
           const status = target.dataset.status === "true" ? true : target.dataset.status === "some" ? "some" : target.dataset.status === "false" ? false : target.dataset.status === "clear" ? null : undefined;
           Focus.Store.setNoJunkFoodDay(target.dataset.date, status).then(() => {
@@ -527,6 +565,16 @@
           Focus.UI.state.accentOpen = !Focus.UI.state.accentOpen;
           renderCurrent();
           break;
+        case "set-challenges": {
+          const on = target.dataset.setChallenges === "on";
+          Focus.Store.setSetting("challengesEnabled", on);
+          applyChallengePref();
+          // Disabling from the Challenges view itself: leave the now-off view.
+          if (!on && App.currentView === "challenges") showView("dashboard");
+          Focus.UI.toast(on ? "Challenges back on 🏆" : "Challenges turned off");
+          renderCurrent();
+          break;
+        }
         case "set-animations": {
           const on = target.dataset.setAnimations === "on";
           Focus.Store.setSetting("animations", on);

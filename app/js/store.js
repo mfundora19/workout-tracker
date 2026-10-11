@@ -9,12 +9,13 @@
   "use strict";
 
   const DB_NAME = "focus-tracker";
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
 
   let db = null;
   const state = {
     workouts: [],
     measurements: [],
+    challenges: [],
     settings: {},          // plain object persisted under key 'app'
     ready: false
   };
@@ -66,6 +67,52 @@
     };
   }
 
+  function localTodayISO() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  /* Challenge kinds: "monthly" is the classic one-per-month goal (its label is
+   * the month), "special" is a limited-edition challenge the user names
+   * themselves (e.g. World Mental Health Day). Both keep the same month/year
+   * slot and completion date — only the label differs. Rows stored before kinds
+   * existed carry no `kind` and read back as "monthly". */
+  const CHALLENGE_KINDS = ["monthly", "special"];
+  function challengeKind(data) {
+    const raw = data && data.kind != null ? String(data.kind).trim() : "";
+    const kind = raw || "monthly";
+    if (CHALLENGE_KINDS.indexOf(kind) === -1) throw new Error("Choose a challenge type: monthly or special edition.");
+    return kind;
+  }
+  /** Normalise a stored/supplied row to its kind — legacy rows are monthly. */
+  function kindOf(challenge) { return challenge && challenge.kind === "special" ? "special" : "monthly"; }
+
+  function makeChallenge(data) {
+    const kind = challengeKind(data);
+    const month = Number(data.month);
+    const year = Number(data.year);
+    const description = String(data.description == null ? "" : data.description).trim();
+    // Monthly challenges always take their label from the month, so a stray name is dropped.
+    const name = kind === "special" ? String(data.name == null ? "" : data.name).trim() : "";
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw new Error("Choose a month from January to December.");
+    if (!Number.isInteger(year) || year < 1900 || year > 9999) throw new Error("Enter a year from 1900 to 9999.");
+    if (!description || description.length > 500) throw new Error("Challenge description is required (up to 500 characters).");
+    if (kind === "special" && (!name || name.length > 120)) throw new Error("Give the special challenge a name (1–120 characters).");
+    const completed = data.completed === true;
+    const completionDate = completed ? (data.completionDate || localTodayISO()) : null;
+    if (completed && !isISODate(completionDate)) throw new Error("Choose a valid completion date.");
+    const t = nowIso();
+    return {
+      id: data.id || uid(), kind, name, month, year, description, completed, completionDate,
+      createdAt: data.createdAt || t,
+      updatedAt: data.updatedAt || t
+    };
+  }
+
+  function byChallengeMonth(a, b) {
+    return b.year - a.year || b.month - a.month || a.description.localeCompare(b.description) || a.id.localeCompare(b.id);
+  }
+
   /* ---------------- IndexedDB plumbing ---------------- */
 
   function openDB() {
@@ -85,6 +132,11 @@
         }
         if (!d.objectStoreNames.contains("settings")) {
           d.createObjectStore("settings", { keyPath: "k" });
+        }
+        if (!d.objectStoreNames.contains("challenges")) {
+          const s = d.createObjectStore("challenges", { keyPath: "id" });
+          s.createIndex("year", "year");
+          s.createIndex("yearMonth", ["year", "month"]);
         }
       };
       req.onsuccess = () => { db = req.result; resolve(db); };
@@ -159,15 +211,22 @@
 
     get workouts() { return state.workouts; },
     get measurements() { return state.measurements; },
+    get challenges() { return state.challenges; },
+    /** "monthly" or "special" for any stored challenge (legacy rows are monthly). */
+    challengeKindOf(challenge) { return kindOf(challenge); },
+    CHALLENGE_KINDS: CHALLENGE_KINDS.slice(),
     get settings() { return state.settings; },
     get ready() { return state.ready; },
 
     /** Boot: open DB, load everything into memory. */
     async init() {
       await openDB();
-      const [w, m, s] = await Promise.all([getAll("workouts"), getAll("measurements"), loadSettings()]);
+      const [w, m, s, c] = await Promise.all([getAll("workouts"), getAll("measurements"), loadSettings(), getAll("challenges")]);
       state.workouts = w.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
       state.measurements = m.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
+      state.challenges = c.map((row) => {
+        try { return makeChallenge(row); } catch (e) { console.warn("[Focus] invalid monthly challenge ignored:", row && row.id, e.message); return null; }
+      }).filter(Boolean).sort(byChallengeMonth);
       const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, neck: null, neckUnit: "cm", accent: "violet", animations: true, backupReminder: true, backupReminderDays: 10, workoutReminder: false, workoutReminderTime: "18:00", weekStartsOn: "monday", customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null, avoidJunkFood: true }, noJunkFoodLog: {} };
       state.settings = Object.assign({}, defaults, s);
       if (state.settings.weekStartsOn !== "sunday" && state.settings.weekStartsOn !== "monday") state.settings.weekStartsOn = "monday";
@@ -310,6 +369,54 @@
       await del("measurements", id);
       state.measurements = state.measurements.filter((x) => x.id !== id);
       this.notify();
+    },
+
+    /* ----- monthly challenges ----- */
+    async addChallenge(data) {
+      const challenge = makeChallenge(data || {});
+      if (state.challenges.some((x) => x.id === challenge.id)) throw new Error("That challenge already exists.");
+      await put("challenges", challenge);
+      state.challenges.push(challenge);
+      state.challenges.sort(byChallengeMonth);
+      this.notify();
+      return challenge;
+    },
+    async updateChallenge(id, patch) {
+      const existing = state.challenges.find((x) => x.id === id);
+      if (!existing) return null;
+      const previousUpdatedAt = Date.parse(existing.updatedAt || "");
+      const updatedAt = new Date(Math.max(Date.now(), Number.isFinite(previousUpdatedAt) ? previousUpdatedAt + 1 : 0)).toISOString();
+      const updated = makeChallenge(Object.assign({}, existing, patch || {}, { id, createdAt: existing.createdAt, updatedAt }));
+      await put("challenges", updated);
+      Object.assign(existing, updated);
+      state.challenges.sort(byChallengeMonth);
+      this.notify();
+      return existing;
+    },
+    async deleteChallenge(id) {
+      if (!state.challenges.some((challenge) => challenge.id === id)) return false;
+      await del("challenges", id);
+      const index = state.challenges.findIndex((x) => x.id === id);
+      if (index >= 0) state.challenges.splice(index, 1);
+      this.notify();
+      return true;
+    },
+    async importChallenges(rows) {
+      const existingIds = new Set(state.challenges.map((x) => x.id));
+      const added = [];
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        try {
+          const challenge = makeChallenge(row || {});
+          if (!existingIds.has(challenge.id)) { existingIds.add(challenge.id); added.push(challenge); }
+        } catch (e) { /* invalid imported challenge is skipped, never damages stored data */ }
+      });
+      if (added.length) {
+        await bulkPut("challenges", added);
+        state.challenges.push(...added);
+      state.challenges.sort(byChallengeMonth);
+        this.notify();
+      }
+      return { added: added.length, skipped: (Array.isArray(rows) ? rows.length : 0) - added.length };
     },
 
     /* ----- settings ----- */
@@ -491,7 +598,8 @@
           removedTypes: (state.settings.removedTypes || []).slice()
         }),
         workouts: state.workouts.map((workout) => Object.assign({}, workout)),
-        measurements: state.measurements.map((measurement) => Object.assign({}, measurement))
+        measurements: state.measurements.map((measurement) => Object.assign({}, measurement)),
+        monthlyChallenges: state.challenges.map((challenge) => Object.assign({}, challenge))
       };
     },
 
@@ -501,7 +609,8 @@
         throw new Error("This file is not a valid Focus backup.");
       }
       const result = await this.importRecords(obj.workouts, obj.measurements);
-      // Old backups have no food log. Restore valid entries without allowing an
+      result.challengesAdded = (await this.importChallenges(obj.monthlyChallenges)).added;
+      // Old backups have no food log or challenge list. Restore valid entries without allowing an
       // imported snapshot to erase or overwrite locally recorded daily outcomes.
       const importedLog = normalizeFoodLog(obj.settings && obj.settings.noJunkFoodLog);
       const localLog = state.settings.noJunkFoodLog || (state.settings.noJunkFoodLog = {});
@@ -518,9 +627,10 @@
 
     /* ----- reset ----- */
     async resetAll() {
-      await Promise.all([clearStore("workouts"), clearStore("measurements")]);
+      await Promise.all([clearStore("workouts"), clearStore("measurements"), clearStore("challenges")]);
       state.workouts = [];
       state.measurements = [];
+      state.challenges = [];
       this.notify();
     }
   };
