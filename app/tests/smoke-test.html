@@ -22,6 +22,21 @@
 const out = document.getElementById("out");
 let pass = 0, fail = 0;
 const lines = [];
+// Keep historical assertions deterministic; the app itself still uses the real clock.
+const NativeDate = Date;
+const SMOKE_DATE = "2026-08-12T12:00:00";
+class SmokeDate extends NativeDate {
+  constructor(...args) {
+    const input = args.length ? args[0] : SMOKE_DATE;
+    if (args.length === 1 && typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+      super(input + "T12:00:00");
+    } else {
+      super(...(args.length ? args : [SMOKE_DATE]));
+    }
+  }
+  static now() { return new NativeDate(SMOKE_DATE).getTime(); }
+}
+window.Date = SmokeDate;
 function ok(name, cond, extra) {
   if (cond) { pass++; lines.push("PASS  " + name); }
   else { fail++; lines.push("FAIL  " + name + (extra ? "  -> " + extra : "")); }
@@ -60,6 +75,45 @@ function dump() {
     // April 3-15 had a long run: Apr 3,4,5,6,7,8,9,10,11,12,13,14,15 = 13
     const aprDays = new Set(Focus.Store.workouts.filter((w) => w.date.slice(0,7) === "2026-04").map((w) => w.date));
     ok("longest streak in April = 13", S.longestStreakInSet(aprDays) === 13, "got " + S.longestStreakInSet(aprDays));
+    // Rest streak: longest run of consecutive days WITHOUT a workout inside a window.
+    // August seed = Aug 2, 3, 4, 7 -> the Aug 5-6 gap is the longest, but it runs to
+    // the end of the window, so only the in-window days count: rest = 2.
+    ok("rest streak in Aug 1-7 window = 2", S.longestRestStreak(Focus.Store.workouts, "2026-08-01", "2026-08-07") === 2, "got " + S.longestRestStreak(Focus.Store.workouts, "2026-08-01", "2026-08-07"));
+    // Bounded window: Aug 1-8 fully contains the Aug 5-6 gap -> 2; a fully-trained
+    // window (Aug 2-4) has no rest days -> 0; a window with no workouts at all is
+    // all rest -> its full length (7 for Sep 1-7).
+    ok("rest streak Aug 1-8 = 2, Aug 2-4 = 0, no-workout window = 7",
+      S.longestRestStreak(Focus.Store.workouts, "2026-08-01", "2026-08-08") === 2
+      && S.longestRestStreak(Focus.Store.workouts, "2026-08-02", "2026-08-04") === 0
+      && S.longestRestStreak(Focus.Store.workouts, "2026-09-01", "2026-09-07", "2026-09-08") === 7,
+      "got " + S.longestRestStreak(Focus.Store.workouts, "2026-08-01", "2026-08-08") + "/" +
+        S.longestRestStreak(Focus.Store.workouts, "2026-08-02", "2026-08-04") + "/" +
+        S.longestRestStreak(Focus.Store.workouts, "2026-09-01", "2026-09-07", "2026-09-08"));
+    ok("rest streak excludes today and future dates", S.longestRestStreak([], "2026-08-01", "2026-08-31", "2026-08-03") === 2 && S.longestRestStreak([], "2026-08-03", "2026-08-31", "2026-08-03") === 0);
+    // restStreakEnd: a window that is already over keeps its end; a running or
+    // future window is capped at yesterday; a cap before the window start -> null.
+    ok("restStreakEnd caps running windows at yesterday (null before start)",
+      S.restStreakEnd("2026-08-01", "2026-08-31", "2026-09-10") === "2026-08-31"
+      && S.restStreakEnd("2026-09-01", "2026-09-30", "2026-09-10") === "2026-09-09"
+      && S.restStreakEnd("2026-10-01", "2026-10-31", "2026-09-10") === null,
+      "got " + S.restStreakEnd("2026-08-01", "2026-08-31", "2026-09-10") + "/" +
+        S.restStreakEnd("2026-09-01", "2026-09-30", "2026-09-10") + "/" +
+        S.restStreakEnd("2026-10-01", "2026-10-31", "2026-09-10"));
+
+    // --- food habit + recovery analytics (explicit outcomes; unlogged stays unknown) ---
+    const habitLog = { "2024-02-01": true, "2024-02-02": false, "2024-02-03": null, "2024-02-30": true, "2024-03-01": true, "2024-03-02": false, "2024-03-05": true, "2024-03-06": false };
+    const habit = S.foodHabitStats(habitLog, 2024, "2024-03-03");
+    ok("food-habit stats count only explicit true/false dates", habit.elapsedDays === 63 && habit.loggedDays === 4 && habit.avoidedDays === 2 && habit.junkFoodDays === 2 && habit.unloggedDays === 59 && habit.avoidanceRate === 0.5, JSON.stringify(habit));
+    ok("food-habit leap February has 29 elapsed days and unknown future March dates excluded", habit.months[1].elapsedDays === 29 && habit.months[1].loggedDays === 2 && habit.months[2].elapsedDays === 3 && habit.months[2].loggedDays === 2, JSON.stringify([habit.months[1], habit.months[2]]));
+    ok("future year and empty logs remain unknown", S.foodHabitStats({ "2026-01-01": true }, 2027, "2026-06-01").elapsedDays === 0 && S.foodHabitStats({}, 2024, "2024-03-03").avoidanceRate === null);
+    const recovery = S.trainingRecoveryStats([
+      { date: "2024-03-01" }, { date: "2024-03-01" }, { date: "2024-03-03" }, { date: "2024-03-09" }
+    ], 2024, "2024-03-10");
+    ok("recovery stats deduplicate workout dates and exclude today/future", recovery.months[2].elapsedDays === 9 && recovery.months[2].workoutDays === 3 && recovery.months[2].restDays === 6 && recovery.months[2].longestRestStreak === 5, JSON.stringify(recovery.months[2]));
+    const historyStats = S.workoutHistoryStats([{ date: "2024-03-01" }, { date: "2024-03-01" }, { date: "2024-03-03" }]);
+    ok("history rest days span first-to-last workout and dedupe same-day sessions", historyStats.elapsedDays === 3 && historyStats.workoutDays === 2 && historyStats.restDays === 1, JSON.stringify(historyStats));
+    ok("empty workout history reports zero days without inventing resting days", S.workoutHistoryStats([]).workoutDays === 0 && S.workoutHistoryStats([]).restDays === 0);
+    ok("invalid ISO dates rejected", !S.validISODate("2024-02-30") && S.validISODate("2024-02-29"));
 
     // --- compareYears ---
     const cmp = S.compareYears(Focus.Store.workouts, 2026, 2025);
@@ -322,7 +376,10 @@ function dump() {
     ok("volumeInsights tones valid", vi.every((i) => ["positive", "negative", "warn", "info", "neutral"].includes(i.tone)));
     const mi = S.monthlyInsights(Focus.Store.workouts, 2026);
     ok("monthlyInsights finds jump", mi.some((i) => i.title.startsWith("Biggest month-over-month jump")), JSON.stringify(mi.map((i) => i.title)));
-    ok("monthlyInsights skips partial current month decline", !mi.some((i) => i.title.startsWith("Largest month-over-month drop") && i.title.includes("Aug")), JSON.stringify(mi.map((i) => i.title)));
+    // Date-stable: the partial-month skip only applies to the CURRENT month of the
+    // current year — once that year is over, the insight is a completed fact.
+    const miCurMonth = S.MONTHS_SHORT[new Date().getMonth()];
+    ok("monthlyInsights skips partial current month decline", !(new Date().getFullYear() === 2026 && mi.some((i) => i.title.startsWith("Largest month-over-month drop") && i.title.includes(miCurMonth))), JSON.stringify(mi.map((i) => i.title)));
     const caps = S.chartCaptions(Focus.Store.workouts, 2026);
     ok("chartCaptions workouts has Apr + Jan", caps.workouts.includes("Training peaked in") && caps.workouts.includes("fewest workouts"), caps.workouts);
     ok("chartCaptions duration says no duration data", caps.duration.includes("No training duration was recorded"), caps.duration);
@@ -433,6 +490,27 @@ function dump() {
 
     // --- intensity levels ---
     ok("intensity mapping", S.intensityForCalories(0) === 0 && S.intensityForCalories(200) === 1 && S.intensityForCalories(400) === 2 && S.intensityForCalories(700) === 3 && S.intensityForCalories(1000) === 4);
+
+    // --- store's optional date-keyed food log and backwards-compatible backup merge ---
+    ok("legacy settings default the food goal on", Focus.Store.settings.goals.avoidJunkFood !== false && typeof Focus.Store.settings.noJunkFoodLog === "object");
+    await Focus.Store.setNoJunkFoodDay("2024-02-01", true);
+    await Focus.Store.setNoJunkFoodDay("2024-02-02", false);
+    await Focus.Store.setNoJunkFoodDay("2024-02-02", true);
+    ok("food outcome can be created and corrected", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-02"] === true);
+    let invalidFoodDate = false, invalidFoodStatus = false;
+    try { await Focus.Store.setNoJunkFoodDay("2024-02-30", true); } catch (e) { invalidFoodDate = true; }
+    try { await Focus.Store.setNoJunkFoodDay("2024-02-03", "true"); } catch (e) { invalidFoodStatus = true; }
+    ok("food log rejects invalid dates and non-boolean statuses", invalidFoodDate && invalidFoodStatus);
+    const foodBackup = Focus.Store.exportBackup();
+    ok("JSON backup includes explicit food log outcomes", foodBackup.settings.noJunkFoodLog["2024-02-01"] === true && foodBackup.settings.noJunkFoodLog["2024-02-02"] === true);
+    foodBackup.settings.noJunkFoodLog["2024-02-01"] = false;
+    foodBackup.settings.noJunkFoodLog["2024-02-04"] = false;
+    await Focus.Store.importBackup(foodBackup);
+    ok("backup restores missing food dates but local dates win conflicts", Focus.Store.settings.noJunkFoodLog["2024-02-01"] === true && Focus.Store.settings.noJunkFoodLog["2024-02-04"] === false);
+    await Focus.Store.setNoJunkFoodDay("2024-02-01", null);
+    ok("food log can be cleared without a false/true placeholder", !Object.prototype.hasOwnProperty.call(Focus.Store.settings.noJunkFoodLog, "2024-02-01"));
+    await Focus.Store.importBackup({ app: "focus", kind: "backup", version: 1, settings: {}, workouts: [], measurements: [] });
+    ok("older JSON backups without a food-log key still import", Focus.Store.settings.noJunkFoodLog["2024-02-04"] === false);
 
     // --- independent daily goals: calorie and time complete on their own ---
     const gTest = [
@@ -559,6 +637,9 @@ function dump() {
     Focus.UI.renderAnalytics();
     // seed has workouts only in the current year -> no comparison at all
     ok("no comparison defaults with a single data year", Focus.UI.state.anaA === null && Focus.UI.state.anaB === null, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
+    ok("Analytics replaces duplicate heatmap with monthly junk-food chart", !document.getElementById("acHeat") && !!document.querySelector("#acJunkFood svg") && document.getElementById("analyticsCharts").textContent.includes("Junk-food days") && document.getElementById("analyticsCharts").textContent.includes("logged days"));
+    ok("Analytics recovery summary labels elapsed rest/training days", document.querySelector(".analytics-recovery") && document.querySelector(".analytics-recovery").textContent.includes("rest days") && document.querySelector(".analytics-recovery").textContent.includes("training days · elapsed"));
+    ok("Analytics hides zero junk-food bars for months with no logged food", !document.querySelector("#acJunkFood svg path[fill=\"var(--danger)\"]"));
     ok("comparison row hidden with a single data year", document.getElementById("analyticsCompare").innerHTML.trim() === "" && !document.querySelector("#acCompareWk"), "cmp html: " + document.getElementById("analyticsCompare").innerHTML.slice(0, 40));
     // add a second year (plus a future-dated workout) -> comparison appears with only valid years
     const cmpA = await Focus.Store.addWorkout({ date: "2025-01-10", type: "Other", calories: 500 });
@@ -583,7 +664,7 @@ function dump() {
 
     // --- goals: settings card, dashboard card, calendar badges ---
     Focus.UI.renderSettings();
-    ok("settings has goal inputs", !!document.getElementById("goalCal") && !!document.getElementById("goalDur") && !!document.getElementById("goalWk"));
+    ok("settings has goal inputs and food-habit toggle enabled by default", !!document.getElementById("goalCal") && !!document.getElementById("goalDur") && !!document.getElementById("goalWk") && !!document.querySelector('[data-action="toggle-food-goal"][aria-pressed="true"]'));
     await Focus.Store.setSettings({ goals: { calPerDay: 400, durPerDay: 60, workoutsPerWeek: 5 } });
     Focus.UI.renderDashboard();
     const goalCard = document.getElementById("dashGrid").querySelector(".stat");
@@ -599,13 +680,29 @@ function dump() {
     ok("week card shows headline + % vs last week", /workouts/.test(wkHero.textContent) && wkHero.querySelector(".delta").textContent.includes("vs last week"), wkHero.textContent.slice(0, 60));
     const monthTiles = [...periodCards[1].querySelectorAll(".stat-mini")].map((t) => ({ l: t.querySelector(".l").textContent, v: t.querySelector(".v") }));
     const monthPills = monthTiles.map((t) => t.v.querySelector(".delta")).filter(Boolean).map((p) => p.textContent.trim());
-    ok("month card compares days/calories/avg from seed data", monthPills.includes("▼ -66.7%") && monthPills.includes("▼ -64.9%") && monthPills.includes("▲ +5.3%"), monthPills.join(" | "));
+    ok("month card compares calories/averages from seed data", monthPills.includes("▼ -64.9%") && monthPills.includes("▲ +5.3%"), monthPills.join(" | "));
+    const restTile = monthTiles.find((t) => t.l === "Rest streak");
+    // Era-proof assertions: the tile replaces "Workout days" as the first metric, shows
+    // an "N days" value whose pill (when present) carries the previous period's value,
+    // and colors flip so a FALLING rest streak reads green (lower is better).
+    const restPillEl = restTile && restTile.v.querySelector(".delta");
+    const restPillOk = !restPillEl || (restPillEl.classList.contains("flat") && restPillEl.textContent.includes("±0%"))
+      || (restPillEl.classList.contains("good-down") && restPillEl.textContent.includes("▼"))
+      || (restPillEl.classList.contains("bad-up") && restPillEl.textContent.includes("▲"));
+    ok("month card opens with the rest-streak tile (N days, lower-is-better pill)",
+      restTile && monthTiles[0].l === "Rest streak" && /^\d+ days/.test(restTile.v.textContent.trim()) && restPillOk
+      && (!restPillEl || /^\d+ days$/.test(restPillEl.getAttribute("data-prev") || "")),
+      restTile ? restTile.v.textContent.replace(/\s+/g, " ") + " | classes=" + (restPillEl ? restPillEl.className : "none") : "no Rest streak tile");
     const streakTile = monthTiles.find((t) => t.l === "Best streak");
     ok("month card compares best streak (3 vs 5 days)", streakTile && streakTile.v.textContent.includes("3 days") && streakTile.v.querySelector(".delta").textContent.includes("▼ -40%"), streakTile && streakTile.v.textContent.replace(/\s+/g, " "));
-    ok("month card has avg time + calories/day tiles and no workouts/day", monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day") && !monthTiles.some((t) => t.l === "Workouts / day"), monthTiles.map((t) => t.l).join(" | "));
+    ok("month card has rest-streak, avg time + calories/day tiles and no workout-days tile", monthTiles.some((t) => t.l === "Rest streak") && monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day") && !monthTiles.some((t) => t.l === "Workout days"), monthTiles.map((t) => t.l).join(" | "));
     const bestDayTileEl = monthTiles.find((t) => t.l === "Best day");
     const timePerDayTile = monthTiles.find((t) => t.l === "Time / day");
     ok("month card adds time/day + best-day tiles (9 total)", !!bestDayTileEl && !!timePerDayTile && monthTiles.length === 9, monthTiles.map((t) => t.l).join(" | "));
+    Focus.UI.renderData();
+    const dataYour = document.querySelector("#dataBody .data-card");
+    ok("Data Your Data separates workout and resting days", !!dataYour && dataYour.textContent.includes("Workout days") && dataYour.textContent.includes("Resting days") && !dataYour.textContent.includes("Workouts"));
+    ok("Data backup status retains total record count", document.querySelector("#dataBody .data-status").textContent.includes("Records stored"));
     const bestDayPill = bestDayTileEl && bestDayTileEl.v.querySelector(".delta");
     ok("best day tile shows only the date; kcal data rides on the pill tooltip", bestDayTileEl && bestDayTileEl.v.textContent.replace(/\s+/g, " ").trim() === "Aug 4 ▼ -5.9%" && bestDayPill && bestDayPill.getAttribute("data-prev-label") === "This month:" && bestDayPill.getAttribute("data-prev").includes("Aug 4") && bestDayPill.getAttribute("data-prev").includes("1,045") && bestDayPill.getAttribute("data-prev").includes("Jul 27"), bestDayTileEl && bestDayTileEl.v.textContent.replace(/\s+/g, " ") + " | " + (bestDayPill ? bestDayPill.getAttribute("data-prev") : ""));
 
@@ -622,6 +719,29 @@ function dump() {
     ok("prev-value tooltip appears after 0.3s hover", tipEl.hidden === false && tipEl.textContent.includes("Last week: 3 workouts"), tipEl.textContent.replace(/\s+/g, " "));
     heroPill.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
     ok("prev-value tooltip hides on leave", tipEl.hidden === true, "hidden=" + tipEl.hidden);
+
+    // --- rest-streak tile: lower is better, so a smaller rest run flips the pill green ---
+    // End-to-end wiring: add a workout to the current week, then compare the week card's
+    // tile against the same helper applied to the same window (works in any era).
+    const restW = await Focus.Store.addWorkout({ date: S.todayISO(), type: "Other", calories: 500 });
+    Focus.UI.renderDashboard();
+    const wkRestTile = document.querySelectorAll(".period-card")[0].querySelectorAll(".stat-mini")[0];
+    const wkRestPill = wkRestTile.querySelector(".delta");
+    const wkStatsNow = S.weeklyStats(Focus.Store.workouts, S.todayISO());
+    const yr26 = Focus.Store.workouts.filter((w) => w.date.slice(0, 4) === "2026");
+    // Mirror the card: current week capped at yesterday (today isn't over yet).
+    const expCur = S.longestRestStreak(yr26, wkStatsNow.start, S.restStreakEnd(wkStatsNow.start, wkStatsNow.end, S.todayISO()));
+    const expPrev = S.longestRestStreak(yr26, S.addDays(wkStatsNow.start, -7), S.restStreakEnd(S.addDays(wkStatsNow.start, -7), S.addDays(wkStatsNow.end, -7), S.todayISO()));
+    const wkPillOk = !wkRestPill || (wkRestPill.classList.contains("flat") && wkRestPill.textContent.includes("±0%"))
+      || (wkRestPill.classList.contains("good-down") && wkRestPill.textContent.includes("▼") && expCur < expPrev)
+      || (wkRestPill.classList.contains("bad-up") && wkRestPill.textContent.includes("▲") && expCur > expPrev);
+    ok("week rest streak counts only in-window rest days (lower-is-better pill)",
+      wkRestTile.querySelector(".l").textContent === "Rest streak"
+      && wkRestTile.querySelector(".v").textContent.includes(expCur + " days")
+      && (!wkRestPill || wkRestPill.getAttribute("data-prev") === expPrev + " days") && wkPillOk,
+      wkRestTile.textContent.replace(/\s+/g, " ") + " | expected " + expCur + " vs " + expPrev + " | classes=" + (wkRestPill ? wkRestPill.className : "none"));
+    await Focus.Store.deleteWorkout(restW.id);
+    Focus.UI.renderDashboard();
 
     // --- animations: Settings toggle (default on), entrance + chart draw-in classes ---
     Focus.UI.renderSettings();
@@ -729,7 +849,7 @@ function dump() {
     // Analytics: calorie and time goals shown as two separate hit-rate bars.
     Focus.UI.renderAnalytics();
     const gaRows = document.querySelectorAll("#analyticsCharts .goal-hits .type-bar-row");
-    ok("analytics shows calorie + time goal hit rates", gaRows.length === 2 && document.getElementById("analyticsCharts").textContent.includes("Calorie goal") && document.getElementById("analyticsCharts").textContent.includes("Duration goal"), "rows=" + gaRows.length);
+    ok("analytics shows all enabled calorie, time + no-junk-food goals", gaRows.length === 3 && document.getElementById("analyticsCharts").textContent.includes("Calorie goal") && document.getElementById("analyticsCharts").textContent.includes("Duration goal") && document.getElementById("analyticsCharts").textContent.includes("No junk-food goal"), "rows=" + gaRows.length);
 
     await Focus.Store.deleteWorkout(Focus.Store.workouts.find((x) => x.date === "2026-09-10").id);
     await Focus.Store.deleteWorkout(Focus.Store.workouts.find((x) => x.date === "2026-09-11").id);
@@ -739,9 +859,9 @@ function dump() {
     ok("year view highlights the current month", document.querySelectorAll("#calendarBody .month-card.is-current").length === 1 && document.querySelector("#calendarBody .month-card.is-current").dataset.month === String(new Date().getMonth() + 1), "cur=" + document.querySelectorAll("#calendarBody .month-card.is-current").length);
     ok("current month has a colored border but no This-month label", document.querySelectorAll(".cur-chip").length === 0);
     ok("year view marks the best day subtly", document.querySelectorAll("#calendarBody .heat .day.best-day").length === 1, "best=" + document.querySelectorAll("#calendarBody .heat .day.best-day").length);
-    ok("heatmap month cards show Best chip bottom-right", document.querySelectorAll("#acHeat .month-foot .best-chip").length === 1, "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
+    ok("Analytics removes its duplicate consistency heatmap", !document.getElementById("acHeat") && !document.querySelector("#analyticsCharts .consistency-heatmap"));
     ok("no arm emoji chips remain anywhere", document.querySelectorAll(".act-chip").length === 0);
-    ok("best month gets a Best chip (heatmap)", document.querySelector("#acHeat .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#acHeat .month-foot .best-chip").length);
+    ok("best month gets a Best chip in Calendar", document.querySelector("#calendarBody .month-foot .best-chip").textContent.includes("Best"), "best=" + document.querySelectorAll("#calendarBody .month-foot .best-chip").length);
     ok("calendar year view shows the Best month chip too", document.querySelectorAll("#calendarBody .month-foot .best-chip").length === 1);
     await Focus.Store.setSettings({ goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } });
 
@@ -780,6 +900,28 @@ function dump() {
     ok("one submit adds weight + waist + neck", trio.length === 3 && trio.some((m) => m.type === "Weight" && m.value === 80) && trio.some((m) => m.type === "Waist" && m.value === 91) && trio.some((m) => m.type === "Neck" && m.value === 38), JSON.stringify(trio.map((m) => m.type + ":" + m.value)));
     for (const m of trio) await Focus.Store.deleteMeasurement(m.id);
     ok("multi-measurement cleanup restores count", Focus.Store.measurements.length === measBefore, "before=" + measBefore + " after=" + Focus.Store.measurements.length);
+
+    // --- calendar day panel: month insights and explicit food outcome controls ---
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": false };
+    Focus.Store.settings.goals.avoidJunkFood = true;
+    Focus.UI.state.calMode = "month";
+    Focus.UI.state.calMonth = 8;
+    Focus.UI.state.calDay = null;
+    Focus.UI.renderCalendar();
+    const monthSummary = document.querySelector("#dayPanel .month-summary");
+    ok("Calendar month summary includes workout, elapsed rest, duration and food facts", !!monthSummary && monthSummary.textContent.includes("workout days") && monthSummary.textContent.includes("rest days · elapsed") && monthSummary.textContent.includes("duration") && monthSummary.textContent.includes("junk-food day"));
+    ok("Calendar month summary reports logged-day denominator", monthSummary && monthSummary.textContent.includes("2 logged / 12 elapsed"));
+    Focus.Store.settings.noJunkFoodLog = {};
+    Focus.Store.settings.goals.avoidJunkFood = true;
+    Focus.UI.renderCalendar();
+    const emptyFoodSummary = document.querySelector("#dayPanel .food-summary:not(.month-training-highlight)");
+    ok("Calendar month with no food entries labels the rate unknown", emptyFoodSummary && emptyFoodSummary.textContent.includes("No food days logged yet") && emptyFoodSummary.querySelector(".food-summary-rate b").textContent === "—");
+    Focus.Store.settings.noJunkFoodLog = { "2026-08-02": true, "2026-08-03": false };
+    Focus.UI.state.calDay = "2026-08-02";
+    Focus.UI.renderCalendar();
+    ok("Calendar selected day shows food status, correction and clear controls", document.querySelector("#dayPanel .food-habit.is-avoided") && document.querySelector('#dayPanel [data-action="food-log"][data-status="false"]') && document.querySelector('#dayPanel [data-action="food-log"][data-status="clear"]'));
+    Focus.UI.state.calMode = "year";
+    Focus.UI.state.calDay = null;
 
     // --- calendar day panel: add measurement with the selected date ---
     Focus.UI.state.calMode = "month";

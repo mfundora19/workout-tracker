@@ -85,6 +85,208 @@
     return out;
   }
 
+  function validISODate(iso) {
+    if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const year = Number(iso.slice(0, 4)), month = Number(iso.slice(5, 7)), day = Number(iso.slice(8, 10));
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return false;
+    return toISO(parse(iso)) === iso;
+  }
+
+  /**
+   * Food-habit totals for a calendar year. Only explicit boolean log entries
+   * count as logged; missing dates are unknown, never clean or junk-food days.
+   * refDateISO makes partial years/months deterministic and excludes future
+   * dates. avoidanceRate is null until at least one date was logged.
+   */
+  function foodHabitStats(log, year, refDateISO) {
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const dateLimit = year > yearOf(ref) ? null : year < yearOf(ref) ? String(year) + "-12-31" : ref;
+    const months = [];
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, junkFoodDays = 0;
+    for (let month = 1; month <= 12; month++) {
+      const start = String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0") + "-01";
+      const last = start.slice(0, 8) + String(daysInMonth(year, month)).padStart(2, "0");
+      const stats = dateLimit ? foodHabitRangeStats(log, start, last, ref) : foodHabitRangeStats(log, start, last, String(year - 1).padStart(4, "0") + "-12-31");
+      elapsedDays += stats.elapsedDays;
+      loggedDays += stats.loggedDays;
+      avoidedDays += stats.avoidedDays;
+      junkFoodDays += stats.junkFoodDays;
+      months.push({ month, label: MONTHS_SHORT[month - 1], ...stats });
+    }
+    return {
+      year, elapsedDays, loggedDays, avoidedDays, junkFoodDays,
+      unloggedDays: elapsedDays - loggedDays,
+      avoidanceRate: loggedDays ? avoidedDays / loggedDays : null,
+      months
+    };
+  }
+
+  /** Count logged outcomes for a date range; today and future are not elapsed yet. */
+  function foodHabitRangeStats(log, startISO, endISO, refDateISO) {
+    if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) {
+      return { elapsedDays: 0, loggedDays: 0, avoidedDays: 0, junkFoodDays: 0, unloggedDays: 0, avoidanceRate: null };
+    }
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const end = endISO < ref ? endISO : ref;
+    let elapsedDays = 0, loggedDays = 0, avoidedDays = 0, junkFoodDays = 0;
+    if (end >= startISO) {
+      for (let day = startISO; day <= end; day = addDays(day, 1)) {
+        elapsedDays++;
+        if (!log || !Object.prototype.hasOwnProperty.call(log, day) || (log[day] !== true && log[day] !== false)) continue;
+        loggedDays++;
+        if (log[day]) avoidedDays++; else junkFoodDays++;
+      }
+    }
+    return { elapsedDays, loggedDays, avoidedDays, junkFoodDays, unloggedDays: elapsedDays - loggedDays, avoidanceRate: loggedDays ? avoidedDays / loggedDays : null };
+  }
+
+  /**
+   * Workout/recovery totals for [startISO, endISO], capped at yesterday so an
+   * unfinished day and future dates are not called rest days. Duplicate
+   * workouts on one date count as one workout day. A null rate means an empty
+   * elapsed window. The longest rest streak is measured within the same period.
+   */
+  function periodRecoveryStats(workouts, startISO, endISO, refDateISO) {
+    if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) {
+      return { elapsedDays: 0, workoutDays: 0, restDays: 0, workoutRate: null };
+    }
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const lastElapsed = addDays(ref, -1);
+    const end = endISO < lastElapsed ? endISO : lastElapsed;
+    if (end < startISO) return { elapsedDays: 0, workoutDays: 0, restDays: 0, workoutRate: null };
+    const elapsedDays = Math.round((parse(end) - parse(startISO)) / 86400000) + 1;
+    const days = new Set(workouts.filter((w) => w.date >= startISO && w.date <= end).map((w) => w.date));
+    const workoutDays = days.size;
+    return {
+      elapsedDays, workoutDays, restDays: elapsedDays - workoutDays,
+      workoutRate: elapsedDays ? workoutDays / elapsedDays : null,
+      longestRestStreak: longestRestStreak(workouts, startISO, end, ref)
+    };
+  }
+
+  /** Per-month training/recovery stats for a year, using elapsed days only. */
+  function trainingRecoveryStats(workouts, year, refDateISO) {
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const months = [];
+    let elapsedDays = 0, workoutDays = 0;
+    for (let month = 1; month <= 12; month++) {
+      const start = String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0") + "-01";
+      const end = start.slice(0, 8) + String(daysInMonth(year, month)).padStart(2, "0");
+      const stats = periodRecoveryStats(workouts, start, end, ref);
+      elapsedDays += stats.elapsedDays;
+      workoutDays += stats.workoutDays;
+      months.push({ month, label: MONTHS_SHORT[month - 1], ...stats });
+    }
+    const longestRestStreak = longestRestStreakAcrossPeriods(months);
+    return {
+      year, elapsedDays, workoutDays, restDays: elapsedDays - workoutDays,
+      workoutRate: elapsedDays ? workoutDays / elapsedDays : null, longestRestStreak, months
+    };
+  }
+
+  function longestRestStreakAcrossPeriods(months) {
+    let longest = 0, trailing = 0;
+    for (const month of months) {
+      if (month.elapsedDays === 0) continue;
+      longest = Math.max(longest, month.longestRestStreak);
+      trailing = month.restDays === month.elapsedDays ? trailing + month.elapsedDays : 0;
+      longest = Math.max(longest, trailing);
+    }
+    return longest;
+  }
+
+  /** Whole-history recovery totals from first workout through yesterday. */
+  function allTimeRecoveryStats(workouts, refDateISO) {
+    const dates = workoutDays(workouts).filter((iso) => validISODate(iso)).sort();
+    if (!dates.length) return { elapsedDays: 0, workoutDays: 0, restDays: 0, workoutRate: null, longestRestStreak: 0, startDate: null, endDate: null };
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const end = addDays(ref, -1);
+    if (dates[0] > end) return { elapsedDays: 0, workoutDays: 0, restDays: 0, workoutRate: null, longestRestStreak: 0, startDate: dates[0], endDate: end };
+    const stats = periodRecoveryStats(workouts, dates[0], end, ref);
+    return { ...stats, startDate: dates[0], endDate: end };
+  }
+
+  /** Month-specific food totals for the selected Calendar month. */
+  function foodHabitMonthStats(log, year, month, refDateISO) {
+    const yearly = foodHabitStats(log, year, refDateISO);
+    return yearly.months[month - 1] || null;
+  }
+
+  /** First and last ISO date for a month; exposed for view calculations. */
+  function monthRange(year, month) {
+    const start = String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0") + "-01";
+    return { start, end: start.slice(0, 8) + String(daysInMonth(year, month)).padStart(2, "0") };
+  }
+
+  /** Unique workout/rest days across the inclusive span from first to last record. */
+  function workoutHistoryStats(workouts) {
+    const dates = workoutDays(workouts).filter(validISODate).sort();
+    if (!dates.length) return { startDate: null, endDate: null, elapsedDays: 0, workoutDays: 0, restDays: 0 };
+    const elapsedDays = Math.round((parse(dates[dates.length - 1]) - parse(dates[0])) / 86400000) + 1;
+    return { startDate: dates[0], endDate: dates[dates.length - 1], elapsedDays, workoutDays: dates.length, restDays: elapsedDays - dates.length };
+  }
+
+  /** Select the strongest logged workout day in a date window. */
+  function bestTrainingDay(workouts, startISO, endISO) {
+    if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) return null;
+    const agg = dayAggregates(workouts.filter((w) => validISODate(w.date) && w.date >= startISO && w.date <= endISO));
+    let best = null;
+    agg.forEach((day, date) => {
+      if (!best || day.calories > best.calories || (day.calories === best.calories && day.count > best.workouts)) {
+        best = { date, workouts: day.count, calories: day.calories, duration: day.duration };
+      }
+    });
+    return best;
+  }
+
+  /** Count elapsed workout/rest days for a selected month (today excluded). */
+  function trainingRecoveryMonthStats(workouts, year, month, refDateISO) {
+    const range = monthRange(year, month);
+    return periodRecoveryStats(workouts, range.start, range.end, refDateISO);
+  }
+
+  /** Year-level totals + derived stats. */
+  function yearlyStats(workouts, year) {
+    const monthly = monthlyStats(workouts, year);
+    const inYear = workouts.filter((w) => yearOf(w.date) === year);
+    const days = new Set(inYear.map((w) => w.date));
+    const totals = {
+      year,
+      workouts: inYear.length,
+      days: days.size,
+      calories: monthly.reduce((s, m) => s + m.calories, 0),
+      duration: monthly.reduce((s, m) => s + m.duration, 0)
+    };
+    totals.avgCal = totals.workouts ? totals.calories / totals.workouts : 0;
+    totals.avgDur = totals.workouts ? totals.duration / totals.workouts : 0;
+    totals.avgWorkoutsPerMonth = totals.workouts / 12;
+    totals.avgCalPerMonth = totals.calories / 12;
+    totals.monthsWithData = monthly.filter((m) => m.days > 0).length;
+
+    const withData = monthly.filter((m) => m.days > 0);
+    totals.bestMonth = withData.length ? withData.reduce((a, b) => (a.days >= b.days ? a : b)) : null;
+    totals.worstMonth = withData.length ? withData.reduce((a, b) => (a.days <= b.days ? a : b)) : null;
+    totals.longestStreak = longestStreakInSet(days);
+    return totals;
+  }
+
+  /** Daily food habit by month with explicit log rate. */
+  function foodHabitMonthSummary(log, year, month, refDateISO) {
+    const item = foodHabitMonthStats(log, year, month, refDateISO);
+    if (!item) return null;
+    return {
+      ...item,
+      avoidancePct: item.avoidanceRate == null ? null : Math.round(item.avoidanceRate * 100)
+    };
+  }
+
+  /** Daily food habit summary label data, kept separate from the UI. */
+  function foodHabitStatus(log, iso) {
+    return log && Object.prototype.hasOwnProperty.call(log, iso) && (log[iso] === true || log[iso] === false)
+      ? log[iso] : null;
+  }
+
+
   /* ---------------- streaks ---------------- */
 
   function streaks(workouts, refDateISO) {
@@ -190,6 +392,34 @@
       else run = 1;
       if (run > longest) longest = run;
       prev = d;
+    }
+    return longest;
+  }
+
+  /**
+   * End for rest-day accounting: today and all future dates are excluded;
+   * the day itself must be complete before it can count as a rest day. Returns
+   * endISO when the whole window is already in the past.
+   */
+  function restStreakEnd(startISO, endISO, refDateISO) {
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) return null;
+    const capped = endISO < ref ? endISO : addDays(ref, -1);
+    return capped < startISO ? null : capped;
+  }
+
+  /** Longest workout-free run through yesterday; unknown future and current days are excluded. */
+  function longestRestStreak(workouts, startISO, endISO, refDateISO) {
+    if (!validISODate(startISO) || !validISODate(endISO) || endISO < startISO) return 0;
+    const ref = validISODate(refDateISO) ? refDateISO : todayISO();
+    const lastElapsed = addDays(ref, -1);
+    const end = endISO < lastElapsed ? endISO : lastElapsed;
+    if (end < startISO) return 0;
+    const workoutDates = new Set(workouts.filter((w) => w.date >= startISO && w.date <= end).map((w) => w.date));
+    let longest = 0, run = 0;
+    for (let day = startISO; day <= end; day = addDays(day, 1)) {
+      if (workoutDates.has(day)) run = 0;
+      else { run++; longest = Math.max(longest, run); }
     }
     return longest;
   }
@@ -1038,12 +1268,14 @@
     MONTHS_SHORT, MONTHS_LONG,
     parse, toISO, addDays, todayISO, yearOf, monthOf, dayOf, dayOfYear, daysInMonth, weekdayOf,
     dayAggregates, workoutDays, streaks, weeklyStats, monthlyStats, yearlyStats, compareYears,
+    validISODate, foodHabitStats, foodHabitMonthStats, foodHabitRangeStats, foodHabitMonthSummary, foodHabitStatus,
+    periodRecoveryStats, trainingRecoveryStats, trainingRecoveryMonthStats, allTimeRecoveryStats, workoutHistoryStats, bestTrainingDay, monthRange,
     typeBreakdown, measurementStats, measurementSeries, intensityForCalories,
     toCm, toKg, convertTo, latestOfType, calcBMI, bmiCategory, navyNeeds,
     calcNavyBodyFat, bodyCompClass, bfInfoRanges,
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
-    monthDayMap, availableYears, workoutYears, longestStreakInSet, backupReminderDue, REMINDER_UNIT_DAYS, dailyGoalStatus,
+    monthDayMap, availableYears, workoutYears, longestStreakInSet, longestRestStreak, restStreakEnd, backupReminderDue, REMINDER_UNIT_DAYS, dailyGoalStatus,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
 })();
