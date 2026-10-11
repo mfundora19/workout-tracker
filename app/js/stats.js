@@ -319,19 +319,34 @@
 
   /* ---------------- weekly ---------------- */
 
+  /** Normalize a saved week start (only Sunday is an alternate; default Monday). */
+  function weekStartIndex(weekStartsOn) {
+    return weekStartsOn === "sunday" || weekStartsOn === 0 ? 0 : 1;
+  }
+
+  /** Number of days from the configured week start to this date. */
+  function weekStartOffset(iso, weekStartsOn) {
+    return (parse(iso).getDay() - weekStartIndex(weekStartsOn) + 7) % 7;
+  }
+
+  /** Localized-independent weekday abbreviations in configured calendar order. */
+  function weekdayLabels(weekStartsOn) {
+    const labels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+    const start = weekStartIndex(weekStartsOn);
+    return Array.from({ length: 7 }, (_, i) => labels[(start + i) % 7]);
+  }
+
   /**
-   * Stats for the current ISO week (Monday–Sunday) vs the previous week.
-   * Returns { cur, prev, start, end } where each week has
+   * Stats for the configured week vs the previous week (Monday–Sunday by
+   * default). Returns { cur, prev, start, end } where each week has
    * { workouts, days, calories, duration }.
    */
-  function weeklyStats(workouts, refDateISO) {
+  function weeklyStats(workouts, refDateISO, weekStartsOn) {
     const ref = refDateISO || todayISO();
-    const d = parse(ref);
-    const dow = (d.getDay() + 6) % 7; // 0 = Monday
-    const monday = addDays(ref, -dow);
-    const week = (start) => {
-      const end = addDays(start, 6);
-      const rows = workouts.filter((w) => w.date >= start && w.date <= end);
+    const start = addDays(ref, -weekStartOffset(ref, weekStartsOn));
+    const week = (weekStart) => {
+      const end = addDays(weekStart, 6);
+      const rows = workouts.filter((w) => w.date >= weekStart && w.date <= end);
       return {
         workouts: rows.length,
         days: new Set(rows.map((w) => w.date)).size,
@@ -339,7 +354,7 @@
         duration: rows.reduce((s, w) => s + (w.duration || 0), 0)
       };
     };
-    return { cur: week(monday), prev: week(addDays(monday, -7)), start: monday, end: addDays(monday, 6) };
+    return { cur: week(start), prev: week(addDays(start, -7)), start, end: addDays(start, 6) };
   }
 
   /* ---------------- monthly / yearly ---------------- */
@@ -1132,16 +1147,15 @@
   }
 
   /**
-   * Activity grid for a year: 7-day weeks (Mon-Sun) aligned so Jan 1 always
-   * starts a fresh week column, for heatmap-style visualisations. Cells are
+   * Activity grid for a year: 7-day weeks aligned to the configured start
+   * day. Cells are
    * null when outside the year, otherwise { date, level, workouts } where
    * level = intensityForCalories. Also returns the week index where each
    * month first appears (for month labels).
    */
-  function yearActivityGrid(workouts, year) {
+  function yearActivityGrid(workouts, year, weekStartsOn) {
     const agg = dayAggregates(workouts);
-    const firstDow = parse(year + "-01-01").getDay();
-    const offset = (firstDow + 6) % 7;
+    const offset = weekStartOffset(year + "-01-01", weekStartsOn);
     const weeks = [];
     const monthAtWeek = [];
     let d = addDays(year + "-01-01", -offset);
@@ -1279,6 +1293,7 @@
     pctChange, pctVsPrev, monthlyAnalysis, plural, volumeInsights, monthlyInsights, comparisonInsights,
     measurementInsights, consistencyInsights, chartCaptions, execSummary, keyTakeaways, yearActivityGrid,
     monthDayMap, availableYears, workoutYears, longestStreakInSet, longestRestStreak, restStreakEnd, backupReminderDue, REMINDER_UNIT_DAYS, dailyGoalStatus,
+    weekStartIndex, weekStartOffset, weekdayLabels,
     fmtNum, fmtDuration, fmtCal, fmtDelta, prettyDate, shortDate, weekdayName
   };
 })();

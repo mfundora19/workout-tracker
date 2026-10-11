@@ -28,7 +28,7 @@ history of 92 workouts across Jan–Aug 2026).*
 - 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
 - 🎯 **Goals** — daily **calorie (🔥)** and **duration (⏱️)** goals complete independently, plus a weekly workout target and a configurable **Avoid junk food (🥗)** daily habit goal. Log **No junk food**, **Some junk food**, or **Junk-food day** from the Dashboard or any Calendar day; unknown dates remain unlogged, and monthly Analytics distinguishes partial from full junk-food days.
-- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
+- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), configurable **week start** (Monday by default, or Sunday), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
 
 ## Getting started
 
@@ -108,7 +108,7 @@ bundled Unicode font keeps symbols legible.
 
 ## Yearly comparisons
 
-- The year picker (‹ 2026 ›) switches any view to any year — past or future, with or without data.
+- The year picker (‹ 2026 ›) switches any view to any year — past or future, with or without data. **Settings → Week starts on** controls Monday/Sunday alignment for weekly summaries and calendar layouts; new and existing installs default to Monday.
 - **Dashboard** shows your year vs the previous year; **Analytics** lets you compare **any two years** (per-month bars, cumulative lines, totals with differences) — the comparison only appears when both years actually have data.
 
 ## Privacy

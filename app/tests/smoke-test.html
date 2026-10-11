@@ -402,6 +402,16 @@ function dump() {
     ok("activity grid ~53 weeks", grid.weeks.length >= 52 && grid.weeks.length <= 53, "weeks=" + grid.weeks.length);
     // 2026-01-01 is a Thursday: the first week (Mon-aligned) holds Jan 1 at index 3
     ok("activity grid first week starts Mon with Jan 1 at index 3", grid.weeks[0][3] && grid.weeks[0][3].date === "2026-01-01", JSON.stringify((grid.weeks[0] || []).map((c) => c && c.date)));
+    const sundayGrid = S.yearActivityGrid(Focus.Store.workouts, 2026, "sunday");
+    ok("activity grid aligns Jan 1 at index 4 when weeks start Sunday", sundayGrid.weeks[0][4] && sundayGrid.weeks[0][4].date === "2026-01-01", JSON.stringify((sundayGrid.weeks[0] || []).map((c) => c && c.date)));
+    ok("weekday labels follow configured order and default to Monday", S.weekdayLabels().join(",") === "Mo,Tu,We,Th,Fr,Sa,Su" && S.weekdayLabels("sunday").join(",") === "Su,Mo,Tu,We,Th,Fr,Sa");
+    const weekBoundaryWorkouts = [
+      { date: "2026-10-04", calories: 100 }, { date: "2026-10-05", calories: 200 }, { date: "2026-10-11", calories: 300 }
+    ];
+    const mondayWeek = S.weeklyStats(weekBoundaryWorkouts, "2026-10-07");
+    const sundayWeek = S.weeklyStats(weekBoundaryWorkouts, "2026-10-07", "sunday");
+    ok("weekly stats default Monday boundary is Oct 5–11", mondayWeek.start === "2026-10-05" && mondayWeek.end === "2026-10-11" && mondayWeek.cur.workouts === 2, JSON.stringify(mondayWeek));
+    ok("weekly stats Sunday boundary is Oct 4–10", sundayWeek.start === "2026-10-04" && sundayWeek.end === "2026-10-10" && sundayWeek.cur.workouts === 2, JSON.stringify(sundayWeek));
     ok("activity grid levels 0-4", grid.weeks.flat().filter(Boolean).every((c) => c.level >= 0 && c.level <= 4));
 
     // comparison insights with a small deterministic 2025 year added to the seed
@@ -759,6 +769,17 @@ function dump() {
     await Focus.Store.deleteWorkout(restW.id);
     Focus.UI.renderDashboard();
 
+    // --- week-start setting defaults to Monday and renders both choices ---
+    Focus.Store.settings.weekStartsOn = "monday";
+    Focus.UI.renderSettings();
+    const weekStartRow = [...document.querySelectorAll(".setting-row")].find((r) => r.querySelector(".setting-label b")?.textContent === "Week starts on");
+    ok("Settings week-start choice defaults to Monday", !!weekStartRow && !!weekStartRow.querySelector('[data-week-start="monday"].is-active[aria-pressed="true"]') && !!weekStartRow.querySelector('[data-week-start="sunday"]'), weekStartRow ? weekStartRow.textContent.replace(/\s+/g, " ") : "no week-start setting");
+    Focus.Store.settings.weekStartsOn = "sunday";
+    Focus.UI.renderSettings();
+    ok("Settings reflects saved Sunday preference", !!document.querySelector('[data-week-start="sunday"].is-active[aria-pressed="true"]'));
+    Focus.Store.settings.weekStartsOn = "monday";
+    Focus.UI.renderSettings();
+
     // --- animations: Settings toggle (default on), entrance + chart draw-in classes ---
     Focus.UI.renderSettings();
     const animRow = [...document.querySelectorAll(".setting-row")].find((r) => {
@@ -829,7 +850,17 @@ function dump() {
     ok("backup banner shows last-backup age + turn-off", bb.innerHTML.includes("since your last backup") && !!bb.querySelector("[data-action='set-backup-reminder']"));
     Focus.UI.hideBackupBanner();
     ok("backup banner hides", bb.innerHTML === "", "innerHTML=" + bb.innerHTML);
-    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 8; Focus.UI.state.calDay = null;
+    Focus.UI.state.calMode = "month"; Focus.UI.state.calMonth = 1; Focus.UI.state.calDay = null;
+    Focus.Store.settings.weekStartsOn = "monday";
+    Focus.UI.renderCalendar();
+    const jan1MondayCell = document.querySelector('#calendarBody .days-grid .day-cell[data-day="2026-01-01"]');
+    ok("January 2026 month calendar places Thursday Jan 1 after three Monday-first blanks", document.querySelectorAll("#calendarBody .days-grid .day-cell.empty").length === 3 && jan1MondayCell === document.querySelectorAll("#calendarBody .days-grid .day-cell")[3]);
+    ok("month calendar weekday headers start Monday by default", [...document.querySelectorAll("#calendarBody .weekdays span")].map((e) => e.textContent).join(",") === "Mo,Tu,We,Th,Fr,Sa,Su");
+    Focus.Store.settings.weekStartsOn = "sunday";
+    Focus.UI.renderCalendar();
+    ok("Sunday preference shifts Jan 1 one column and reorders weekday headers", document.querySelectorAll("#calendarBody .days-grid .day-cell.empty").length === 4 && [...document.querySelectorAll("#calendarBody .weekdays span")].map((e) => e.textContent).join(",") === "Su,Mo,Tu,We,Th,Fr,Sa");
+    Focus.Store.settings.weekStartsOn = "monday";
+    Focus.UI.state.calMonth = 8;
     Focus.UI.renderCalendar();
     ok("calendar month view shows calorie goal badges", document.querySelectorAll(".day-cell .goal-badge.cal").length > 0, "cal=" + document.querySelectorAll(".day-cell .goal-badge.cal").length);
     ok("calendar month view shows time goal badges", document.querySelectorAll(".day-cell .goal-badge.time").length > 0, "time=" + document.querySelectorAll(".day-cell .goal-badge.time").length);

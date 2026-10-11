@@ -670,7 +670,9 @@
     // --- This week / This month (large comparison KPI cards) ---
     // "This week" is scoped to the selected year, matching "This month".
     const yearWk = all.filter((w) => St().yearOf(w.date) === year);
-    const wk = St().weeklyStats(yearWk, today);
+    const weekStartsOn = Store().settings.weekStartsOn;
+    const wk = St().weeklyStats(yearWk, today, weekStartsOn);
+    const weekEndLabel = weekStartsOn === "sunday" ? "Saturday" : "Sunday";
     // Longest run of consecutive workout days inside each week window.
     const wkStreak = (start, end) => St().longestStreakInSet(new Set(yearWk.filter((w) => w.date >= start && w.date <= end).map((w) => w.date)));
     const wkStreaks = {
@@ -720,7 +722,7 @@
     parts.push(`<div class="dash-compare">
       ${periodCard({
         title: "This week",
-        sub: St().shortDate(wk.start) + " – " + St().shortDate(wk.end),
+        sub: St().shortDate(wk.start) + " – " + St().shortDate(wk.end) + " · ends " + weekEndLabel,
         value: wk.cur.workouts,
         pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
         vs: "last week",
@@ -1054,7 +1056,7 @@
     const agg = St().dayAggregates(Store().workouts).get(today);
     const cal = agg ? agg.calories : 0;
     const dur = agg ? agg.duration : 0;
-    const wk = St().weeklyStats(Store().workouts, today).cur.workouts;
+    const wk = St().weeklyStats(Store().workouts, today, Store().settings.weekStartsOn).cur.workouts;
     // Daily completion comes from the shared goal logic (calorie and time are
     // judged independently); only the weekly workout target is local here.
     const hits = St().dailyGoalStatus(Store().workouts, g).get(today);
@@ -1140,6 +1142,10 @@
       const map = St().monthDayMap(all, year, i + 1);
       let calCnt = 0, durCnt = 0;
       const cells = [];
+      const monthStart = year + "-" + String(i + 1).padStart(2, "0") + "-01";
+      for (let pad = 0; pad < St().weekStartOffset(monthStart, Store().settings.weekStartsOn); pad++) {
+        cells.push('<div class="day empty" aria-hidden="true"></div>');
+      }
       for (let d = 1; d <= St().daysInMonth(year, i + 1); d++) {
         const info = map.get(d);
         const iso = year + "-" + String(i + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
@@ -1187,7 +1193,8 @@
     const body = document.getElementById("calendarBody");
     const map = St().monthDayMap(all, year, month);
     const mStats = St().monthlyStats(all, year)[month - 1];
-    const firstWeekday = new Date(year, month - 1, 1).getDay();
+    const weekStartsOn = Store().settings.weekStartsOn;
+    const firstWeekday = St().weekStartOffset(year + "-" + String(month).padStart(2, "0") + "-01", weekStartsOn);
     const dim = St().daysInMonth(year, month);
     const today = St().todayISO();
     const sel = state.calDay;
@@ -1202,7 +1209,7 @@
 
     let calHits = 0, durHits = 0;
     let cells = "";
-    for (let i = 0; i < firstWeekday; i++) cells += `<div class="day-cell empty"></div>`;
+    for (let i = 0; i < firstWeekday; i++) cells += `<div class="day-cell empty" aria-hidden="true"></div>`;
     for (let d = 1; d <= dim; d++) {
       const iso = year + "-" + String(month).padStart(2, "0") + "-" + String(d).padStart(2, "0");
       const info = map.get(d);
@@ -1274,7 +1281,7 @@
       </div>
       <div class="month-detail">
         <div>
-          <div class="weekdays">${["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => `<span>${d}</span>`).join("")}</div>
+          <div class="weekdays">${St().weekdayLabels(weekStartsOn).map((d) => `<span>${d}</span>`).join("")}</div>
           <div class="days-grid">${cells}</div>
         </div>
         <div id="dayPanel">${dayPanel}</div>
@@ -1683,6 +1690,7 @@
     const rem = s.backupReminder !== false;
     const remUnit = s.backupReminderUnit || "days";
     const remVal = s.backupReminderDays ?? 10;
+    const weekStartsOn = s.weekStartsOn === "sunday" ? "sunday" : "monday";
     // App version comes from app/js/version.js (managed by bump-version.py), read
     // at render time so a new build is picked up without a hard refresh.
     const ver = window.FOCUS_VERSION || { major: 1, minor: 0, patch: 0 };
@@ -1715,6 +1723,13 @@
             <div class="seg" role="group" aria-label="Animations">
               <button class="seg-btn ${anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="on">✨ On</button>
               <button class="seg-btn ${!anim ? "is-active" : ""}" data-action="set-animations" data-set-animations="off">Off</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"><b>Week starts on</b><span>Sets the first day for weekly summaries and calendar layouts.</span></div>
+            <div class="seg" role="group" aria-label="Week starts on">
+              <button type="button" class="seg-btn ${weekStartsOn === "monday" ? "is-active" : ""}" data-action="set-week-start" data-week-start="monday" aria-pressed="${weekStartsOn === "monday"}">Monday</button>
+              <button type="button" class="seg-btn ${weekStartsOn === "sunday" ? "is-active" : ""}" data-action="set-week-start" data-week-start="sunday" aria-pressed="${weekStartsOn === "sunday"}">Sunday</button>
             </div>
           </div>
         </div>

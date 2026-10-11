@@ -491,6 +491,16 @@
           }
           break;
         }
+        case "set-week-start": {
+          const next = target.dataset.weekStart;
+          if (next === "monday" || next === "sunday") {
+            Focus.Store.setSetting("weekStartsOn", next).then(() => {
+              Focus.UI.toast("Week now starts on " + (next === "monday" ? "Monday" : "Sunday"));
+              renderCurrent();
+            });
+          }
+          break;
+        }
         case "save-profile": {
           const hEl = document.getElementById("setHeight");
           const huEl = document.getElementById("setHeightUnit");

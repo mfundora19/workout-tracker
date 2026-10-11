@@ -744,8 +744,10 @@
       track(x - r, cy - r, r * 2, r * 2, "donut");
     }
 
-    /** Year activity heatmap: weeks x days (Mon-Sun), colored by intensity. */
+    /** Year activity heatmap: weeks x days (configured weekday order), colored by intensity. */
     function heatmapChart(x, y, w, h, grid, opts = {}) {
+      const weekStartsOn = opts.weekStartsOn === "sunday" ? "sunday" : "monday";
+      const weekdays = S.weekdayLabels(weekStartsOn);
       const nW = grid.weeks.length;
       const cellW = w / nW;
       const cellH = 8.5;
@@ -763,6 +765,12 @@
         if (m && (!grid.monthAtWeek[wi - 1] || grid.monthAtWeek[wi - 1].month !== m.month)) {
           doc.text(m.label, x + wi * cellW + cellW / 2, y - 4, { align: "center" });
         }
+      });
+      weekdays.forEach((label, i) => {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(5.5);
+        doc.setTextColor(...hexToRgb(INK.muted));
+        doc.text(label, x - 3, y + i * (cellH + 1.6) + 5.8, { align: "right" });
       });
       grid.weeks.forEach((week, wi) => {
         week.forEach((cell, di) => {
@@ -1267,10 +1275,11 @@
     if (hasData) {
       beginPage("Consistency & Streaks - " + year, "How regularly you trained");
       addSection(7, "Consistency & Streaks", "Frequency, streaks and the rhythm of your year");
-      const grid = S.yearActivityGrid(workouts, year);
+      const weekStartsOn = Focus.Store.settings.weekStartsOn === "sunday" ? "sunday" : "monday";
+      const grid = S.yearActivityGrid(workouts, year, weekStartsOn);
       const heatH = 138;
       ensure(heatH + 14);
-      heatmapChart(M, y + 12, CW, heatH, grid);
+      heatmapChart(M + 24, y + 12, CW - 24, heatH, grid, { weekStartsOn });
       y += heatH + 16;
       const cin = S.consistencyInsights(workouts, year);
       cin.forEach((i) => addInsight(i));
@@ -1302,7 +1311,7 @@
         track(sx, y, statW, 44, "stat:" + sd.k);
       });
       y += 56;
-      addText("The heatmap shows every training day of the year; darker cells are higher-calorie sessions. The calendar starts on a Monday so each column is one full week.",
+      addText("The heatmap shows every training day of the year; darker cells are higher-calorie sessions. Weeks start on " + (weekStartsOn === "sunday" ? "Sunday" : "Monday") + ".",
         { size: 7.5, color: INK.muted });
     }
 
