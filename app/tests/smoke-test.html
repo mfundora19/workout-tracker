@@ -13,10 +13,11 @@
 <script src="../js/version.js"></script>
 <script src="../js/store.js?v=10"></script>
 <script src="../js/stats.js?v=10"></script>
-<script src="../js/charts.js?v=10"></script>
+<script src="../js/progressEngine.js?v=1"></script>
+<script src="../js/charts.js?v=11"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=10"></script>
+<script src="../js/ui.js?v=11"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -144,6 +145,31 @@ function dump() {
     ok("weight count=29", weight.count === 29, "got " + weight.count);
     ok("weight first=158.5 latest=149.2 change=-9.3", weight.first.value === 158.5 && weight.latest.value === 149.2 && Math.abs(weight.change - (-9.3)) < 0.001, JSON.stringify({f: weight.first.value, l: weight.latest.value, c: weight.change}));
     ok("waist trend down", mstats.find((m) => m.type === "Waist").trend === "down");
+
+    // --- dedicated Progress engine: edge cases, regression, projections, composition ---
+    const PE = Focus.ProgressEngine;
+    const emptyProgress = PE.analyze([], {});
+    ok("progress engine empty history is safe", emptyProgress.weight.count === 0 && emptyProgress.weight.latest === null && emptyProgress.weight.projections.oneMonth === null && emptyProgress.composition.bmi === null);
+    const oneProgress = PE.analyzeMetric([{ id: "one", date: "2026-01-31", type: "Weight", value: 158, unit: "lb" }], "Weight");
+    ok("progress engine single point avoids fake rate/projection", oneProgress.count === 1 && oneProgress.trend === "stable" && oneProgress.ratePerMonth === null && oneProgress.projections.threeMonths === null);
+    const irregularProgress = PE.analyzeMetric([
+      { id: "a", date: "2026-01-01", type: "Weight", value: 80, unit: "kg" },
+      { id: "b", date: "2026-02-15", type: "Weight", value: 170, unit: "lb" },
+      { id: "c", date: "2026-05-01", type: "Weight", value: 76, unit: "kg" }
+    ], "Weight");
+    ok("progress engine normalizes mixed weight units and fits dated trend", irregularProgress.count === 3 && irregularProgress.unit === "kg" && Math.abs(irregularProgress.latest.value - 76) < 0.001 && irregularProgress.ratePerMonth < 0 && irregularProgress.r2 > 0.8, JSON.stringify({ unit: irregularProgress.unit, rate: irregularProgress.ratePerMonth, r2: irregularProgress.r2 }));
+    ok("progress engine produces trend and calendar-month projection points", irregularProgress.trendLine.length === 3 && irregularProgress.trendLine.every((p) => Number.isFinite(p.trend)) && irregularProgress.projections.points[0].date === "2026-06-01" && irregularProgress.projections.sixMonths != null, JSON.stringify(irregularProgress.projections));
+    ok("progress engine sorts irregular records and reports current month comparison", irregularProgress.first.date === "2026-01-01" && irregularProgress.monthComparison.currentMonth === "2026-05" && irregularProgress.insights.past.length > 0 && irregularProgress.insights.future.length > 0);
+    const goalProgress = PE.analyzeMetric([
+      { id: "ga", date: "2026-01-01", type: "Weight", value: 80, unit: "kg" },
+      { id: "gb", date: "2026-06-01", type: "Weight", value: 74, unit: "kg" }
+    ], "Weight", { goal: 60 });
+    ok("progress engine estimates a reachable goal date", goalProgress.goalETA && goalProgress.goalETA.date > "2026-06-01" && goalProgress.goalETA.months > 0 && goalProgress.insights.future.some((i) => i.includes("reach 60")), JSON.stringify(goalProgress.goalETA));
+    const goalUnitProgress = PE.analyze(Focus.Store.measurements, {}, { weightUnit: "lb", goalWeight: 60, goalWeightUnit: "kg" });
+    ok("progress engine normalizes goal units to displayed weight units", goalUnitProgress.weight.goalETA && Math.abs(goalUnitProgress.weight.goalETA.months - PE.analyzeMetric(Focus.Store.measurements, "Weight", { unit: "lb", goal: 132.2772 }).goalETA.months) < 0.1, JSON.stringify(goalUnitProgress.weight.goalETA));
+    const progressResult = PE.analyze(Focus.Store.measurements, { height: 170, heightUnit: "cm", sex: "male", neck: 38, neckUnit: "cm" });
+    ok("progress engine composition includes BMI and waist-height ratio", progressResult.composition.bmi != null && progressResult.composition.bmiCategory && progressResult.composition.waistHeightRatio != null, JSON.stringify({ bmi: progressResult.composition.bmi, whtr: progressResult.composition.waistHeightRatio }));
+    ok("progress engine derives lean/fat mass when body fat exists", progressResult.composition.bodyFat != null && progressResult.composition.leanMass != null && progressResult.composition.fatMass != null && Math.abs(progressResult.composition.leanMass + progressResult.composition.fatMass - progressResult.composition.weightKg / 0.45359237) < 0.2, JSON.stringify(progressResult.composition));
 
     // --- body composition engine ---
     ok("calcBMI 175cm/70kg", Math.abs(S.calcBMI(175, 70) - 22.857) < 0.01, "got " + S.calcBMI(175, 70));
@@ -1125,28 +1151,29 @@ function dump() {
     const chipLabels = Array.from(document.querySelectorAll("#progressHead .chip")).map((c) => c.textContent);
     ok("progress chips ordered Weight then Waist", chipLabels[0] === "Weight" && chipLabels[1] === "Waist", chipLabels.join(","));
     ok("progress defaults to Weight", Focus.UI.state.progType === "Weight", Focus.UI.state.progType);
-    ok("summary shows colored trend headline", !!document.querySelector("#progressStatsCard .sum-headline") && document.getElementById("progressStatsCard").textContent.includes("Great trend"), document.getElementById("progressStatsCard").textContent.slice(0, 80));
-    ok("comp card incomplete without Height", document.getElementById("progressCompCard").textContent.includes("Height") && document.getElementById("progressCompCard").textContent.includes("Weight"), document.getElementById("progressCompCard").textContent.slice(0, 100));
+    ok("progress summary is a narrative Journey card with trend and projections", document.querySelector("#progressStatsCard .progress-journey") && document.getElementById("progressStatsCard").textContent.includes("Your Weight Journey") && document.getElementById("progressStatsCard").textContent.includes("You started at") && document.getElementById("progressStatsCard").textContent.includes("in 3 months"), document.getElementById("progressStatsCard").textContent.slice(0, 140));
+    ok("body composition prompts for height and weight when BMI is unavailable", /weight and height for BMI/i.test(document.getElementById("progressCompCard").textContent), document.getElementById("progressCompCard").textContent.slice(0, 100));
     // add Height + Neck records -> BMI + BF% computed from stored measurements
     await Focus.Store.addMeasurement({ date: "2026-08-01", type: "Height", value: 175, unit: "cm" });
     await Focus.Store.addMeasurement({ date: "2026-08-01", type: "Neck", value: 38, unit: "cm" });
     Focus.UI.renderProgress();
     const compTxt = document.getElementById("progressCompCard").textContent;
-    ok("comp card shows BMI 22.1 from records", compTxt.includes("Current BMI") && compTxt.includes("22.1"), compTxt.slice(0, 140));
-    ok("comp card shows BF 21.5 + combined class", compTxt.includes("Est. body fat") && compTxt.includes("21.5") && compTxt.includes("Normal / Healthy"), compTxt.slice(0, 160));
+    ok("comp card shows BMI 22.1 from records", compTxt.includes("BMI") && compTxt.includes("22.1") && compTxt.includes("Normal weight"), compTxt.slice(0, 140));
+    ok("comp card shows BF 21.5 + combined class", compTxt.includes("U.S. Navy estimate") && compTxt.includes("21.5") && compTxt.includes("Normal / Healthy"), compTxt.slice(0, 160));
     const hRec2 = Focus.Store.measurements.find((m) => m.type === "Height");
     const nRec2 = Focus.Store.measurements.find((m) => m.type === "Neck");
     await Focus.Store.deleteMeasurement(hRec2.id);
     await Focus.Store.deleteMeasurement(nRec2.id);
     Focus.UI.renderProgress();
-    ok("comp card returns to incomplete state after cleanup", document.getElementById("progressCompCard").textContent.includes("Height"));
+    ok("comp card returns to BMI-missing state after cleanup", /weight and height for BMI/i.test(document.getElementById("progressCompCard").textContent));
 
-    // --- progress view: last-5 table, analysis tiles, view-all modal ---
+    // --- progress view: 2-row table, narrative insights, fit and forecast ---
     Focus.UI.renderProgress();
-    ok("progress table shows 5 most recent", document.querySelectorAll("#progressTable tbody tr").length === 5, "rows=" + document.querySelectorAll("#progressTable tbody tr").length);
-    ok("progress view-all button present", !!document.querySelector("#progressTable [data-action='view-all-measurements']"));
-    ok("summary has 12 analysis tiles", document.querySelectorAll("#progressStatsCard .stat-mini").length === 12, "tiles=" + document.querySelectorAll("#progressStatsCard .stat-mini").length);
-    ok("summary shows last-change analysis", document.getElementById("progressStatsCard").textContent.includes("Last change") && document.getElementById("progressStatsCard").textContent.includes("Change / month"));
+    ok("progress table shows 2 most recent rows", document.querySelectorAll("#progressTable tbody tr").length === 2, "rows=" + document.querySelectorAll("#progressTable tbody tr").length);
+    ok("progress view-all button retains full record count", !!document.querySelector("#progressTable [data-action='view-all-measurements']") && document.querySelector("#progressTable [data-action='view-all-measurements']").textContent.includes("29"));
+    ok("Progress summary groups insights into past, present and future", [...document.querySelectorAll("#progressStatsCard .insight-groups h4")].map((h) => h.textContent).join("|") === "How you did|How you’re doing|How you’ll do");
+    ok("Progress chart shows actual, trend and projection series", document.querySelectorAll("#progChart svg path.ln").length >= 3 && document.querySelector("#progChart svg path.ln-projection[stroke-dasharray='7 5']"));
+    ok("Progress chart adds six future projection dates", Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight.projectionLine.length === 7);
     Focus.UI.openMeasurementList("Waist");
     ok("view-all modal lists every record", document.querySelectorAll("#modal .preview-scroll tbody tr").length === 29, "rows=" + document.querySelectorAll("#modal .preview-scroll tbody tr").length);
     Focus.UI.closeModal();
@@ -1174,13 +1201,13 @@ function dump() {
     ok("tools prefills neck from settings profile", document.getElementById("bmiNeck").value === "38", document.getElementById("bmiNeck").value);
     Focus.UI.renderProgress();
     const compFromSettings = document.getElementById("progressCompCard").textContent;
-    ok("progress BMI uses profile height (no Height measurement needed)", compFromSettings.includes("Current BMI") && compFromSettings.includes("23.4"), compFromSettings.slice(0, 130));
+    ok("progress BMI uses profile height (no Height measurement needed)", compFromSettings.includes("BMI") && compFromSettings.includes("23.4"), compFromSettings.slice(0, 130));
     const hadNeckRec = Focus.Store.measurements.some((m) => m.type === "Neck");
-    ok("progress body-fat uses profile neck", compFromSettings.includes("Est. body fat") && !compFromSettings.includes("Add Neck to estimate"), compFromSettings.slice(0, 160));
+    ok("progress body-fat uses profile neck", compFromSettings.includes("U.S. Navy estimate") && !compFromSettings.includes("Add Neck + Waist"), compFromSettings.slice(0, 160));
     Focus.Store.settings.neck = null;
     Focus.UI.renderProgress();
     const compNoNeck = document.getElementById("progressCompCard").textContent;
-    ok("body-fat falls back to Neck records when the profile neck is empty", hadNeckRec ? !compNoNeck.includes("Add Neck to estimate") : compNoNeck.includes("Add Neck to estimate"), compNoNeck.slice(0, 160));
+    ok("body-fat falls back to Neck records when the profile neck is empty", hadNeckRec ? compNoNeck.includes("U.S. Navy estimate") : compNoNeck.includes("Add Neck + Waist"), compNoNeck.slice(0, 160));
     Focus.Store.settings.neck = 38;
     // historic Neck records stay stored but never surface in Progress
     const neckRec = await Focus.Store.addMeasurement({ date: "2026-08-02", type: "Neck", value: 38, unit: "cm" });
@@ -1188,7 +1215,7 @@ function dump() {
     const chipLabelsNeck = Array.from(document.querySelectorAll("#progressHead .chip")).map((c) => c.textContent);
     ok("neck never appears as a progress chip", !chipLabelsNeck.includes("Neck"), chipLabelsNeck.join(","));
     await Focus.Store.deleteMeasurement(neckRec.id);
-    Focus.Store.settings.height = null; Focus.Store.settings.age = null; Focus.Store.settings.neck = null;
+    Focus.Store.settings.height = null; Focus.Store.settings.heightUnit = "cm"; Focus.Store.settings.age = null; Focus.Store.settings.neck = null;
     Focus.UI.renderTools();
     ok("tools falls back to default height without profile", document.getElementById("bmiHeight").value === "175", document.getElementById("bmiHeight").value);
 
@@ -1232,7 +1259,7 @@ function dump() {
     const tabChecks = [
       ["profile", () => !!document.getElementById("setHeight") && !!document.getElementById("setNeck")],
       ["preferences", () => !!document.querySelector('[data-set-theme="system"]')],
-      ["goals", () => !!document.getElementById("goalCal") && !document.getElementById("setHeight")],
+      ["goals", () => !!document.getElementById("goalCal") && !!document.getElementById("goalWeight") && !!document.getElementById("goalWeightUnit") && !document.getElementById("setHeight")],
       ["notifications", () => !!document.getElementById("setWorkoutTime")],
       ["data", () => !!document.querySelector('[data-action="goto"][data-view="data"]')],
       ["about", () => document.getElementById("settingsBody").textContent.includes("Version")]
@@ -1276,7 +1303,7 @@ function dump() {
     ok("valid reminder time persists", Focus.Store.settings.workoutReminderTime === "07:30", "got " + Focus.Store.settings.workoutReminderTime);
     await Focus.Store.setSettings({ workoutReminderTime: origRemTime });
     Focus.UI.renderProgress();
-    ok("progress returns to incomplete state without height source", document.getElementById("progressCompCard").textContent.includes("Height"));
+    ok("progress returns to BMI-missing state without height source", /weight and height for BMI/i.test(document.getElementById("progressCompCard").textContent));
 
   } catch (e) {
     fail++;

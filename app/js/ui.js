@@ -1731,6 +1731,8 @@
     const wt = s.weightUnit || "lb";
     const sex = s.sex || "male";
     const g = s.goals || {};
+    const goalWeightUnit = g.goalWeightUnit || wt;
+    const targetWeightValue = g.weight == null ? "" : (St().convertTo(g.weight, goalWeightUnit, wt) ?? "");
     const hCm = s.height != null ? St().toCm(s.height, s.heightUnit || "cm") : null;
     const hVal = hCm != null ? Math.round(hCm * 10) / 10 : "";
     const nCm = s.neck != null ? St().toCm(s.neck, s.neckUnit || "cm") : null;
@@ -1864,6 +1866,13 @@
               <div class="input-with-unit">
                 <input class="input" id="goalWk" type="number" min="0" step="1" placeholder="e.g. 5" value="${g.workoutsPerWeek ?? ""}">
                 <span class="suffix">days</span>
+              </div>
+            </div>
+            <div class="goal-field">
+              <label for="goalWeight">Target weight</label>
+              <div class="input-with-unit">
+                <input class="input" id="goalWeight" type="number" min="0" step="any" placeholder="Optional" value="${targetWeightValue}">
+                <select class="select" id="goalWeightUnit" aria-label="Target weight unit"><option value="lb" ${wt === "lb" ? "selected" : ""}>lb</option><option value="kg" ${wt === "kg" ? "selected" : ""}>kg</option></select>
               </div>
             </div>
             <div class="setting-row food-goal-toggle">
@@ -2019,7 +2028,7 @@
    * the Navy circumference measurements exist) computed from the user's latest
    * recorded measurements — never entered twice.
    */
-  function renderCompCard() {
+  function renderLegacyCompCard() {
     const el = document.getElementById("progressCompCard");
     if (!el) return;
     const ms = Store().measurements;
@@ -2095,6 +2104,146 @@
   }
 
   function renderProgress() {
+    const all = Store().measurements;
+    const profile = Store().settings;
+    const types = existingMeasTypes();
+    const engine = Focus.ProgressEngine.analyze(all, profile, {
+      weightUnit: profile.weightUnit || "lb",
+      goalWeight: profile.goals && profile.goals.weight != null ? profile.goals.weight : null,
+      goalWeightUnit: profile.goals && profile.goals.goalWeightUnit || profile.weightUnit || "lb"
+    });
+    if (!state.progType || !types.includes(state.progType)) state.progType = types.includes("Weight") ? "Weight" : types[0] || null;
+
+    document.getElementById("progressHead").innerHTML = `
+      <div class="chip-row" role="tablist" aria-label="Measurement type">
+        ${types.map((t) => `<button class="chip ${state.progType === t ? "is-active" : ""}" role="tab" aria-selected="${state.progType === t}" data-action="prog-type" data-type="${esc(t)}">${esc(t)}</button>`).join("")}
+        ${types.length === 0 ? '<span style="color:var(--text-faint);font-size:13px">No measurements yet</span>' : ""}
+      </div>
+      <button class="btn btn-primary" data-action="add-measurement">${ICONS.plus} Add measurement</button>`;
+
+    renderProgressComposition(engine.composition);
+    if (!state.progType) {
+      document.getElementById("progressChartCard").innerHTML = "";
+      document.getElementById("progressStatsCard").innerHTML = "";
+      document.getElementById("progressTable").innerHTML = `
+        <div class="empty-state card">
+          <div class="es-icon">${ICONS.scale}</div>
+          <h3>Track your body measurements</h3>
+          <p>Add weight, waist, or other measurements to begin your journey.</p>
+          <button class="btn btn-primary" data-action="add-measurement">${ICONS.plus} Add first measurement</button>
+        </div>`;
+      return;
+    }
+
+    const analysis = state.progType === "Weight" ? engine.weight : state.progType === "Waist" ? engine.waist : Focus.ProgressEngine.analyzeMetric(all, state.progType);
+    const statsCard = document.getElementById("progressStatsCard");
+    renderProgressChart(analysis);
+    if (!analysis.count) {
+      statsCard.innerHTML = `<div class="card"><div class="chart-empty">No ${esc(state.progType.toLowerCase())} records yet. Add a measurement to start tracking.</div></div>`;
+      document.getElementById("progressTable").innerHTML = "";
+      return;
+    }
+
+    const unit = analysis.unit || "";
+    const fmt = (v, dp = 1) => v == null ? "—" : `${St().fmtNum(v, dp)}${unit ? " " + esc(unit) : ""}`;
+    const changeVerb = analysis.change < 0 ? "loss" : analysis.change > 0 ? "gain" : "no net change";
+    const headline = analysis.count > 1
+      ? `You started at <b>${fmt(analysis.first.value)}</b> on ${esc(St().prettyDate(analysis.first.date))} and are now <b>${fmt(analysis.latest.value)}</b>. That’s a ${changeVerb} of <b>${fmt(Math.abs(analysis.change))}</b>${analysis.pctChange == null ? "" : ` (${St().fmtNum(Math.abs(analysis.pctChange), 1)}%)`} over ${analysis.spanMonths >= 1 ? `${St().fmtNum(analysis.spanMonths, 1)} months` : `${St().fmtNum(analysis.spanDays, 0)} days`}.`
+      : `Your first ${esc(state.progType.toLowerCase())} reading is <b>${fmt(analysis.first.value)}</b> from ${esc(St().prettyDate(analysis.first.date))}.`;
+    const trendLabel = analysis.trend === "stable" ? "holding steady" : analysis.trend === "down" ? "moving down" : "moving up";
+    const past = analysis.insights.past.map((x) => `<li>${esc(x)}</li>`).join("");
+    const present = analysis.insights.present.map((x) => `<li>${esc(x)}</li>`).join("");
+    const future = analysis.insights.future.map((x) => `<li>${esc(x)}</li>`).join("");
+    const previousValue = analysis.lastChange == null ? "No previous reading" : `${analysis.lastChange > 0 ? "+" : ""}${fmt(analysis.lastChange)} since ${esc(St().prettyDate(analysis.lastChangeDate))}`;
+    const projectionValue = analysis.projections.threeMonths == null ? "More readings needed" : `${fmt(analysis.projections.threeMonths)} in 3 months`;
+
+    statsCard.innerHTML = `
+      <div class="progress-story">
+      <div class="card progress-journey">
+        <div class="card-title"><h3>Your ${esc(state.progType)} Journey</h3><span class="sub">${analysis.count} reading${analysis.count === 1 ? "" : "s"} · ${esc(St().prettyDate(analysis.first.date))} → ${esc(St().prettyDate(analysis.latest.date))}</span></div>
+        <p class="progress-narrative">${headline}</p>
+        <div class="progress-key-stats">
+          <div class="stat-mini"><div class="l">Average</div><div class="v">${fmt(analysis.average)}</div></div>
+          <div class="stat-mini"><div class="l">Lowest</div><div class="v">${fmt(analysis.lowest.value)} <small>${esc(St().shortDate(analysis.lowest.date))}</small></div></div>
+          <div class="stat-mini"><div class="l">Highest</div><div class="v">${fmt(analysis.highest.value)} <small>${esc(St().shortDate(analysis.highest.date))}</small></div></div>
+          <div class="stat-mini"><div class="l">Records / month</div><div class="v">${analysis.recordsPerMonth == null ? "—" : St().fmtNum(analysis.recordsPerMonth, 1)}</div></div>
+        </div>
+        <div class="journey-trend ${analysis.trend === "stable" ? "neutral" : analysis.trend === "down" ? "good-down" : "bad-up"}">
+          <div><b>${trendLabel}</b><span>${analysis.ratePerMonth == null ? "Rate available with more history" : `${analysis.ratePerMonth > 0 ? "+" : ""}${St().fmtNum(analysis.ratePerMonth, 2)} ${esc(unit)}/month · fit ${analysis.r2 == null ? "—" : St().fmtNum(analysis.r2 * 100, 0) + "%"}`}</span></div>
+          <div><b>${esc(projectionValue)}</b><span>linear trend estimate</span></div>
+          <div><b>${esc(previousValue)}</b><span>last change</span></div>
+        </div>
+        ${analysis.recommendation ? `<p class="progress-recommendation">${esc(analysis.recommendation)}</p>` : ""}
+      </div>
+      <div class="card progress-insights">
+        <div class="card-title"><h3>Insights</h3><span class="sub">A reading of your trend — not a diagnosis</span></div>
+        <div class="insight-groups">
+          <section><h4>How you did</h4><ul>${past}</ul></section>
+          <section><h4>How you’re doing</h4><ul>${present || "<li>More readings will reveal your current pace.</li>"}</ul></section>
+          <section><h4>How you’ll do</h4><ul>${future}</ul></section>
+        </div>
+      </div>
+      </div>`;
+
+    renderProgressTable(analysis);
+  }
+
+  function renderProgressChart(analysis) {
+    const card = document.getElementById("progressChartCard");
+    const title = `${esc(analysis.type)} over time`;
+    card.innerHTML = `<div class="card"><div class="card-title"><h3>${title}</h3><span class="sub">${analysis.count} readings${analysis.count > 1 ? " · fitted trend + 6-month projection" : ""}</span></div><div class="chart-wrap" id="progChart"></div><div class="progress-chart-legend"><span><i class="actual"></i>Reading</span>${analysis.count > 1 ? '<span><i class="fit"></i>Trend</span><span><i class="forecast"></i>Projection</span>' : ""}</div></div>`;
+    const plot = document.getElementById("progChart");
+    if (!analysis.count) { plot.innerHTML = `<div class="chart-empty">Add a ${esc(analysis.type.toLowerCase())} reading to start your trend.</div>`; return; }
+    const allDates = [...new Set([...analysis.records.map((r) => r.date), ...(analysis.projectionLine || []).map((p) => p.date)])].sort();
+    const datePos = new Map(allDates.map((d) => [d, (new Date(d + "T12:00:00").getTime() - new Date(allDates[0] + "T12:00:00").getTime()) / 86400000]));
+    const byDate = new Map(analysis.records.map((r) => [r.date, r.value]));
+    const trendByDate = new Map((analysis.trendLine || []).map((p) => [p.date, p.trend]));
+    const projections = new Map((analysis.projectionLine || []).map((p) => [p.date, p.value]));
+    const hasTrend = analysis.count > 1;
+    const series = [
+      { name: "Reading", values: allDates.map((d) => byDate.has(d) ? byDate.get(d) : null), color: "var(--accent)" },
+      ...(hasTrend ? [
+        { name: "Trend", values: allDates.map((d) => trendByDate.has(d) ? trendByDate.get(d) : null), color: "var(--success)" },
+        { name: "Projection", values: allDates.map((d) => projections.has(d) ? projections.get(d) : null), color: "var(--warn)" }
+      ] : [])
+    ];
+    const chartLabels = allDates.map((d, i) => i % Math.max(1, Math.ceil(allDates.length / 7)) === 0 || i === allDates.length - 1 ? St().shortDate(d) : "");
+    C().lineChart(plot, chartLabels, series, {
+      height: 235, area: false, fillId: "progress-" + analysis.type.replace(/\W/g, ""),
+      xValues: allDates.map((d) => datePos.get(d)),
+      valueFmt: (v) => St().fmtNum(v, 1) + (analysis.unit ? " " + esc(analysis.unit) : ""),
+      dashedSeries: hasTrend ? [2] : [],
+      yMin: Math.min(...analysis.records.map((r) => r.value), ...(analysis.projectionLine || []).map((p) => p.value)) * 0.98
+    });
+  }
+
+  function renderProgressComposition(composition) {
+    const el = document.getElementById("progressCompCard");
+    if (!el) return;
+    if (composition.bmi == null && composition.bodyFat == null) {
+      el.innerHTML = `<div class="card data-card comp-card"><div class="card-title"><h3>Body composition</h3><span class="sub">Estimates from your profile and measurements</span></div><p class="chart-empty">${esc(composition.interpretation)}</p></div>`;
+      return;
+    }
+    const meter = (value, max, color) => `<div class="composition-meter" role="meter" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${value}"><span style="width:${Math.max(0, Math.min(100, value / max * 100))}%;background:${color}"></span></div>`;
+    const bmi = composition.bmi == null ? `<div class="comp-tile comp-missing"><b>BMI</b><p>Height and weight are needed.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bmi, 1)}</b><span>BMI</span></div><div class="bmi-cat ${esc(composition.bmiCategory.cls)}">${esc(composition.bmiCategory.label)}</div>${meter(composition.bmi, 40, "var(--accent)")}</div>`;
+    const bf = composition.bodyFat == null ? `<div class="comp-tile comp-missing"><b>Estimated body fat</b><p>Add Neck + Waist${profileSex() === "female" ? " + Hips" : ""} measurements/profile values.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bodyFat, 1)}%</b><span>U.S. Navy estimate <button type="button" class="info-btn" data-info-btn aria-label="About body-fat ranges">ⓘ</button></span></div><div class="bmi-cat ${esc(composition.bodyFatCategory.cls)}">${esc(composition.bodyFatCategory.label)}</div>${meter(composition.bodyFat, 50, "var(--success)")}</div>`;
+    const mass = composition.leanMass == null ? "" : `<div class="stat-mini"><div class="l">Lean mass</div><div class="v">${St().fmtNum(composition.leanMass, 1)} <small>${esc(composition.massUnit)}</small></div></div><div class="stat-mini"><div class="l">Fat mass</div><div class="v">${St().fmtNum(composition.fatMass, 1)} <small>${esc(composition.massUnit)}</small></div></div>`;
+    const waistRatio = composition.waistHeightRatio == null ? "" : `<div class="stat-mini"><div class="l">Waist / height</div><div class="v">${St().fmtNum(composition.waistHeightRatio, 2)} <small>${composition.waistHeightRatio < 0.5 ? "below 0.5" : "0.5 or higher"}</small></div></div>`;
+    el.innerHTML = `<div class="card data-card comp-card"><div class="card-title"><h3>Body composition</h3><span class="sub">Latest valid measurements · estimates only</span></div><div class="comp-grid">${bmi}${bf}</div><div class="composition-extras">${mass}${waistRatio}</div><p class="comp-note">${esc(composition.interpretation)}</p></div>`;
+    const infoBtn = el.querySelector("[data-info-btn]");
+    if (infoBtn) infoBtn.addEventListener("click", (e) => { e.stopPropagation(); openInfoPopover(infoBtn, profileSex()); });
+  }
+
+  function profileSex() { return Store().settings.sex === "female" ? "female" : "male"; }
+
+  function renderProgressTable(analysis) {
+    const allRecs = analysis.records.slice().reverse();
+    const recent = allRecs.slice(0, 2);
+    const rowHTML = (r) => `<tr><td><b>${St().prettyDate(r.date)}</b></td><td><b>${St().fmtNum(r.value, 1)}</b> ${esc(r.unit)}</td><td style="color:var(--text-dim)">${r.notes ? esc(r.notes) : "—"}</td><td><div class="wk-actions"><button class="mini-btn" data-action="edit-measurement" data-id="${esc(r.id)}" aria-label="Edit ${esc(analysis.type)} from ${esc(r.date)}">${ICONS.pencil}</button><button class="mini-btn danger" data-action="delete-measurement" data-id="${esc(r.id)}" aria-label="Delete ${esc(analysis.type)} from ${esc(r.date)}">${ICONS.trash}</button></div></td></tr>`;
+    document.getElementById("progressTable").innerHTML = `<div class="card"><div class="card-title"><h3>${esc(analysis.type)} records</h3><button class="btn btn-sm btn-ghost" data-action="view-all-measurements" data-type="${esc(analysis.type)}">${ICONS.eye} View all (${allRecs.length})</button></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Value</th><th>Notes</th><th style="width:110px"></th></tr></thead><tbody>${recent.map(rowHTML).join("")}</tbody></table></div>${allRecs.length > 2 ? `<p class="progress-table-note">Showing 2 of ${allRecs.length} readings. “View all” opens the full history.</p>` : ""}</div>`;
+  }
+
+  function renderLegacyProgress() {
     const all = Store().measurements;
     const types = existingMeasTypes();
     renderCompCard();

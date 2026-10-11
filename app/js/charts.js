@@ -164,17 +164,28 @@
   /* ---------------- line / area chart ---------------- */
 
   /**
-   * opts: { height, area: bool, unit, valueFmt, colors[], fillId, yFmt }
+   * opts: { height, area: bool, unit, valueFmt, colors[], fillId, yFmt,
+   *         xLabels[], xValues[], projectionFrom, dashedSeries[] }
    */
   function lineChart(container, labels, series, opts = {}) {
     if (!labels.length) { emptyChart(container); return; }
+    const xLabels = Array.isArray(opts.xLabels) && opts.xLabels.length === labels.length ? opts.xLabels : labels;
+    const projectionFrom = Number.isInteger(opts.projectionFrom) ? opts.projectionFrom : null;
+    const dashedSeries = new Set(opts.dashedSeries || []);
+    const rawX = Array.isArray(opts.xValues) && opts.xValues.length === labels.length ? opts.xValues.map(Number) : null;
+    const xMin = rawX ? Math.min(...rawX) : 0;
+    const xMax = rawX ? Math.max(...rawX) : Math.max(1, labels.length - 1);
     const H = opts.height || 240;
     const W = 640;
     const pad = { t: 14, r: 10, b: 26, l: 44 };
     const plotW = W - pad.l - pad.r;
     const plotH = H - pad.t - pad.b;
-    const max = Math.max(1, ...series.flatMap((s) => s.values).filter((v) => v != null));
-    const nice = niceMax(max);
+    const finiteValues = series.flatMap((s) => s.values).filter((v) => v != null && Number.isFinite(v));
+    const dataMax = finiteValues.length ? Math.max(...finiteValues) : 1;
+    const dataMin = finiteValues.length ? Math.min(...finiteValues) : 0;
+    const domainMin = Number.isFinite(Number(opts.yMin)) ? Math.min(Number(opts.yMin), dataMin) : Math.min(0, dataMin);
+    const domainMax = Math.max(domainMin + 1, dataMax);
+    const nice = niceMax(domainMax - domainMin);
     const n = labels.length;
     const step = plotW / Math.max(1, n - 1);
     const accent = cssVar("--accent", "#6366f1");
@@ -190,12 +201,15 @@
       const y = pad.t + plotH - (plotH * i) / 4;
       svg.appendChild(el("line", { x1: pad.l, y1: y, x2: W - pad.r, y2: y, stroke: grid, "stroke-width": 1 }));
       const t = el("text", { x: pad.l - 8, y: y + 4, "text-anchor": "end", "font-size": 10.5, fill: textFaint });
-      t.textContent = compact((nice * i) / 4);
+      t.textContent = compact(domainMin + (nice * i) / 4);
       svg.appendChild(t);
     }
 
-    const xOf = (i) => pad.l + (n === 1 ? plotW / 2 : i * step);
-    const yOf = (v) => pad.t + plotH - (v / nice) * plotH;
+    const xOf = (i) => {
+      const position = rawX ? (xMax === xMin ? 0.5 : (rawX[i] - xMin) / (xMax - xMin)) : (n === 1 ? 0.5 : i / Math.max(1, n - 1));
+      return pad.l + position * plotW;
+    };
+    const yOf = (v) => pad.t + plotH - ((v - domainMin) / nice) * plotH;
 
     const defs = el("defs", {});
     const hasNull = series.some((s) => s.values.some((v) => v == null));
@@ -225,7 +239,7 @@
         if (seg.length === 1) {
           svg.appendChild(el("circle", { cx: seg[0][0], cy: seg[0][1], r: 4, fill: colors[si] }));
         } else {
-          svg.appendChild(el("path", { d: smoothPath(seg), fill: "none", stroke: colors[si], "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round", class: "ln", pathLength: 1000 }));
+          svg.appendChild(el("path", { d: smoothPath(seg), fill: "none", stroke: colors[si], "stroke-width": dashedSeries.has(si) ? 2 : 2.5, "stroke-dasharray": dashedSeries.has(si) ? "7 5" : null, "stroke-linecap": "round", "stroke-linejoin": "round", class: "ln" + (dashedSeries.has(si) ? " ln-projection" : ""), pathLength: 1000 }));
         }
         seg = [];
       };
@@ -256,7 +270,7 @@
     labels.forEach((lb, i) => {
       if (i % every !== 0 && i !== n - 1) return;
       const t = el("text", { x: xOf(i), y: H - 8, "text-anchor": "middle", "font-size": 10.5, fill: textFaint });
-      t.textContent = String(lb);
+      t.textContent = String(xLabels[i]);
       svg.appendChild(t);
     });
 

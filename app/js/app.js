@@ -614,11 +614,14 @@
         }
         case "save-goals": {
           const num = (v) => (v === "" || v == null || !isFinite(Number(v)) ? null : Math.max(0, Number(v)));
+          const previousGoals = Focus.Store.settings.goals || {};
           const goals = {
             calPerDay: num(document.getElementById("goalCal") ? document.getElementById("goalCal").value : ""),
             durPerDay: num(document.getElementById("goalDur") ? document.getElementById("goalDur").value : ""),
             workoutsPerWeek: num(document.getElementById("goalWk") ? document.getElementById("goalWk").value : ""),
-            avoidJunkFood: Focus.Store.settings.goals ? Focus.Store.settings.goals.avoidJunkFood !== false : true
+            weight: num(document.getElementById("goalWeight") ? document.getElementById("goalWeight").value : ""),
+            goalWeightUnit: document.getElementById("goalWeightUnit") && document.getElementById("goalWeightUnit").value === "kg" ? "kg" : "lb",
+            avoidJunkFood: previousGoals.avoidJunkFood !== false
           };
           Focus.Store.setSettings({ goals }).then(() => {
             Focus.UI.toast("Goals saved 🎯 — check your dashboard and calendar");
