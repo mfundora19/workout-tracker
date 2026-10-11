@@ -168,9 +168,11 @@
       const [w, m, s] = await Promise.all([getAll("workouts"), getAll("measurements"), loadSettings()]);
       state.workouts = w.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
       state.measurements = m.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
-      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, backupReminder: true, backupReminderDays: 10, customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null } };
+      const defaults = { theme: null, selectedYear: null, lastBackupAt: null, lastBackupReminderAt: null, seedVersion: 0, weightUnit: "lb", sex: "male", height: null, heightUnit: "cm", age: null, accent: "violet", animations: true, backupReminder: true, backupReminderDays: 10, customTypes: [], removedTypes: [], goals: { calPerDay: null, durPerDay: null, workoutsPerWeek: null, avoidJunkFood: true }, noJunkFoodLog: {} };
       state.settings = Object.assign({}, defaults, s);
       state.settings.goals = Object.assign({}, defaults.goals, s.goals || {});
+      state.settings.noJunkFoodLog = normalizeFoodLog(s.noJunkFoodLog);
+      if (s.goals && Object.prototype.hasOwnProperty.call(s.goals, "avoidJunkFood")) state.settings.goals.avoidJunkFood = s.goals.avoidJunkFood !== false;
 
       // ----- one-time integrity pass over stored data -----
       // IDs are structurally unique in IndexedDB (keyPath "id"), but this
@@ -317,6 +319,17 @@
     async setSettings(obj) {
       Object.assign(state.settings, obj);
       await saveSettings();
+    },
+    /** Save an explicit daily food outcome; true = avoided, false = ate junk, null = clear. */
+    async setNoJunkFoodDay(iso, status) {
+      if (!isISODate(iso)) throw new Error("Choose a valid calendar date.");
+      if (status !== true && status !== false && status !== null) throw new Error("Choose a food outcome or clear the log.");
+      const log = state.settings.noJunkFoodLog || (state.settings.noJunkFoodLog = {});
+      if (status === null) delete log[iso];
+      else log[iso] = status;
+      await saveSettings();
+      this.notify();
+      return status;
     },
 
     /* ----- seed ----- */
@@ -470,9 +483,14 @@
         kind: "backup",
         version: 1,
         exportedAt: nowIso(),
-        settings: state.settings,
-        workouts: state.workouts,
-        measurements: state.measurements
+        settings: Object.assign({}, state.settings, {
+          goals: Object.assign({}, state.settings.goals),
+          noJunkFoodLog: Object.assign({}, state.settings.noJunkFoodLog),
+          customTypes: (state.settings.customTypes || []).slice(),
+          removedTypes: (state.settings.removedTypes || []).slice()
+        }),
+        workouts: state.workouts.map((workout) => Object.assign({}, workout)),
+        measurements: state.measurements.map((measurement) => Object.assign({}, measurement))
       };
     },
 
@@ -481,7 +499,20 @@
       if (!obj || (obj.app !== "focus" && obj.app !== "pulse") || !Array.isArray(obj.workouts) || !Array.isArray(obj.measurements)) {
         throw new Error("This file is not a valid Focus backup.");
       }
-      return this.importRecords(obj.workouts, obj.measurements);
+      const result = await this.importRecords(obj.workouts, obj.measurements);
+      // Old backups have no food log. Restore valid entries without allowing an
+      // imported snapshot to erase or overwrite locally recorded daily outcomes.
+      const importedLog = normalizeFoodLog(obj.settings && obj.settings.noJunkFoodLog);
+      const localLog = state.settings.noJunkFoodLog || (state.settings.noJunkFoodLog = {});
+      let merged = false;
+      Object.keys(importedLog).forEach((iso) => {
+        if (!Object.prototype.hasOwnProperty.call(localLog, iso)) {
+          localLog[iso] = importedLog[iso];
+          merged = true;
+        }
+      });
+      if (merged) { await saveSettings(); this.notify(); }
+      return result;
     },
 
     /* ----- reset ----- */
@@ -494,6 +525,21 @@
   };
 
   /* ---------------- helpers ---------------- */
+
+  function isISODate(iso) {
+    if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const d = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+    return d.getFullYear() === Number(iso.slice(0, 4)) && d.getMonth() + 1 === Number(iso.slice(5, 7)) && d.getDate() === Number(iso.slice(8, 10));
+  }
+
+  function normalizeFoodLog(log) {
+    const clean = {};
+    if (!log || typeof log !== "object" || Array.isArray(log)) return clean;
+    Object.keys(log).forEach((iso) => {
+      if (isISODate(iso) && (log[iso] === true || log[iso] === false)) clean[iso] = log[iso];
+    });
+    return clean;
+  }
 
   function byDateThenId(a, b) {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
