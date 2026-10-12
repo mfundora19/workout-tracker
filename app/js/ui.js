@@ -750,7 +750,7 @@
         pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
         vs: "last week",
         period: "week",
-        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur, restStreak: wkRest.cur }),
+        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur, restStreak: wkRest.cur, currentStreak: streak }),
         prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev, bestDay: wkBest.prev, restStreak: wkRest.prev })
       })}
       ${periodCard({
@@ -760,7 +760,7 @@
         pct: St().pctVsPrev(mStats.workouts, prevMonth.workouts),
         vs: "last month",
         period: "month",
-        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod, bestDay: moBest.cur, restStreak: moRest.cur }),
+        cur: periodMetrics(mStats, { daysInPeriod: curDaysInPeriod, bestDay: moBest.cur, restStreak: moRest.cur, currentStreak: streak }),
         prev: periodMetrics(prevMonth, { daysInPeriod: prevDaysInPeriod, bestDay: moBest.prev, restStreak: moRest.prev })
       })}
     </div>`);
@@ -936,7 +936,7 @@
             ${metricTile("Avg kcal / workout", cur.avgCal, prev.avgCal, (v) => St().fmtNum(v), period, "kcal")}
             ${metricTile("Avg time / workout", cur.avgDur, prev.avgDur, (v) => St().fmtDuration(v), period)}
             ${metricTile("Calories / day", cur.calPerDay, prev.calPerDay, (v) => St().fmtNum(v), period, "kcal")}
-            ${metricTile("Time / day", cur.timePerDay, prev.timePerDay, (v) => St().fmtDuration(v), period)}
+            ${metricTile("Current streak", cur.curStreak, null, (v) => v + " days", period, "", { emptyWhenZero: false })}
             ${bestDayTile(cur.bestDay, prev.bestDay, period)}
             ${metricTile("Best streak", cur.bestStreak, prev.bestStreak, (v) => v + " days", period)}
           </div>
@@ -961,7 +961,7 @@
       avgCal: s.workouts ? s.calories / s.workouts : null,
       avgDur: s.workouts ? s.duration / s.workouts : null,
       calPerDay: o.daysInPeriod ? s.calories / o.daysInPeriod : null,
-      timePerDay: o.daysInPeriod ? s.duration / o.daysInPeriod : null,
+      curStreak: o.currentStreak != null ? o.currentStreak : null,
       bestDay: o.bestDay != null ? o.bestDay : null,
       bestStreak: o.bestStreak != null ? o.bestStreak : (s.bestStreak != null ? s.bestStreak : null),
       restStreak: o.restStreak != null ? o.restStreak : (s.restStreak != null ? s.restStreak : null)

@@ -17,7 +17,7 @@
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=19"></script>
+<script src="../js/ui.js?v=20"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -1046,8 +1046,10 @@ function dump() {
     ok("month card compares best streak (3 vs 5 days)", streakTile && streakTile.v.textContent.includes("3 days") && streakTile.v.querySelector(".delta").textContent.includes("▼ -40%"), streakTile && streakTile.v.textContent.replace(/\s+/g, " "));
     ok("month card has rest-streak, avg time + calories/day tiles and no workout-days tile", monthTiles.some((t) => t.l === "Rest streak") && monthTiles.some((t) => t.l === "Avg time / workout") && monthTiles.some((t) => t.l === "Calories / day") && !monthTiles.some((t) => t.l === "Workout days"), monthTiles.map((t) => t.l).join(" | "));
     const bestDayTileEl = monthTiles.find((t) => t.l === "Best day");
-    const timePerDayTile = monthTiles.find((t) => t.l === "Time / day");
-    ok("month card adds time/day + best-day tiles (9 total)", !!bestDayTileEl && !!timePerDayTile && monthTiles.length === 9, monthTiles.map((t) => t.l).join(" | "));
+    const curStreakTile = monthTiles.find((t) => t.l === "Current streak");
+    ok("month card shows current streak instead of time/day (9 total, no pill)", !!bestDayTileEl && !!curStreakTile && !monthTiles.some((t) => t.l === "Time / day") && monthTiles.length === 9 && /^\d+ days/.test(curStreakTile.v.textContent.trim()) && !curStreakTile.v.querySelector(".delta"), monthTiles.map((t) => t.l).join(" | "));
+    const wkTiles = [...periodCards[0].querySelectorAll(".stat-mini")].map((t) => t.querySelector(".l").textContent);
+    ok("week card also swaps time/day for current streak", wkTiles.includes("Current streak") && !wkTiles.includes("Time / day"), wkTiles.join(" | "));
     Focus.UI.renderData();
     const dataYour = document.querySelector("#dataBody .data-card");
     ok("Data Your Data separates workout and resting days", !!dataYour && dataYour.textContent.includes("Workout days") && dataYour.textContent.includes("Resting days") && !dataYour.textContent.includes("Workouts"));
