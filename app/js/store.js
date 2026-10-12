@@ -348,8 +348,8 @@
     async addMeasurement(data) {
       const m = makeMeasurement(data);
       await put("measurements", m);
-      state.measurements.push(m);
-      state.measurements.sort(byDateThenId);
+      // Immutable update: new array reference so memoized engine calls re-run.
+      state.measurements = [...state.measurements, m].sort(byDateThenId);
       this.notify();
       return m;
     },
@@ -361,9 +361,10 @@
       updated.type = String(patch.type).trim();
       updated.unit = (patch.unit || "").trim();
       await put("measurements", updated);
-      Object.assign(m, updated);
+      // Immutable update: replace the entry so consumers see a new reference.
+      state.measurements = state.measurements.map((x) => x.id === id ? updated : x);
       this.notify();
-      return m;
+      return updated;
     },
     async deleteMeasurement(id) {
       await del("measurements", id);

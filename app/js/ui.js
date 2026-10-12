@@ -2153,10 +2153,15 @@
     const all = Store().measurements;
     const profile = Store().settings;
     const types = existingMeasTypes();
+    // Reactive: re-runs from the single source of truth (Store.measurements)
+    // on every render, which Store.onChange triggers after each add/update/
+    // delete. `now` is injected so midnight rollover refreshes the recent
+    // window and the Jan-31 projection horizon on next render.
     const engine = Focus.ProgressEngine.analyze(all, profile, {
       weightUnit: profile.weightUnit || "lb",
       goalWeight: profile.goals && profile.goals.weight != null ? profile.goals.weight : null,
-      goalWeightUnit: profile.goals && profile.goals.goalWeightUnit || profile.weightUnit || "lb"
+      goalWeightUnit: profile.goals && profile.goals.goalWeightUnit || profile.weightUnit || "lb",
+      now: St().todayISO()
     });
     if (!state.progType || !types.includes(state.progType)) state.progType = types.includes("Weight") ? "Weight" : types[0] || null;
 
@@ -2202,6 +2207,8 @@
     const future = analysis.insights.future.map((x) => `<li>${esc(x)}</li>`).join("");
     const previousValue = analysis.lastChange == null ? "No previous reading" : `${analysis.lastChange > 0 ? "+" : ""}${fmt(analysis.lastChange)} since ${esc(St().prettyDate(analysis.lastChangeDate))}`;
     const projectionValue = analysis.projections.threeMonths == null ? "More readings needed" : `${fmt(analysis.projections.threeMonths)} in 3 months`;
+    const milestoneValue = analysis.projections.endOfYear == null ? null
+      : `${fmt(analysis.projections.endOfYear)} by Dec 31 · ${fmt(analysis.projections.endOfNextJanuary)} by Jan 31`;
     const targetValue = state.progType === "Weight" && analysis.goalETA && profile.goals && profile.goals.weight != null
       ? St().convertTo(profile.goals.weight, profile.goals.goalWeightUnit || profile.weightUnit || "lb", unit) : null;
     const targetDate = targetValue == null ? null : `${fmt(targetValue)} by ${esc(analysis.goalETA.label)}`;
@@ -2213,6 +2220,7 @@
         <p class="progress-narrative">${headline}${targetDate ? `<span class="journey-target">Goal forecast: ${targetDate}</span>` : ""}</p>
         <div class="progress-key-stats">
           <div class="stat-mini"><div class="l">Average</div><div class="v">${fmt(analysis.average)}</div></div>
+          <div class="stat-mini"><div class="l">Recent average</div><div class="v">${fmt(analysis.recentAverage)}</div></div>
           <div class="stat-mini"><div class="l">Lowest</div><div class="v">${fmt(analysis.lowest.value)} <small>${esc(St().shortDate(analysis.lowest.date))}</small></div></div>
           <div class="stat-mini"><div class="l">Highest</div><div class="v">${fmt(analysis.highest.value)} <small>${esc(St().shortDate(analysis.highest.date))}</small></div></div>
           <div class="stat-mini"><div class="l">Records / month</div><div class="v">${analysis.recordsPerMonth == null ? "—" : St().fmtNum(analysis.recordsPerMonth, 1)}</div></div>
@@ -2220,6 +2228,7 @@
         <div class="journey-trend ${analysis.trend === "stable" ? "neutral" : analysis.trend === "down" ? "good-down" : "bad-up"}">
           <div><b>${trendLabel}</b><span>${analysis.ratePerMonth == null ? "Rate available with more history" : `${analysis.ratePerMonth > 0 ? "+" : ""}${St().fmtNum(analysis.ratePerMonth, 2)} ${esc(unit)}/month · fit ${analysis.r2 == null ? "—" : St().fmtNum(analysis.r2 * 100, 0) + "%"}`}</span></div>
           <div><b>${esc(projectionValue)}</b><span>linear trend estimate</span></div>
+          ${milestoneValue ? `<div><b>${esc(milestoneValue)}</b><span>year-end + Jan projection</span></div>` : ""}
           <div><b>${esc(previousValue)}</b><span>last change</span></div>
         </div>
         ${analysis.recommendation ? `<p class="progress-recommendation">${esc(analysis.recommendation)}</p>` : ""}
@@ -2246,7 +2255,7 @@
       date: new Date(year + Math.floor(index / 12), index % 12, 1, 12)
     }));
     const monthLabel = (point) => point.date.toLocaleDateString(undefined, { month: "short" });
-    card.innerHTML = `<div class="card"><div class="card-title"><h3>${title}</h3><span class="sub">${analysis.count} readings${analysis.count > 1 ? " · fitted trend + 6-month projection" : ""}</span></div><div class="chart-wrap" id="progChart"></div><div class="progress-chart-legend"><span><i class="actual"></i>Reading</span>${analysis.count > 1 ? '<span><i class="fit"></i>Trend</span><span><i class="forecast"></i>Projection</span>' : ""}</div></div>`;
+    card.innerHTML = `<div class="card"><div class="card-title"><h3>${title}</h3><span class="sub">${analysis.count} readings${analysis.count > 1 ? " · recent-weighted trend + projection through Jan" : ""}</span></div><div class="chart-wrap" id="progChart"></div><div class="progress-chart-legend"><span><i class="actual"></i>Reading</span>${analysis.count > 1 ? '<span><i class="fit"></i>Trend</span><span><i class="forecast"></i>Projection</span>' : ""}</div></div>`;
     const plot = document.getElementById("progChart");
     if (!analysis.count) { plot.innerHTML = `<div class="chart-empty">Add a ${esc(analysis.type.toLowerCase())} reading to start your trend.</div>`; return; }
     const rangeStart = `${year}-01-01`;
