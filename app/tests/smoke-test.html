@@ -17,7 +17,7 @@
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=20"></script>
+<script src="../js/ui.js?v=21"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -1048,8 +1048,9 @@ function dump() {
     const bestDayTileEl = monthTiles.find((t) => t.l === "Best day");
     const curStreakTile = monthTiles.find((t) => t.l === "Current streak");
     ok("month card shows current streak instead of time/day (9 total, no pill)", !!bestDayTileEl && !!curStreakTile && !monthTiles.some((t) => t.l === "Time / day") && monthTiles.length === 9 && /^\d+ days/.test(curStreakTile.v.textContent.trim()) && !curStreakTile.v.querySelector(".delta"), monthTiles.map((t) => t.l).join(" | "));
-    const wkTiles = [...periodCards[0].querySelectorAll(".stat-mini")].map((t) => t.querySelector(".l").textContent);
-    ok("week card also swaps time/day for current streak", wkTiles.includes("Current streak") && !wkTiles.includes("Time / day"), wkTiles.join(" | "));
+    const wkTiles = [...periodCards[0].querySelectorAll(".stat-mini")].map((t) => ({ l: t.querySelector(".l").textContent, v: t.querySelector(".v") }));
+    const wkStreakTile = wkTiles.find((t) => t.l === "Week streak");
+    ok("week card shows the streak of the week (no pill)", !!wkStreakTile && !wkTiles.some((t) => t.l === "Time / day" || t.l === "Current streak") && /^\d+ days/.test(wkStreakTile.v.textContent.trim()) && !wkStreakTile.v.querySelector(".delta"), wkTiles.map((t) => t.l).join(" | "));
     Focus.UI.renderData();
     const dataYour = document.querySelector("#dataBody .data-card");
     ok("Data Your Data separates workout and resting days", !!dataYour && dataYour.textContent.includes("Workout days") && dataYour.textContent.includes("Resting days") && !dataYour.textContent.includes("Workouts"));

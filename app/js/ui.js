@@ -750,7 +750,8 @@
         pct: St().pctVsPrev(wk.cur.workouts, wk.prev.workouts),
         vs: "last week",
         period: "week",
-        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur, restStreak: wkRest.cur, currentStreak: streak }),
+        cur: periodMetrics(wk.cur, { daysInPeriod: 7, bestStreak: wkStreaks.cur, bestDay: wkBest.cur, restStreak: wkRest.cur, currentStreak: wkStreaks.cur }),
+        streakLabel: "Week streak",
         prev: periodMetrics(wk.prev, { daysInPeriod: 7, bestStreak: wkStreaks.prev, bestDay: wkBest.prev, restStreak: wkRest.prev })
       })}
       ${periodCard({
@@ -913,7 +914,7 @@
    * own delta pill. Shares the large-card tier (title + sub) with the chart
    * cards below it.
    */
-  function periodCard({ title, sub, value, pct, vs, period, cur, prev }) {
+  function periodCard({ title, sub, value, pct, vs, period, cur, prev, streakLabel }) {
     // Hover tip (revealed after 2s on a pill): the previous period's actual value.
     const tip = prev.workouts
       ? { label: "Last " + period + ":", value: St().fmtNum(prev.workouts) + (prev.workouts === 1 ? " workout" : " workouts") }
@@ -936,7 +937,7 @@
             ${metricTile("Avg kcal / workout", cur.avgCal, prev.avgCal, (v) => St().fmtNum(v), period, "kcal")}
             ${metricTile("Avg time / workout", cur.avgDur, prev.avgDur, (v) => St().fmtDuration(v), period)}
             ${metricTile("Calories / day", cur.calPerDay, prev.calPerDay, (v) => St().fmtNum(v), period, "kcal")}
-            ${metricTile("Current streak", cur.curStreak, null, (v) => v + " days", period, "", { emptyWhenZero: false })}
+            ${metricTile(streakLabel || "Current streak", cur.curStreak, null, (v) => v + " days", period, "", { emptyWhenZero: false })}
             ${bestDayTile(cur.bestDay, prev.bestDay, period)}
             ${metricTile("Best streak", cur.bestStreak, prev.bestStreak, (v) => v + " days", period)}
           </div>
