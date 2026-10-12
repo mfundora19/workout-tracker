@@ -13,7 +13,7 @@
 <script src="../js/version.js"></script>
 <script src="../js/store.js?v=12"></script>
 <script src="../js/stats.js?v=11"></script>
-<script src="../js/progressEngine.js?v=2"></script>
+<script src="../js/progressEngine.js?v=3"></script>
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
@@ -177,6 +177,14 @@ function dump() {
     const mixedRate = PE.analyzeMetric(oldHeavy, "Weight", { now: "2026-08-12" });
     const recentOnlyRate = PE.analyzeMetric(oldHeavy.slice(2), "Weight", { now: "2026-08-12" });
     ok("recent window wins: old readings do not skew the trend", Math.abs(mixedRate.ratePerMonth - recentOnlyRate.ratePerMonth) < 0.05 && mixedRate.rateBasis === 2 && mixedRate.recentAverage != null && mixedRate.projections.endOfNextJanuary != null, JSON.stringify({ mixed: mixedRate.ratePerMonth, recent: recentOnlyRate.ratePerMonth }));
+    const boundaryRate = PE.analyzeMetric([
+      { id: "b0", date: "2026-03-01", type: "Weight", value: 220, unit: "lb" },
+      { id: "b1", date: "2026-06-01", type: "Weight", value: 150, unit: "lb" },
+      { id: "b2", date: "2026-07-01", type: "Weight", value: 149, unit: "lb" },
+      { id: "b3", date: "2026-08-01", type: "Weight", value: 148, unit: "lb" },
+      { id: "b4", date: "2026-08-01", type: "Weight", value: 147.5, unit: "lb" }
+    ], "Weight", { now: "2026-08-12" });
+    ok("recent window spans 3 months and keeps multiple same-month inputs", boundaryRate.recentWindowStart === "2026-05-12" && boundaryRate.rateBasis === 4 && boundaryRate.recentCount === 4 && Math.abs(boundaryRate.ratePerMonth - recentOnlyRate.ratePerMonth) > 0.01, JSON.stringify({ start: boundaryRate.recentWindowStart, basis: boundaryRate.rateBasis }));
     const horizon = PE.analyzeMetric([{ id: "h1", date: "2026-07-01", type: "Weight", value: 150, unit: "lb" }, { id: "h2", date: "2026-08-01", type: "Weight", value: 149, unit: "lb" }], "Weight", { now: "2026-08-12" });
     ok("projection horizon covers remaining year + 1 month weekly", horizon.projectionEnd === "2027-01-31" && horizon.projections.endOfYearDate === "2026-12-31" && horizon.projections.endOfNextJanuaryDate === "2027-01-31" && horizon.weeklyProjection.length >= 20 && horizon.weeklyProjection[horizon.weeklyProjection.length - 1].date === "2027-01-31" && horizon.insights.future.some((i) => i.includes("January 31, 2027")), JSON.stringify({ end: horizon.projectionEnd, pts: horizon.weeklyProjection.length }));
     const cp = PE.computeProgress({ weightMeasurements: [{ id: "w1", date: "2026-07-01", type: "Weight", value: 150, unit: "lb" }, { id: "w2", date: "2026-08-01", type: "Weight", value: 149, unit: "lb" }], waistMeasurements: [], profile: {}, now: "2026-08-12", options: { weightUnit: "lb" } });

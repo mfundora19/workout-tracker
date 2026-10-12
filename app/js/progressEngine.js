@@ -12,7 +12,7 @@
  * The engine normalizes Weight to the latest record's unit and Waist to cm
  * before comparing values. It never mutates stored records or profile data.
  *
- * RECENT-WEIGHTED DESIGN (default recent window = last 2 calendar months):
+ * RECENT-WEIGHTED DESIGN (default recent window = last 3 calendar months):
  * - Overall stats (first, last, change, %, average, high/low, count, span,
  *   last change) use ALL readings.
  * - Trend direction, rate/month, trend line, projections, goal ETA and the
@@ -22,7 +22,7 @@
  * - Within the recent window, regression is exponentially weighted:
  *     weight_i = exp(-lambda * (t_now - t_i)), lambda = ln(2) / halfLife,
  *   with a default half-life of 30 days. Readings from the last few weeks
- *   dominate; readings ~2 months old carry ~1/4 weight. Set
+ *   dominate; readings ~3 months old carry ~1/8 weight. Set
  *   opts.halfLifeDays = Infinity for unweighted recent-window regression.
  *
  * PROJECTION HORIZON: from max(latest.date, now) through January 31 of
@@ -35,7 +35,7 @@
 
   const MONTH_MS = 365.2425 / 12 * 86400000;
   const DAYS_PER_MONTH = 365.2425 / 12; // ~30.44
-  const RECENT_WINDOW_MONTHS = 2;
+  const RECENT_WINDOW_MONTHS = 3;
   const HALF_LIFE_DAYS = 30;
   const LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
   const finite = (v) => typeof v === "number" && Number.isFinite(v);
