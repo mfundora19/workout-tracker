@@ -1474,6 +1474,75 @@
       <p>U.S. Navy circumference method · estimates, not a medical diagnosis.</p>`);
   }
 
+  /** Reference-range rows sharing the body-fat popover look; the row matching
+      the user's current value is highlighted via activeIndex. */
+  function compInfoRows(rows, activeIndex) {
+    return `<div class="info-rows">${rows.map((r, i) => `<div class="info-row${i === activeIndex ? " is-active" : ""}"><span>${esc(r.label)}</span><b>${esc(r.range)}</b></div>`).join("")}</div>`;
+  }
+
+  function openBmiPopover(anchor, bmi) {
+    const v = Number(bmi);
+    const rows = [
+      { label: "Underweight", range: "below 18.5" },
+      { label: "Normal weight", range: "18.5 – 25" },
+      { label: "Overweight", range: "25 – 30" },
+      { label: "Obesity", range: "30 and above" }
+    ];
+    const active = !(v > 0) ? -1 : v < 18.5 ? 0 : v < 25 ? 1 : v < 30 ? 2 : 3;
+    openInfoPop(anchor, `
+      <b>BMI reference ranges (WHO)</b>
+      ${compInfoRows(rows, active)}
+      <p>Your BMI is marked. BMI can't tell muscle from fat — read it with body fat %.</p>`);
+  }
+
+  function openMassPopover(anchor, composition, kind) {
+    const isLean = kind === "lean";
+    const value = isLean ? composition.leanMass : composition.fatMass;
+    const sharePct = composition.bodyFat != null ? (isLean ? 100 - composition.bodyFat : composition.bodyFat) : null;
+    const unit = composition.massUnit || "kg";
+    const showMass = (kg) => kg == null ? "—" : `${St().fmtNum(St().convertTo(kg, "kg", unit), 1)} ${esc(unit)}`;
+    const female = profileSex() === "female";
+    const essLo = composition.weightKg != null ? showMass(composition.weightKg * (female ? 0.10 : 0.02)) : "—";
+    const essHi = composition.weightKg != null ? showMass(composition.weightKg * (female ? 0.13 : 0.05)) : "—";
+    const rows = isLean
+      ? [{ label: "Your lean mass", range: `${St().fmtNum(value, 1)} ${unit}` }, { label: "Share of body weight", range: sharePct == null ? "—" : `${St().fmtNum(sharePct, 1)}%` }]
+      : [{ label: "Your fat mass", range: `${St().fmtNum(value, 1)} ${unit}` }, { label: "Share of body weight", range: sharePct == null ? "—" : `${St().fmtNum(sharePct, 1)}%` }, { label: `Essential minimum (${female ? "women 10–13%" : "men 2–5%"})`, range: `~${essLo} – ${essHi}` }];
+    openInfoPop(anchor, `
+      <b>${isLean ? "Lean mass" : "Fat mass"} — your numbers</b>
+      ${compInfoRows(rows, 0)}
+      <p>${isLean ? "Everything that isn't fat — muscle, bone, water, organs. No single healthy number: compare against your own history. Rising lean mass at a steady weight usually means recomposition." : "Some fat is essential; above that minimum, less generally tracks with better health markers. An estimate from weight × body-fat %, not a diagnosis."}</p>`);
+  }
+
+  function openWaistRatioPopover(anchor, ratio) {
+    const r = Number(ratio);
+    const rows = [
+      { label: "Healthy", range: "below 0.50" },
+      { label: "Increased risk", range: "0.50 – 0.60" },
+      { label: "High risk", range: "above 0.60" }
+    ];
+    const active = !(r > 0) ? -1 : r < 0.5 ? 0 : r <= 0.6 ? 1 : 2;
+    openInfoPop(anchor, `
+      <b>Waist-to-height reference</b>
+      ${compInfoRows(rows, active)}
+      <p>Keep your waist less than half your height. Your ratio is marked.</p>`);
+  }
+
+  /** One binder for every reference popover on a composition card.
+      getCtx() returns { sex, bmi, composition } — whichever the card has. */
+  function bindCompInfoButtons(root, getCtx) {
+    root.querySelectorAll("[data-comp-info]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const ctx = getCtx() || {};
+        const kind = btn.dataset.compInfo;
+        if (kind === "bf") openInfoPopover(btn, ctx.sex || "male");
+        else if (kind === "bmi") openBmiPopover(btn, ctx.bmi);
+        else if (kind === "lean" || kind === "fat") { if (ctx.composition) openMassPopover(btn, ctx.composition, kind); }
+        else if (kind === "waist") { if (ctx.composition) openWaistRatioPopover(btn, ctx.composition.waistHeightRatio); }
+      });
+    });
+  }
+
   function renderTools() {
     const wt = Store().settings.weightUnit || "lb";
     const sex = Store().settings.sex || "male";
@@ -2117,7 +2186,7 @@
       const cls = St().bodyCompClass(sex, bmi, bf);
       bfHTML = `
         <div class="comp-tile">
-          <div class="comp-val"><b>${Number(bf.toFixed(1))}%</b><span>Est. body fat <button type="button" class="info-btn" data-info-btn aria-label="About body-fat ranges">ⓘ</button></span></div>
+          <div class="comp-val"><b>${Number(bf.toFixed(1))}%</b><span>Est. body fat <button type="button" class="info-btn" data-comp-info="bf" aria-label="About body-fat ranges">${ICONS.info}</button></span></div>
           <div class="bmi-cat ${cls.cls}">${esc(cls.label)}</div>
           <p class="comp-note">${esc(cls.note)}</p>
         </div>`;
@@ -2133,20 +2202,14 @@
         <div class="card-title"><h3>Body composition</h3><span class="sub">from your latest measurements</span></div>
         <div class="comp-grid">
           <div class="comp-tile">
-            <div class="comp-val"><b>${Number(bmi.toFixed(1))}</b><span>Current BMI</span></div>
+            <div class="comp-val"><b>${Number(bmi.toFixed(1))}</b><span>Current BMI <button type="button" class="info-btn" data-comp-info="bmi" aria-label="About BMI ranges">${ICONS.info}</button></span></div>
             <div class="bmi-cat ${bCat.cls}">${esc(bCat.label)}</div>
             <p class="comp-note">${wTxt ? "Latest weight: " + wTxt : "Based on your latest Height & Weight records."}</p>
           </div>
           ${bfHTML}
         </div>
       </div>`;
-    const infoBtn = el.querySelector("[data-info-btn]");
-    if (infoBtn) {
-      infoBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openInfoPopover(infoBtn, sex);
-      });
-    }
+    bindCompInfoButtons(el, () => ({ sex, bmi }));
   }
 
   function renderProgress() {
@@ -2321,60 +2384,13 @@
       return;
     }
     const meter = (value, max, color) => `<div class="composition-meter" role="meter" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${value}"><span style="width:${Math.max(0, Math.min(100, value / max * 100))}%;background:${color}"></span></div>`;
-    const bmi = composition.bmi == null ? `<div class="comp-tile comp-missing"><b>BMI</b><p>Height and weight are needed.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bmi, 1)}</b><span>BMI</span></div><div class="bmi-cat ${esc(composition.bmiCategory.cls)}">${esc(composition.bmiCategory.label)}</div>${meter(composition.bmi, 40, "var(--accent)")}</div>`;
-    const bf = composition.bodyFat == null ? `<div class="comp-tile comp-missing"><b>Estimated body fat</b><p>Add Neck + Waist${profileSex() === "female" ? " + Hips" : ""} measurements/profile values.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bodyFat, 1)}%</b><span>U.S. Navy estimate <button type="button" class="info-btn" data-info-btn aria-label="About body-fat ranges">ⓘ</button></span></div><div class="bmi-cat ${esc(composition.bodyFatCategory.cls)}">${esc(composition.bodyFatCategory.label)}</div>${meter(composition.bodyFat, 50, "var(--success)")}</div>`;
-    const massInfo = (key, label, value, description) => `<div class="stat-mini composition-help" tabindex="0" role="button" aria-label="${label} information" aria-describedby="composition-tip-${key}" data-composition-tip="${key}"><div class="l">${label}</div><div class="v">${St().fmtNum(value, 1)} <small>${esc(composition.massUnit)}</small></div><span class="measure-tooltip" id="composition-tip-${key}" role="tooltip" hidden>${esc(description)}</span></div>`;
-    const mass = composition.leanMass == null ? "" : `${massInfo("lean", "Lean mass", composition.leanMass, "Lean mass is everything in your body that isn’t fat—including muscle, bone, water, and organs. It’s the ‘good’ weight you want to maintain or increase.")}${massInfo("fat", "Fat mass", composition.fatMass, "Fat mass is the total weight of fat in your body. While some fat is essential, reducing excess fat mass is often a goal for better health.")}`;
-    const waistRatio = composition.waistHeightRatio == null ? "" : `<div class="stat-mini"><div class="l">Waist / height</div><div class="v">${St().fmtNum(composition.waistHeightRatio, 2)} <small>${composition.waistHeightRatio < 0.5 ? "below 0.5" : "0.5 or higher"}</small></div></div>`;
+    const bmi = composition.bmi == null ? `<div class="comp-tile comp-missing"><b>BMI</b><p>Height and weight are needed.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bmi, 1)}</b><span>BMI <button type="button" class="info-btn" data-comp-info="bmi" aria-label="About BMI ranges">${ICONS.info}</button></span></div><div class="bmi-cat ${esc(composition.bmiCategory.cls)}">${esc(composition.bmiCategory.label)}</div>${meter(composition.bmi, 40, "var(--accent)")}</div>`;
+    const bf = composition.bodyFat == null ? `<div class="comp-tile comp-missing"><b>Estimated body fat</b><p>Add Neck + Waist${profileSex() === "female" ? " + Hips" : ""} measurements/profile values.</p></div>` : `<div class="comp-tile composition-metric"><div class="comp-val"><b>${St().fmtNum(composition.bodyFat, 1)}%</b><span>U.S. Navy estimate <button type="button" class="info-btn" data-comp-info="bf" aria-label="About body-fat ranges">${ICONS.info}</button></span></div><div class="bmi-cat ${esc(composition.bodyFatCategory.cls)}">${esc(composition.bodyFatCategory.label)}</div>${meter(composition.bodyFat, 50, "var(--success)")}</div>`;
+    const massInfo = (key, label, value) => `<div class="stat-mini"><div class="l">${label} <button type="button" class="info-btn" data-comp-info="${key}" aria-label="About ${label.toLowerCase()} ranges">${ICONS.info}</button></div><div class="v">${St().fmtNum(value, 1)} <small>${esc(composition.massUnit)}</small></div></div>`;
+    const mass = composition.leanMass == null ? "" : `${massInfo("lean", "Lean mass", composition.leanMass)}${massInfo("fat", "Fat mass", composition.fatMass)}`;
+    const waistRatio = composition.waistHeightRatio == null ? "" : `<div class="stat-mini"><div class="l">Waist / height <button type="button" class="info-btn" data-comp-info="waist" aria-label="About waist-to-height ranges">${ICONS.info}</button></div><div class="v">${St().fmtNum(composition.waistHeightRatio, 2)} <small>${composition.waistHeightRatio < 0.5 ? "below 0.5" : "0.5 or higher"}</small></div></div>`;
     el.innerHTML = `<div class="card data-card comp-card"><div class="card-title"><h3>Body composition</h3><span class="sub">Latest valid measurements · estimates only</span></div><div class="comp-grid">${bmi}${bf}</div><div class="composition-extras">${mass}${waistRatio}</div><p class="comp-note">${esc(composition.interpretation)}</p></div>`;
-    bindCompositionTooltips(el);
-    const infoBtn = el.querySelector("[data-info-btn]");
-    if (infoBtn) infoBtn.addEventListener("click", (e) => { e.stopPropagation(); openInfoPopover(infoBtn, profileSex()); });
-  }
-
-  function bindCompositionTooltips(root) {
-    root.querySelectorAll("[data-composition-tip]").forEach((anchor) => {
-      const tip = anchor.querySelector(".measure-tooltip");
-      let timer = null;
-      let pointerInside = false;
-      let escapeHandler = null;
-      const hide = () => {
-        if (timer) { clearTimeout(timer); timer = null; }
-        tip.hidden = true;
-        if (escapeHandler) { document.removeEventListener("keydown", escapeHandler); escapeHandler = null; }
-      };
-      const show = (delay) => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-          timer = null;
-          tip.hidden = false;
-          escapeHandler = (event) => { if (event.key === "Escape") hide(); };
-          document.addEventListener("keydown", escapeHandler);
-          const rect = anchor.getBoundingClientRect();
-          const width = Math.min(260, window.innerWidth - 24);
-          const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
-          tip.style.width = width + "px";
-          tip.style.left = left + "px";
-          tip.style.top = (rect.top - tip.offsetHeight - 8 >= 8 ? rect.top - tip.offsetHeight - 8 : Math.min(window.innerHeight - tip.offsetHeight - 8, rect.bottom + 8)) + "px";
-        }, delay);
-      };
-      anchor.addEventListener("mouseenter", () => { pointerInside = true; show(1000); });
-      anchor.addEventListener("mouseleave", () => { pointerInside = false; hide(); });
-      anchor.addEventListener("focus", () => show(1000));
-      anchor.addEventListener("blur", hide);
-      anchor.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (tip.hidden) show(0);
-        else if (!pointerInside && document.activeElement !== anchor) hide();
-      });
-      anchor.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") hide();
-        if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
-          event.preventDefault();
-          if (tip.hidden) show(0); else hide();
-        }
-      });
-    });
+    bindCompInfoButtons(el, () => ({ sex: profileSex(), bmi: composition.bmi, composition }));
   }
 
   function profileSex() { return Store().settings.sex === "female" ? "female" : "male"; }

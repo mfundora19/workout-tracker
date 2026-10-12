@@ -17,7 +17,7 @@
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=18"></script>
+<script src="../js/ui.js?v=19"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -1447,21 +1447,28 @@ function dump() {
     const compTxt = document.getElementById("progressCompCard").textContent;
     ok("comp card shows BMI 22.1 from records", compTxt.includes("BMI") && compTxt.includes("22.1") && compTxt.includes("Normal weight"), compTxt.slice(0, 140));
     ok("comp card shows BF 21.5 + combined class", compTxt.includes("U.S. Navy estimate") && compTxt.includes("21.5") && compTxt.includes("Normal / Healthy"), compTxt.slice(0, 160));
-    const leanTip = document.querySelector('#progressCompCard [data-composition-tip="lean"]');
-    const fatTip = document.querySelector('#progressCompCard [data-composition-tip="fat"]');
-    ok("lean/fat mass labels expose accessible delayed-tooltip targets", !!leanTip && !!fatTip && leanTip.getAttribute("aria-describedby") === "composition-tip-lean" && fatTip.getAttribute("aria-describedby") === "composition-tip-fat");
-    ok("lean/fat tooltips include the explanations", /muscle, bone, water, and organs/.test(leanTip.querySelector('[role="tooltip"]').textContent) && /reducing excess fat mass/.test(fatTip.querySelector('[role="tooltip"]').textContent));
-    ok("composition tooltips are initially hidden", leanTip.querySelector('[role="tooltip"]').hidden && fatTip.querySelector('[role="tooltip"]').hidden);
-    leanTip.dispatchEvent(new MouseEvent("mouseenter"));
-    await new Promise((r) => setTimeout(r, 1050));
-    ok("lean-mass tooltip appears after one-second hover", !leanTip.querySelector('[role="tooltip"]').hidden);
-    leanTip.dispatchEvent(new MouseEvent("mouseleave"));
-    ok("lean-mass tooltip hides immediately on leave", leanTip.querySelector('[role="tooltip"]').hidden);
-    fatTip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 10));
-    ok("fat-mass tooltip supports a tap toggle", !fatTip.querySelector('[role="tooltip"]').hidden);
-    fatTip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    ok("fat-mass tap toggles the tooltip closed", fatTip.querySelector('[role="tooltip"]').hidden);
+    const compInfoKinds = [...document.querySelectorAll('#progressCompCard [data-comp-info]')].map((b) => b.dataset.compInfo).sort().join(",");
+    ok("comp tiles expose info buttons for bmi, body fat, lean, fat and waist ratio", compInfoKinds === "bf,bmi,fat,lean,waist", compInfoKinds);
+    ok("comp info buttons use the project icon style", [...document.querySelectorAll('#progressCompCard [data-comp-info]')].every((b) => b.querySelector("svg") && !/[ⓘ]/.test(b.textContent)));
+    const escClose = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.querySelector('#progressCompCard [data-comp-info="lean"]').click();
+    await new Promise((r) => setTimeout(r, 20));
+    ok("lean-mass popover shows personalized reference rows", !!document.querySelector(".info-pop") && /Your lean mass/.test(document.querySelector(".info-pop").textContent) && /Share of body weight/.test(document.querySelector(".info-pop").textContent), (document.querySelector(".info-pop") || { textContent: "missing" }).textContent.slice(0, 100));
+    escClose();
+    ok("comp popover closes on Escape", !document.querySelector(".info-pop"));
+    document.querySelector('#progressCompCard [data-comp-info="fat"]').click();
+    await new Promise((r) => setTimeout(r, 20));
+    ok("fat-mass popover shows essential-minimum reference", /Essential minimum/.test(document.querySelector(".info-pop").textContent), (document.querySelector(".info-pop") || { textContent: "missing" }).textContent.slice(0, 120));
+    escClose();
+    document.querySelector('#progressCompCard [data-comp-info="bmi"]').click();
+    await new Promise((r) => setTimeout(r, 20));
+    ok("BMI popover lists WHO bands with your band highlighted", /Normal weight/.test(document.querySelector(".info-pop").textContent) && !!document.querySelector(".info-pop .info-row.is-active"));
+    escClose();
+    document.querySelector('#progressCompCard [data-comp-info="waist"]').click();
+    await new Promise((r) => setTimeout(r, 20));
+    ok("waist/height popover shows the 0.50 bands", /0\.50/.test(document.querySelector(".info-pop").textContent) && !!document.querySelector(".info-pop .info-row.is-active"));
+    escClose();
+    ok("all comp popovers closed after cleanup", !document.querySelector(".info-pop"));
     const hRec2 = Focus.Store.measurements.find((m) => m.type === "Height");
     const nRec2 = Focus.Store.measurements.find((m) => m.type === "Neck");
     await Focus.Store.deleteMeasurement(hRec2.id);
