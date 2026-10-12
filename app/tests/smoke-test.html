@@ -17,7 +17,7 @@
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=17"></script>
+<script src="../js/ui.js?v=18"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -1477,7 +1477,8 @@ function dump() {
     ok("Progress chart shows actual, trend and projection series", document.querySelectorAll("#progChart svg path.ln").length >= 3 && document.querySelector("#progChart svg path.ln-projection[stroke-dasharray='7 5']"));
     ok("Progress chart uses 13 current/next-year month ticks", document.querySelectorAll("#progChart svg text").length >= 18 && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’26") && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’27") && [...document.querySelectorAll("#progChart svg text")].filter((tick) => /^(Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.test(tick.textContent)).length === 11);
     ok("Progress projection runs weekly through Jan 31 next year", (() => { const w = Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight; return w.projectionEnd === "2027-01-31" && w.projectionLine.length > 7 && w.projectionLine[w.projectionLine.length - 1].date === "2027-01-31" && w.weeklyProjection.length === w.projectionLine.length - 1; })(), JSON.stringify(Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight.projectionEnd));
-    ok("Journey card shows recent average and year-end/Jan milestones", document.getElementById("progressStatsCard").textContent.includes("Recent average") && document.getElementById("progressStatsCard").textContent.includes("Dec 31") && document.getElementById("progressStatsCard").textContent.includes("Jan 31"));
+    const journeyTxt = document.querySelector("#progressStatsCard .progress-journey").textContent;
+    ok("Journey card shows last reading, total change and labeled trend/projection", journeyTxt.includes("Last") && journeyTxt.includes("Total change") && journeyTxt.includes("Trend") && journeyTxt.includes("Projection") && !journeyTxt.includes("Records / month") && !journeyTxt.includes("Recent average") && journeyTxt.includes("Dec 31") && journeyTxt.includes("Jan 31"), journeyTxt.slice(0, 120));
     Focus.UI.openMeasurementList("Waist");
     ok("view-all modal lists every record", document.querySelectorAll("#modal .preview-scroll tbody tr").length === 29, "rows=" + document.querySelectorAll("#modal .preview-scroll tbody tr").length);
     Focus.UI.closeModal();

@@ -893,10 +893,13 @@ table.data-table { width: 100%; border-collapse: collapse; background: var(--sur
 .progress-narrative b { color: var(--accent); font-variant-numeric: tabular-nums; }
 .journey-target { display: block; margin-top: 4px; color: var(--accent); font-size: 11px; font-weight: 700; }
 .progress-key-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.journey-trend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-.journey-trend > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 10px; border-radius: 10px; background: var(--surface-2); }
-.journey-trend b { font-size: 12px; font-variant-numeric: tabular-nums; }
-.journey-trend span { color: var(--text-faint); font-size: 10.5px; line-height: 1.4; }
+.journey-sections { display: grid; gap: 12px; margin-top: 12px; }
+.journey-section-title { margin: 0 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
+.journey-trend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.journey-forecast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.journey-trend > div, .journey-forecast > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 10px; border-radius: 10px; background: var(--surface-2); }
+.journey-trend b, .journey-forecast b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.journey-trend span, .journey-forecast span { color: var(--text-faint); font-size: 10.5px; line-height: 1.4; }
 .journey-trend.good-down > div:first-child b { color: var(--success); }
 .journey-trend.bad-up > div:first-child b { color: var(--warn); }
 .journey-trend.neutral > div:first-child b { color: var(--text-dim); }
@@ -1125,7 +1128,7 @@ html[data-theme="dark"] .analytics-challenge-month.is-complete i { color: color-
   .dash-compare, .dash-charts { grid-template-columns: 1fr; }
   .month-detail { grid-template-columns: 1fr; }
   .progress-grid { flex-direction: column; }
-  .journey-trend { grid-template-columns: 1fr; }
+  .journey-trend, .journey-forecast { grid-template-columns: 1fr; }
   .composition-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 1100px) {

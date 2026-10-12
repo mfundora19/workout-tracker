@@ -2220,16 +2220,26 @@
         <p class="progress-narrative">${headline}${targetDate ? `<span class="journey-target">Goal forecast: ${targetDate}</span>` : ""}</p>
         <div class="progress-key-stats">
           <div class="stat-mini"><div class="l">Average</div><div class="v">${fmt(analysis.average)}</div></div>
-          <div class="stat-mini"><div class="l">Recent average</div><div class="v">${fmt(analysis.recentAverage)}</div></div>
+          <div class="stat-mini"><div class="l">Last</div><div class="v">${fmt(analysis.latest.value)} <small>${esc(St().shortDate(analysis.latest.date))}</small></div></div>
           <div class="stat-mini"><div class="l">Lowest</div><div class="v">${fmt(analysis.lowest.value)} <small>${esc(St().shortDate(analysis.lowest.date))}</small></div></div>
           <div class="stat-mini"><div class="l">Highest</div><div class="v">${fmt(analysis.highest.value)} <small>${esc(St().shortDate(analysis.highest.date))}</small></div></div>
-          <div class="stat-mini"><div class="l">Records / month</div><div class="v">${analysis.recordsPerMonth == null ? "—" : St().fmtNum(analysis.recordsPerMonth, 1)}</div></div>
+          <div class="stat-mini"><div class="l">Total change</div><div class="v">${analysis.change > 0 ? "+" : ""}${fmt(analysis.change)}${analysis.pctChange == null ? "" : ` <small>${analysis.pctChange > 0 ? "+" : ""}${St().fmtNum(analysis.pctChange, 1)}%</small>`}</div></div>
         </div>
-        <div class="journey-trend ${analysis.trend === "stable" ? "neutral" : analysis.trend === "down" ? "good-down" : "bad-up"}">
-          <div><b>${trendLabel}</b><span>${analysis.ratePerMonth == null ? "Rate available with more history" : `${analysis.ratePerMonth > 0 ? "+" : ""}${St().fmtNum(analysis.ratePerMonth, 2)} ${esc(unit)}/month · fit ${analysis.r2 == null ? "—" : St().fmtNum(analysis.r2 * 100, 0) + "%"}`}</span></div>
-          <div><b>${esc(projectionValue)}</b><span>linear trend estimate</span></div>
-          ${milestoneValue ? `<div><b>${esc(milestoneValue)}</b><span>year-end + Jan projection</span></div>` : ""}
-          <div><b>${esc(previousValue)}</b><span>last change</span></div>
+        <div class="journey-sections">
+          <section class="journey-section" aria-label="Trend">
+            <h5 class="journey-section-title">Trend</h5>
+            <div class="journey-trend ${analysis.trend === "stable" ? "neutral" : analysis.trend === "down" ? "good-down" : "bad-up"}">
+              <div><b>${trendLabel}</b><span>${analysis.ratePerMonth == null ? "Rate available with more history" : `${analysis.ratePerMonth > 0 ? "+" : ""}${St().fmtNum(analysis.ratePerMonth, 2)} ${esc(unit)}/month · fit ${analysis.r2 == null ? "—" : St().fmtNum(analysis.r2 * 100, 0) + "%"}`}</span></div>
+              <div><b>${esc(previousValue)}</b><span>last change</span></div>
+            </div>
+          </section>
+          <section class="journey-section" aria-label="Projection">
+            <h5 class="journey-section-title">Projection</h5>
+            <div class="journey-forecast">
+              <div><b>${esc(projectionValue)}</b><span>linear trend estimate</span></div>
+              ${milestoneValue ? `<div><b>${esc(milestoneValue)}</b><span>year-end + Jan projection</span></div>` : ""}
+            </div>
+          </section>
         </div>
         ${analysis.recommendation ? `<p class="progress-recommendation">${esc(analysis.recommendation)}</p>` : ""}
       </div>
