@@ -199,6 +199,7 @@ WorkoutTracker/
 │   │   ├── charts.js       ← SVG charts (zero dependencies)
 │   │   ├── excel.js        ← .xlsx/.csv import & export (styled workbook)
 │   │   ├── pdf.js          ← local PDF annual report builder
+│   │   ├── progressEngine.js ← pure body-measurement analysis (recent-weighted trends, Jan-31 projections)
 │   │   ├── seed-data.js    ← your historical data, embedded
 │   │   ├── stats.js        ← streaks, monthly/yearly, comparisons, insights
 │   │   ├── store.js        ← IndexedDB persistence + dedup + multi-type normalize
