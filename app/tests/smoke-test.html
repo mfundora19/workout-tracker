@@ -11,13 +11,13 @@
 <script src="../lib/fonts/fonts.js"></script>
 <script src="../js/seed-data.js"></script>
 <script src="../js/version.js"></script>
-<script src="../js/store.js?v=11"></script>
+<script src="../js/store.js?v=12"></script>
 <script src="../js/stats.js?v=11"></script>
-<script src="../js/progressEngine.js?v=1"></script>
+<script src="../js/progressEngine.js?v=2"></script>
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=16"></script>
+<script src="../js/ui.js?v=17"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -165,6 +165,22 @@ function dump() {
       { id: "gb", date: "2026-06-01", type: "Weight", value: 74, unit: "kg" }
     ], "Weight", { goal: 60 });
     ok("progress engine estimates a reachable goal date", goalProgress.goalETA && goalProgress.goalETA.date > "2026-06-01" && goalProgress.goalETA.months > 0 && goalProgress.insights.future.some((i) => i.includes("reach 60")), JSON.stringify(goalProgress.goalETA));
+    const purityA = PE.analyzeMetric([{ id: "p1", date: "2026-06-01", type: "Weight", value: 160, unit: "lb" }, { id: "p2", date: "2026-07-15", type: "Weight", value: 155, unit: "lb" }], "Weight", { now: "2026-08-12" });
+    const purityB = PE.analyzeMetric([{ id: "p1", date: "2026-06-01", type: "Weight", value: 160, unit: "lb" }, { id: "p2", date: "2026-07-15", type: "Weight", value: 155, unit: "lb" }], "Weight", { now: "2026-08-12" });
+    ok("progress engine is pure: same inputs give same outputs", JSON.stringify(purityA) === JSON.stringify(purityB) && purityA.now === "2026-08-12");
+    const oldHeavy = [
+      { id: "o1", date: "2024-01-01", type: "Weight", value: 220, unit: "lb" },
+      { id: "o2", date: "2024-06-01", type: "Weight", value: 210, unit: "lb" },
+      { id: "r1", date: "2026-07-01", type: "Weight", value: 150, unit: "lb" },
+      { id: "r2", date: "2026-08-01", type: "Weight", value: 148, unit: "lb" }
+    ];
+    const mixedRate = PE.analyzeMetric(oldHeavy, "Weight", { now: "2026-08-12" });
+    const recentOnlyRate = PE.analyzeMetric(oldHeavy.slice(2), "Weight", { now: "2026-08-12" });
+    ok("recent window wins: old readings do not skew the trend", Math.abs(mixedRate.ratePerMonth - recentOnlyRate.ratePerMonth) < 0.05 && mixedRate.rateBasis === 2 && mixedRate.recentAverage != null && mixedRate.projections.endOfNextJanuary != null, JSON.stringify({ mixed: mixedRate.ratePerMonth, recent: recentOnlyRate.ratePerMonth }));
+    const horizon = PE.analyzeMetric([{ id: "h1", date: "2026-07-01", type: "Weight", value: 150, unit: "lb" }, { id: "h2", date: "2026-08-01", type: "Weight", value: 149, unit: "lb" }], "Weight", { now: "2026-08-12" });
+    ok("projection horizon covers remaining year + 1 month weekly", horizon.projectionEnd === "2027-01-31" && horizon.projections.endOfYearDate === "2026-12-31" && horizon.projections.endOfNextJanuaryDate === "2027-01-31" && horizon.weeklyProjection.length >= 20 && horizon.weeklyProjection[horizon.weeklyProjection.length - 1].date === "2027-01-31" && horizon.insights.future.some((i) => i.includes("January 31, 2027")), JSON.stringify({ end: horizon.projectionEnd, pts: horizon.weeklyProjection.length }));
+    const cp = PE.computeProgress({ weightMeasurements: [{ id: "w1", date: "2026-07-01", type: "Weight", value: 150, unit: "lb" }, { id: "w2", date: "2026-08-01", type: "Weight", value: 149, unit: "lb" }], waistMeasurements: [], profile: {}, now: "2026-08-12", options: { weightUnit: "lb" } });
+    ok("computeProgress entry point matches analyzeMetric", cp.weight.count === 2 && cp.weight.now === "2026-08-12" && cp.composition != null);
     const goalUnitProgress = PE.analyze(Focus.Store.measurements, {}, { weightUnit: "lb", goalWeight: 60, goalWeightUnit: "kg" });
     ok("progress engine normalizes goal units to displayed weight units", goalUnitProgress.weight.goalETA && Math.abs(goalUnitProgress.weight.goalETA.months - PE.analyzeMetric(Focus.Store.measurements, "Weight", { unit: "lb", goal: 132.2772 }).goalETA.months) < 0.1, JSON.stringify(goalUnitProgress.weight.goalETA));
     const progressResult = PE.analyze(Focus.Store.measurements, { height: 170, heightUnit: "cm", sex: "male", neck: 38, neckUnit: "cm" });
@@ -1452,7 +1468,8 @@ function dump() {
     ok("Progress summary groups insights into past, present and future", [...document.querySelectorAll("#progressStatsCard .insight-groups h4")].map((h) => h.textContent).join("|") === "How you did|How you’re doing|How you’ll do");
     ok("Progress chart shows actual, trend and projection series", document.querySelectorAll("#progChart svg path.ln").length >= 3 && document.querySelector("#progChart svg path.ln-projection[stroke-dasharray='7 5']"));
     ok("Progress chart uses 13 current/next-year month ticks", document.querySelectorAll("#progChart svg text").length >= 18 && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’26") && [...document.querySelectorAll("#progChart svg text")].some((tick) => tick.textContent === "Jan ’27") && [...document.querySelectorAll("#progChart svg text")].filter((tick) => /^(Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.test(tick.textContent)).length === 11);
-    ok("Progress chart adds six future projection dates", Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight.projectionLine.length === 7);
+    ok("Progress projection runs weekly through Jan 31 next year", (() => { const w = Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight; return w.projectionEnd === "2027-01-31" && w.projectionLine.length > 7 && w.projectionLine[w.projectionLine.length - 1].date === "2027-01-31" && w.weeklyProjection.length === w.projectionLine.length - 1; })(), JSON.stringify(Focus.ProgressEngine.analyze(Focus.Store.measurements, Focus.Store.settings).weight.projectionEnd));
+    ok("Journey card shows recent average and year-end/Jan milestones", document.getElementById("progressStatsCard").textContent.includes("Recent average") && document.getElementById("progressStatsCard").textContent.includes("Dec 31") && document.getElementById("progressStatsCard").textContent.includes("Jan 31"));
     Focus.UI.openMeasurementList("Waist");
     ok("view-all modal lists every record", document.querySelectorAll("#modal .preview-scroll tbody tr").length === 29, "rows=" + document.querySelectorAll("#modal .preview-scroll tbody tr").length);
     Focus.UI.closeModal();
