@@ -3208,12 +3208,11 @@
         </div>
       </div>
 
-      <div class="card data-card">
-        <div class="data-card-head">${icon("download")}<div><h3>Export</h3><p class="desc">Take your data with you — to Google Sheets, another computer, or just as a keepsake.</p></div></div>
+      <div class="card data-card">          <div class="data-card-head">${icon("download")}<div><h3>Export</h3><p class="desc">The JSON backup is the complete backup — it restores everything. Excel and PDF are handy copies.</p></div></div>
         <div class="export-btns">
-          <button class="btn btn-primary" data-action="export-excel">${ICONS.download} Excel Workbook</button>
+          <button class="btn btn-primary" data-action="export-backup">${ICONS.database} JSON Backup</button>
+          <button class="btn" data-action="export-excel">${ICONS.download} Excel Workbook</button>
           <button class="btn" data-action="export-pdf">${ICONS.download} PDF Report</button>
-          <button class="btn" data-action="export-backup">${ICONS.database} JSON Backup</button>
         </div>
         <div class="export-sub">
           <span>Simple data files</span>
@@ -3225,15 +3224,15 @@
       <div class="card data-card">
         <div class="data-card-head">${icon("upload")}<div><h3>Import</h3><p class="desc">Bring data back in. Imports add and update records — your local data is never deleted.</p></div></div>
         <div class="import-grid">
-          <div class="import-drop" id="dropExcel" tabindex="0" role="button" aria-label="Import Excel file">
-            ${ICONS.upload}
-            <b>Import Excel (.xlsx)</b>
-            <span>Workbooks exported by this app, or edited copies</span>
-          </div>
           <div class="import-drop" id="dropJson" tabindex="0" role="button" aria-label="Import JSON backup">
             ${ICONS.database}
             <b>Restore JSON backup</b>
             <span>A .json backup file saved from this app</span>
+          </div>
+          <div class="import-drop" id="dropExcel" tabindex="0" role="button" aria-label="Import Excel file">
+            ${ICONS.upload}
+            <b>Import Excel (.xlsx)</b>
+            <span>Workbooks exported by this app, or edited copies</span>
           </div>
         </div>
         <input type="file" id="fileExcel" accept=".xlsx,.xls" hidden>
