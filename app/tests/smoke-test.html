@@ -978,7 +978,7 @@ function dump() {
     // Food chart state is isolated from the browser's persisted log.
     ok("no comparison defaults with a single data year", Focus.UI.state.anaA === null && Focus.UI.state.anaB === null, Focus.UI.state.anaA + " vs " + Focus.UI.state.anaB);
     ok("Analytics replaces duplicate heatmap with monthly junk-food chart", !document.getElementById("acHeat") && !!document.querySelector("#acJunkFood svg") && document.getElementById("analyticsCharts").textContent.includes("Junk-food days") && document.getElementById("analyticsCharts").textContent.includes("logged days"));
-    ok("Analytics recovery summary labels rest days, streaks and weekly average", document.querySelector(".analytics-recovery") && document.querySelector(".analytics-recovery").textContent.includes("rest days") && document.querySelector(".analytics-recovery").textContent.includes("longest run, no junk food") && document.querySelector(".analytics-recovery").textContent.includes("avg junk-food days / week"));
+    ok("Analytics no longer hosts the Food Habits & Recovery card", !document.querySelector(".analytics-recovery") && !document.getElementById("analyticsCharts").textContent.includes("Food habits & recovery"), document.getElementById("analyticsCharts").textContent.slice(0, 120));
     ok("Analytics hides junk-food bars when no food days are logged", !document.querySelector("#acJunkFood svg path[fill=\"var(--danger)\"]") && !document.querySelector("#acJunkFood svg path[fill=\"var(--warn)\"]"));
     Focus.Store.settings.noJunkFoodLog = {
       "2026-01-02": true,
@@ -1570,8 +1570,11 @@ function dump() {
     const AY = Focus.App.year();
     Focus.Store.settings.noJunkFoodLog = { [AY + "-01-10"]: true, [AY + "-01-11"]: true, [AY + "-01-12"]: true, [AY + "-01-13"]: false };
     Focus.UI.renderAnalytics();
-    const anaInsights = [...document.querySelectorAll(".insights-list li")].map((li) => li.textContent);
-    ok("analytics generates food-habit insights", anaInsights.some((t) => t.includes("Longest run without junk food")) && anaInsights.some((t) => t.includes("Averaging")) && anaInsights.some((t) => t.includes("Peak day")), anaInsights.join(" | "));
+    if (!document.getElementById("foodBody")) { const d0 = document.createElement("div"); d0.id = "foodBody"; document.body.appendChild(d0); }
+    Focus.UI.renderFood();
+    const anaInsights = [...document.querySelectorAll("#foodBody .insights-list li")].map((li) => li.textContent);
+    ok("food section generates food-habit insights", anaInsights.some((t) => t.includes("Longest run without junk food")) && anaInsights.some((t) => t.includes("Averaging")), anaInsights.join(" | "));
+    Focus.UI.renderAnalytics();
     const anaCounts = document.querySelector(".food-habit-counts");
     ok("analytics counts all three states", !!anaCounts && anaCounts.textContent.includes("Full: 1") && anaCounts.textContent.includes("Some: 0") && anaCounts.textContent.includes("None: 3"), anaCounts ? anaCounts.textContent : "no counts");
     Focus.Store.settings.noJunkFoodLog = savedFoodLog;

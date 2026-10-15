@@ -1342,29 +1342,6 @@
     body.querySelector("#calMonthNext").onclick = () => { state.calMonth = nextM; if (month === 12) Focus.App.setYear(nextY); state.calDay = null; renderCalendar(); };
   }
 
-  /** Auto-generated Food Habits & Recovery insights (streaks, weekly average,
-   *  weekend pattern). Empty until at least one food day is logged. */
-  function foodInsightListHTML(fi) {
-    if (!fi || !fi.loggedDays) {
-      return `<p class="food-habit-note">Log food days on the dashboard or calendar to unlock streaks and weekly insights.</p>`;
-    }
-    const items = [];
-    const wdNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    if (fi.currentAvoidStreak >= 2) items.push(`🔥 Currently <b>${fi.currentAvoidStreak} days</b> without junk food — keep it going!`);
-    if (fi.longestAvoidStreak >= 2) items.push(`🏆 Longest run without junk food: <b>${fi.longestAvoidStreak} days</b>.`);
-    if (fi.longestJunkRun >= 3) items.push(`⚠️ Longest junk-food run: <b>${fi.longestJunkRun} days</b> in a row.`);
-    if (fi.avgJunkPerWeek != null) items.push(`📊 Averaging <b>${fi.avgJunkPerWeek} junk-food days</b> per week (partials count as half).`);
-    if (fi.weekendShare != null && fi.loggedDays >= 7) {
-      const pct = Math.round(fi.weekendShare * 100);
-      items.push(fi.weekendShare >= 0.6
-        ? `🗓️ Most junk-food days land on <b>weekends (${pct}%)</b>.`
-        : `🗓️ Junk food is spread through the week (weekends: <b>${pct}%</b>).`);
-    }
-    if (fi.peakWeekday != null) items.push(`📌 Peak day: <b>${wdNames[fi.peakWeekday]}</b>.`);
-    if (!items.length) return "";
-    return `<ul class="insights-list" aria-label="Food habit insights">${items.map((t) => `<li>${t}</li>`).join("")}</ul>`;
-  }
-
   function foodHabitSummaryHTML(log, year, month, refDateISO) {
     const goals = Store().settings.goals || {};
     if (goals.avoidJunkFood === false) return "";
@@ -2977,19 +2954,15 @@
     // a share of the year's workout days; food goal uses explicitly logged days.
     const gA = Store().settings.goals || {};
     const foodLog = Store().settings.noJunkFoodLog || {};
-    // Analytics consumes the centralized Food engine (no duplicate calculations).
+    // Analytics consumes the centralized Food engine for its high-level
+    // junk-food chart only; detailed streaks/trends/insights live in Food.
     let foodStats = St().foodHabitStats(foodLog, year, St().todayISO());
-    let foodInsights = St().foodHabitInsights(foodLog, year, St().todayISO());
     try {
       if (F() && F().yearStats) {
         const fy = F().yearStats(foodLog, year, St().todayISO());
         foodStats = { ...fy, avoidedDays: fy.noneDays, partialJunkFoodDays: fy.someDays, junkFoodDays: fy.fullDays, months: fy.months.map((m) => ({ ...m, avoidedDays: m.noneDays, partialJunkFoodDays: m.someDays, junkFoodDays: m.fullDays })) };
-        const fst = F().streaks(foodLog, St().todayISO());
-        const ftr = F().trend(foodLog, St().todayISO());
-        foodInsights = { ...foodInsights, longestAvoidStreak: fst.longestNone, currentAvoidStreak: fst.currentNone, longestJunkRun: fst.longestJunk, avgJunkPerWeek: ftr.avgPerWeek };
       }
     } catch (e) { /* fall back to Stats */ }
-    const recoveryStats = St().trainingRecoveryStats(all, year, St().todayISO());
     const gsA = St().dailyGoalStatus(all, gA);
     const yearDays = new Set(all.filter((w) => St().yearOf(w.date) === year).map((w) => w.date));
     let calHitsY = 0, durHitsY = 0;
@@ -3070,29 +3043,12 @@
         ${goalCardHTML}
       </div>
 
-      <div class="grid-2 analytics-insights-grid" style="margin-top:16px">
-        <div class="card">
-          <div class="card-title"><h3>Junk-food days · ${year}</h3><span class="sub">explicitly logged days only</span></div>
-          <div class="food-chart-legend" aria-label="Food log chart legend"><span><i style="--legend-color:var(--danger)"></i>Full junk-food day</span><span><i style="--legend-color:var(--warn)"></i>Some junk food</span><span><i style="--legend-color:var(--success)"></i>No junk food</span></div>
-          <div class="chart-wrap" id="acJunkFood"></div>
-          <p class="food-habit-counts" aria-live="polite">Full: <b>${foodStats.junkFoodDays}</b> · Some: <b>${foodStats.partialJunkFoodDays}</b> · None: <b>${foodStats.avoidedDays}</b></p>
-          <p class="food-habit-note">Months with no logged dates are omitted. Each logged day falls into exactly one of the three states.</p>
-        </div>
-          <div class="card analytics-recovery">
-          <div class="card-title"><h3>Food habits & recovery · ${year}</h3><span class="sub">food through today · training through yesterday</span></div>
-          <div class="recovery-kpis">
-          <div><b>${foodStats.junkFoodDays}</b><span>full junk-food days</span></div>
-          <div><b>${foodStats.partialJunkFoodDays}</b><span>partial junk-food days</span></div>
-          <div><b>${foodStats.avoidanceRate == null ? "—" : Math.round(foodStats.avoidanceRate * 100) + "%"}</b><span>fully avoided · ${foodStats.avoidedDays} / ${foodStats.loggedDays} logged</span></div>
-          <div><b>${foodInsights.longestAvoidStreak}</b><span>longest run, no junk food</span></div>
-          <div><b>${foodInsights.avgJunkPerWeek == null ? "—" : foodInsights.avgJunkPerWeek}</b><span>avg junk-food days / week</span></div>
-          <div><b>${recoveryStats.elapsedDays ? recoveryStats.restDays : "—"}</b><span>rest days</span></div>
-        </div>
-        ${foodInsightListHTML(foodInsights)}
-        <p class="food-habit-note">${foodStats.unloggedDays} unlogged dates are unknown, not successes or junk-food days. Avoidance rate uses only explicitly logged days. Partial junk-food days count as half toward the junk-food total.</p>
-      </div>
-
-
+      <div class="card" style="margin-top:16px;grid-column:1 / -1">
+        <div class="card-title"><div><h3>Junk-food days · ${year}</h3><p class="desc">High-level overview — detailed streaks, trends and insights live in <button type="button" class="link-btn" data-action="goto" data-view="food">Food</button>.</p></div><button type="button" class="btn btn-sm btn-ghost" data-action="goto" data-view="food">Open Food</button></div>
+        <div class="food-chart-legend" aria-label="Food log chart legend"><span><i style="--legend-color:var(--danger)"></i>Full junk-food day</span><span><i style="--legend-color:var(--warn)"></i>Some junk food</span><span><i style="--legend-color:var(--success)"></i>No junk food</span></div>
+        <div class="chart-wrap" id="acJunkFood"></div>
+        <p class="food-habit-counts" aria-live="polite">Full: <b>${foodStats.junkFoodDays}</b> · Some: <b>${foodStats.partialJunkFoodDays}</b> · None: <b>${foodStats.avoidedDays}</b></p>
+        <p class="food-habit-note">Months with no logged dates are omitted. Each logged day falls into exactly one of the three states.</p>
       </div>
 
       ${hasCmp ? `
