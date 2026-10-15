@@ -10,6 +10,7 @@
   const Store = () => Focus.Store;
   const St = () => Focus.Stats;
   const C = () => Focus.Charts;
+  const F = () => Focus.Food;
 
   /* Monthly challenges (and the badges they earn) are opt-out: they show unless
    * the user switched them off in Settings › Preferences. The stored challenges
@@ -644,9 +645,18 @@
     const badgesPrev = challengesOn() ? Store().challenges.filter((challenge) => challenge.completed && challenge.year === year - 1).length : 0;
 
     // --- Quick add card + today's explicit food-habit check-in ---
+    // Dashboard consumes the Food engine for its summary; the Food section owns the logic.
     parts.push(quickAddCardHTML());
     if ((Store().settings.goals || {}).avoidJunkFood !== false) {
-      parts.push(`<div class="card food-habit-card">${foodHabitCardHTML(today, false)}<p class="food-habit-note">Your logged days power the food trends in Analytics.</p></div>`);
+      parts.push(`<div class="card food-habit-card">${foodHabitCardHTML(today, false)}<p class="food-habit-note">Your logged days power the trends in <button type="button" class="link-btn" data-action="goto" data-view="food">Food</button>.</p></div>`);
+      try {
+        if (F() && F().overview) {
+          const fo = F().overview(Store().settings.noJunkFoodLog, today);
+          const statusLabel = fo.todayStatus === "none" ? "No junk food ✓" : fo.todayStatus === "some" ? "Some junk food" : fo.todayStatus === "full" ? "Junk-food day" : "Not logged yet";
+          const trendBit = fo.enoughForTrends ? ` · Trend: ${fo.trend}` : "";
+          parts.push(`<div class="card food-dash-summary" role="note" aria-label="Food summary"><div><b>🥗 Food · ${fo.currentStreak}-day streak</b><span>${statusLabel}${trendBit}</span></div><button type="button" class="btn btn-sm btn-ghost" data-action="goto" data-view="food">Open Food</button></div>`);
+        }
+      } catch (e) { /* dashboard summary is best-effort */ }
     }
 
     // --- KPI stat cards (4, one row on desktop) ---
@@ -1089,9 +1099,9 @@
       return { label, value: `${St().fmtNum(cur)} / ${St().fmtNum(goal)} ${unit} ${met ? "✅" : "⏳"}`, emoji: icon };
     };
     // The no-junk-food habit is a daily goal like the others: met only when
-    // today is explicitly logged as a no-junk-food day.
+    // today is explicitly logged as a no-junk-food day (single source: Food engine).
     const foodMet = g.avoidJunkFood !== false
-      ? { label: "Don't eat junk food (today)", value: St().foodHabitStatus(Store().settings.noJunkFoodLog, today) === true ? "met ✅" : "open ⏳", emoji: "🥗" }
+      ? { label: "Don't eat junk food (today)", value: (F() ? F().isGoalMet(Store().settings.noJunkFoodLog, today) : St().foodHabitStatus(Store().settings.noJunkFoodLog, today) === true) ? "met ✅" : "open ⏳", emoji: "🥗" }
       : null;
     return statCard({
       title: "Goals", icon: "target", cls: "amber",
@@ -1358,7 +1368,14 @@
   function foodHabitSummaryHTML(log, year, month, refDateISO) {
     const goals = Store().settings.goals || {};
     if (goals.avoidJunkFood === false) return "";
-    const stats = St().foodHabitMonthStats(log, year, month, refDateISO);
+    // Calendar consumes the centralized Food engine (single source of truth).
+    let stats = null;
+    try {
+      if (F() && F().monthStats) {
+        const ms = F().monthStats(log, year, month, refDateISO);
+        stats = { ...ms, avoidedDays: ms.noneDays, partialJunkFoodDays: ms.someDays, junkFoodDays: ms.fullDays };
+      } else stats = St().foodHabitMonthStats(log, year, month, refDateISO);
+    } catch (e) { stats = St().foodHabitMonthStats(log, year, month, refDateISO); }
     if (!stats || stats.elapsedDays === 0) return `<div class="food-summary"><div><b>🥗 Avoid junk food</b><span>No elapsed days in this month yet.</span></div><div class="food-summary-rate"><b>—</b><span>avoidance · 0 logged</span></div><p>Future dates are excluded.</p></div>`;
     const rate = stats.avoidanceRate == null ? "—" : Math.round(stats.avoidanceRate * 100) + "%";
     // Full junk-food days count as 1; "some junk food" days count as 0.5.
@@ -2530,6 +2547,7 @@
           close();
           if (Focus.App.currentView === "challenges") renderChallenges();
           else if (Focus.App.currentView === "dashboard") renderDashboard();
+          else if (Focus.App.currentView === "food") renderFood();
           else if (Focus.App.currentView === "calendar") renderCalendar();
           else if (Focus.App.currentView === "analytics") renderAnalytics();
           else if (Focus.App.currentView === "settings") renderSettings();
@@ -2555,6 +2573,90 @@
       : St().suggestedCompletionDate(challenge.month, challenge.year, St().todayISO());
     return Store().updateChallenge(challenge.id, { completed: !wasCompleted, completionDate: completedOn })
       .then(() => { toast(wasCompleted ? "Challenge marked in progress" : "Challenge complete! Badge earned 🏆"); });
+  }
+
+  /* =====================================================================
+   * FOOD — dedicated first-class section (single source: Focus.Food)
+   * ---------------------------------------------------------------------
+   * Overview answers: how am I doing overall / recently / streak / changed.
+   * Today's status is one tap, reversible, keyboard accessible. History is a
+   * year calendar with three visually distinct states. Insights come only
+   * from real data (data-sufficiency aware, never invented).
+   * =================================================================== */
+  function foodStatusMeta(status) {
+    return status === "none"
+      ? { label: "No junk food", cls: "is-avoided", dot: "var(--success)", emoji: "🥗" }
+      : status === "some"
+        ? { label: "Some junk food", cls: "is-partial", dot: "var(--warn)", emoji: "⚠️" }
+        : status === "full"
+          ? { label: "Junk-food day", cls: "is-junk", dot: "var(--danger)", emoji: "🍔" }
+          : { label: "Not logged", cls: "is-unlogged", dot: "var(--text-faint)", emoji: "○" };
+  }
+
+  function renderFood() {
+    const body = document.getElementById("foodBody");
+    if (!body) return;
+    const year = Focus.App.year();
+    const today = St().todayISO();
+    const log = Store().settings.noJunkFoodLog || {};
+    const goals = Store().settings.goals || {};
+    if (goals.avoidJunkFood === false) {
+      body.innerHTML = `<div class="card data-card"><div class="empty-state"><div class="es-icon">🥗</div><h3>Food tracking is off</h3><p>The “Don't eat junk food” goal is switched off in Settings. Nothing was deleted — turn it back on to keep tracking.</p><button type="button" class="btn btn-primary" data-action="toggle-food-goal">Turn food tracking on</button></div></div>`;
+      return;
+    }
+    let ov = null, wk = null, mo = null, yr = null, ins = [];
+    try {
+      ov = F().overview(log, today);
+      wk = F().weekStats(log, today);
+      mo = F().monthStats(log, Number(today.slice(0, 4)), Number(today.slice(5, 7)), today);
+      yr = F().yearStats(log, year, today);
+      ins = F().insights(log, today, year);
+    } catch (e) { ov = null; }
+    if (!ov) { body.innerHTML = `<div class="card"><p>Food data unavailable.</p></div>`; return; }
+    const trendCls = ov.direction === "improving" ? "good" : ov.direction === "worsening" ? "bad" : "flat";
+    const todayMeta = foodStatusMeta(ov.todayStatus);
+    const monthRate = mo.avoidanceRate == null ? "—" : Math.round(mo.avoidanceRate * 100) + "%";
+    const weekLabel = `${wk.noneDays} / ${wk.elapsedDays} junk-free days`;
+    const monthLabel = `${mo.noneDays} / ${mo.elapsedDays} junk-free days`;
+    const yearLabel = `${yr.noneDays} / ${yr.elapsedDays} junk-free days`;
+    const insightHTML = ins.length
+      ? `<ul class="insights-list" aria-label="Food insights">${ins.map((i) => `<li><span class="insight-tone tone-${i.tone}" aria-hidden="true">●</span> ${i.text}</li>`).join("")}</ul>`
+      : (ov.hasData
+        ? `<p class="food-habit-note">Keep tracking to unlock trends and comparisons.</p>`
+        : `<div class="empty-state"><div class="es-icon">🥗</div><h3>Start tracking your food habits</h3><p>Record your first day below to begin seeing trends, streaks, and insights.</p></div>`);
+    // History: compact year calendar (three states, shape + color, not color alone).
+    const histMonths = yr.months.map((m) => {
+      const cells = F().monthCells(log, year, m.month);
+      const dots = cells.map((c) => {
+        const meta = foodStatusMeta(c.status);
+        const glyph = c.status === "none" ? "●" : c.status === "some" ? "◐" : c.status === "full" ? "●" : "○";
+        const cls = c.status === "none" ? "fh-none" : c.status === "some" ? "fh-some" : c.status === "full" ? "fh-full" : "fh-unknown";
+        return `<span class="fh-dot ${cls}" title="${c.iso}: ${meta.label}" aria-label="${c.iso}: ${meta.label}" role="img">${glyph}</span>`;
+      }).join("");
+      return `<div class="food-hist-month"><b>${m.label}</b><div class="food-hist-dots">${dots}</div><small>${m.loggedDays ? `${m.noneDays}✓ · ${m.someDays}◐ · ${m.fullDays}✗` : "no logs"}</small></div>`;
+    }).join("");
+    body.innerHTML = `
+      <div class="card food-overview">
+        <div class="card-title"><div><h3>Your food journey</h3><p class="desc">How you did · how you're doing · what's next — from your logged days only.</p></div><span class="pill ${trendCls}">${ov.trend}</span></div>
+        <div class="dash-stats food-overview-grid">
+          <div class="stat-card"><b>${ov.currentStreak} days</b><span>Current streak · no junk food</span></div>
+          <div class="stat-card"><b>${ov.longestStreak} days</b><span>Longest streak</span></div>
+          <div class="stat-card"><b>${monthRate}</b><span>This month · junk-free (${mo.noneDays}/${mo.loggedDays || 0} logged)</span></div>
+          <div class="stat-card"><b>${todayMeta.emoji} ${todayMeta.label}</b><span>Today's status</span></div>
+        </div>
+        <p class="food-habit-note">You've avoided junk food for <b>${ov.last30.noneDays} of the last 30 logged-eligible days</b> (${ov.last30.loggedDays} logged). ${ov.direction === "improving" ? "Recent days are beating your yearly average." : ov.direction === "worsening" ? "Recent days are slipping vs your yearly average." : "Unlogged dates stay unknown — they never count as clean or junk."}</p>
+      </div>
+      <div class="card food-habit-card food-today"><h3 style="margin:0 0 8px">How was your food today?</h3>${foodHabitCardHTML(today, false)}</div>
+      <div class="grid-2">
+        <div class="card"><div class="card-title"><h3>Your food habits</h3><span class="sub">recent vs long-term</span></div>
+          <div class="type-bar-row"><div class="tbr-head"><span>📅 This week</span><span class="tbr-meta"><b>${weekLabel}</b></span></div></div>
+          <div class="type-bar-row"><div class="tbr-head"><span>🗓️ This month</span><span class="tbr-meta"><b>${monthLabel}</b></span></div></div>
+          <div class="type-bar-row"><div class="tbr-head"><span>📊 ${year}</span><span class="tbr-meta"><b>${yearLabel}</b></span></div></div>
+          <p class="food-habit-note">Best month: <b>${ov.bestMonth ? ov.bestMonth.label + " (" + Math.round(ov.bestMonth.avoidanceRate * 100) + "%)" : "—"}</b>${ov.worstMonth && ov.bestMonth && ov.worstMonth.month !== ov.bestMonth.month ? ` · Toughest: <b>${ov.worstMonth.label} (${Math.round(ov.worstMonth.avoidanceRate * 100)}%)</b>` : ""}. Current junk-food run: <b>${ov.currentJunkRun} day${ov.currentJunkRun === 1 ? "" : "s"}</b>.</p>
+        </div>
+        <div class="card"><div class="card-title"><h3>Insights</h3><span class="sub">generated from real data</span></div>${insightHTML}</div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="card-title"><div><h3>History · ${year}</h3><p class="desc">● none · ◐ some · ● junk · ○ unlogged — shapes differ, not just colors.</p></div></div><div class="food-hist-grid">${histMonths}</div></div>`;
   }
 
   function renderChallenges() {
@@ -2874,8 +2976,18 @@
     // a share of the year's workout days; food goal uses explicitly logged days.
     const gA = Store().settings.goals || {};
     const foodLog = Store().settings.noJunkFoodLog || {};
-    const foodStats = St().foodHabitStats(foodLog, year, St().todayISO());
-    const foodInsights = St().foodHabitInsights(foodLog, year, St().todayISO());
+    // Analytics consumes the centralized Food engine (no duplicate calculations).
+    let foodStats = St().foodHabitStats(foodLog, year, St().todayISO());
+    let foodInsights = St().foodHabitInsights(foodLog, year, St().todayISO());
+    try {
+      if (F() && F().yearStats) {
+        const fy = F().yearStats(foodLog, year, St().todayISO());
+        foodStats = { ...fy, avoidedDays: fy.noneDays, partialJunkFoodDays: fy.someDays, junkFoodDays: fy.fullDays, months: fy.months.map((m) => ({ ...m, avoidedDays: m.noneDays, partialJunkFoodDays: m.someDays, junkFoodDays: m.fullDays })) };
+        const fst = F().streaks(foodLog, St().todayISO());
+        const ftr = F().trend(foodLog, St().todayISO());
+        foodInsights = { ...foodInsights, longestAvoidStreak: fst.longestNone, currentAvoidStreak: fst.currentNone, longestJunkRun: fst.longestJunk, avgJunkPerWeek: ftr.avgPerWeek };
+      }
+    } catch (e) { /* fall back to Stats */ }
     const recoveryStats = St().trainingRecoveryStats(all, year, St().todayISO());
     const gsA = St().dailyGoalStatus(all, gA);
     const yearDays = new Set(all.filter((w) => St().yearOf(w.date) === year).map((w) => w.date));
@@ -3375,7 +3487,7 @@
     openModal, closeModal, toast, confirmDialog, closeInfoPopover,
     markDashEnter, showBackupBanner, hideBackupBanner,
     openWorkoutForm, openMeasurementForm, openMeasurementList, openChallengeForm, toggleChallengeComplete, toggleChallengeYear, unitDefault,
-    renderDashboard, renderCalendar, renderChallenges, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
+    renderDashboard, renderCalendar, renderChallenges, renderFood, renderTools, renderProgress, renderAnalytics, renderData, renderSettings,
     yearHeatGrid, renderMonthView, dayPanelHTML, showImportPreview, showPdfModal, wireDrop, cssColor
   };
 })();

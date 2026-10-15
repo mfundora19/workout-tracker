@@ -527,6 +527,29 @@ html:not(.no-anim) .type-picker-body:not([hidden]) { animation: picker-in .18s e
 .food-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .food-chart-legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--legend-color); }
 .food-habit-note { margin: 8px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.45; }
+.food-dash-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.food-dash-summary > div { display: flex; flex-direction: column; gap: 2px; }
+.food-dash-summary span { font-size: 12px; color: var(--text-dim); }
+.link-btn { background: none; border: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+.food-overview-grid { display: grid; }
+.food-today h3 { font-size: 15px; }
+.food-hist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.food-hist-month b { font-size: 12px; }
+.food-hist-dots { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0; font-size: 10px; line-height: 1; }
+.fh-dot { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.fh-none { color: var(--success); }
+.fh-some { color: var(--warn); }
+.fh-full { color: var(--danger); }
+.fh-unknown { color: var(--text-faint); opacity: 0.55; }
+.food-hist-month small { color: var(--text-faint); font-size: 10.5px; }
+.insight-tone { font-size: 9px; margin-right: 4px; }
+.tone-positive { color: var(--success); }
+.tone-neutral { color: var(--text-dim); }
+.tone-warning { color: var(--warn); }
+.tone-recovery { color: var(--accent); }
+.pill.good { background: var(--success-soft, var(--success)); }
+.pill.bad { background: var(--danger-soft, var(--danger)); }
+@media (max-width: 640px) { .food-dash-summary { flex-direction: column; align-items: flex-start; } }
 .food-habit-compact { align-items: flex-start; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px; }
 .food-goal-toggle { grid-column: 1 / -1; padding: 8px 0 0; }
 .food-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin: 12px 0; padding: 11px 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }

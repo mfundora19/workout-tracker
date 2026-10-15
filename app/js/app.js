@@ -8,6 +8,7 @@
 
   const VIEW_META = {
     dashboard: ["Dashboard", "Your year at a glance"],
+    food: ["Food", "Junk-food tracking, trends and history"],
     calendar: ["Calendar", "Workout days, intensity and streaks"],
     challenges: ["Challenges", "Monthly goals, special editions and badges"],
     progress: ["Progress", "Body measurements and trends"],
@@ -207,6 +208,7 @@
   function renderCurrent() {
     const v = App.currentView;
     if (v === "dashboard") Focus.UI.renderDashboard();
+    else if (v === "food") Focus.UI.renderFood();
     else if (v === "calendar") Focus.UI.renderCalendar();
     else if (v === "challenges") Focus.UI.renderChallenges();
     else if (v === "progress") Focus.UI.renderProgress();
