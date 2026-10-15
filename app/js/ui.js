@@ -2590,8 +2590,19 @@
       ins = F().insights(log, today, year);
     } catch (e) { ov = null; }
     if (!ov) { body.innerHTML = `<div class="card"><p>Food data unavailable.</p></div>`; return; }
-    const trendCls = ov.direction === "improving" ? "good" : ov.direction === "worsening" ? "bad" : "flat";
     const todayMeta = foodStatusMeta(ov.todayStatus);
+    const hero = ov.todayStatus === "none"
+      ? { emoji: "🥗", title: "Didn't eat junk food", sub: "Clean day — your streak grows." }
+      : ov.todayStatus === "some"
+        ? { emoji: "🍜", title: "Ate some junk food", sub: "A little slipped in — tomorrow is fresh." }
+        : ov.todayStatus === "full"
+          ? { emoji: "🍔", title: "Ate junk food", sub: "Junk-food day logged — tomorrow is fresh." }
+          : { emoji: "○", title: "Not logged yet", sub: "Pick one below — it takes a second." };
+    const segBtn = (status, main, sub, emoji) => {
+      const active = ov.todayStatus === status;
+      const legacy = status === "none" ? "true" : status === "some" ? "some" : "false";
+      return `<button type="button" class="seg-btn food-seg-btn${active ? " is-active" : ""}" data-action="food-log" data-date="${today}" data-status="${legacy}" aria-pressed="${active}" aria-label="${main} — ${sub}"><span class="food-seg-emoji" aria-hidden="true">${emoji}</span><span class="food-seg-main">${main}</span><span class="food-seg-sub">${sub}</span></button>`;
+    };
     const monthRate = mo.avoidanceRate == null ? "—" : Math.round(mo.avoidanceRate * 100) + "%";
     const weekLabel = `${wk.noneDays} / ${wk.elapsedDays} junk-free days`;
     const monthLabel = `${mo.noneDays} / ${mo.elapsedDays} junk-free days`;
@@ -2600,7 +2611,20 @@
       ? `<ul class="insights-list" aria-label="Food insights">${ins.map((i) => `<li><span class="insight-tone tone-${i.tone}" aria-hidden="true">●</span> ${i.text}</li>`).join("")}</ul>`
       : (ov.hasData
         ? `<p class="food-habit-note">Keep tracking to unlock trends and comparisons.</p>`
-        : `<div class="empty-state"><div class="es-icon">🥗</div><h3>Start tracking your food habits</h3><p>Record your first day below to begin seeing trends, streaks, and insights.</p></div>`);
+        : `<p class="food-habit-note">Your patterns will appear here once you log a few days.</p>`);
+    // Recent 14-day strip (display only; logging stays in the hero + calendar).
+    const wdLetters = ["M", "T", "W", "T", "F", "S", "S"];
+    let strip = "";
+    for (let i = 13; i >= 0; i--) {
+      const iso = St().addDays(today, -i);
+      const st = F().getStatus(log, iso);
+      const meta = foodStatusMeta(st);
+      const glyph = st === "none" ? "●" : st === "some" ? "◐" : st === "full" ? "●" : "○";
+      const cls = st === "none" ? "fh-none" : st === "some" ? "fh-some" : st === "full" ? "fh-full" : "fh-unknown";
+      const wd = wdLetters[(St().weekdayOf(iso) + 6) % 7];
+      const isToday = iso === today;
+      strip += `<div class="food-strip-day ${cls}${isToday ? " is-today" : ""}" title="${iso}: ${meta.label}" aria-label="${iso}: ${meta.label}${isToday ? " (today)" : ""}"><span class="food-strip-wd" aria-hidden="true">${wd}</span><span class="food-strip-num" aria-hidden="true">${Number(iso.slice(8, 10))}</span><span class="food-strip-dot" aria-hidden="true">${glyph}</span></div>`;
+    }
     // History: compact year calendar (three states, shape + color, not color alone).
     const histMonths = yr.months.map((m) => {
       const cells = F().monthCells(log, year, m.month);
@@ -2613,28 +2637,59 @@
       return `<div class="food-hist-month"><b>${m.label}</b><div class="food-hist-dots">${dots}</div><small>${m.loggedDays ? `${m.noneDays}✓ · ${m.someDays}◐ · ${m.fullDays}✗` : "no logs"}</small></div>`;
     }).join("");
     const trendPill = ov.direction === "improving" ? "up" : ov.direction === "worsening" ? "down" : "flat";
-    body.innerHTML = `
-      <div class="card food-overview">
-        <div class="card-title"><div><h3>Your food journey</h3><p class="desc">How you did · how you're doing · what's next — from your logged days only.</p></div><span class="delta ${trendPill}">${ov.trend}</span></div>
-        <div class="dash-stats food-overview-grid">
-          <div class="card stat"><div class="stat-top"><span class="stat-label">Current streak</span></div><div class="food-big">${ov.currentStreak} days</div><small>no junk food</small></div>
-          <div class="card stat"><div class="stat-top"><span class="stat-label">Longest streak</span></div><div class="food-big">${ov.longestStreak} days</div><small>best run</small></div>
-          <div class="card stat"><div class="stat-top"><span class="stat-label">This month</span></div><div class="food-big">${monthRate}</div><small>junk-free (${mo.noneDays}/${mo.loggedDays || 0} logged)</small></div>
-          <div class="card stat"><div class="stat-top"><span class="stat-label">Today</span></div><div class="food-big">${todayMeta.emoji} ${todayMeta.label}</div><small>today's status</small></div>
+    const emptyIntro = !ov.hasData ? `
+      <div class="card food-intro"><div class="empty-state"><div class="es-icon">🍜</div><h3>Start tracking your food habits</h3><p>Log whether you ate no, some, or a lot of junk food each day. Streaks, trends and insights unlock as you go — unlogged days always stay unknown.</p></div></div>` : "";
+    body.innerHTML = `<div class="food-page">
+      <p class="food-eyebrow">Junk-food tracking · none, some, or full days — unlogged stays unknown</p>
+      <section class="card food-hero ${todayMeta.cls}" aria-labelledby="foodTodayTitle">
+        <div class="food-hero-top">
+          <div><p class="food-kicker">Today · ${St().prettyDate(today)}</p>
+          <h3 id="foodTodayTitle" class="food-hero-status"><span aria-hidden="true">${hero.emoji}</span> ${hero.title}</h3>
+          <p class="desc">${hero.sub}</p></div>
+          <span class="delta ${trendPill}" title="Recent vs yearly average">${ov.trend}</span>
         </div>
-        <p class="food-habit-note">You've avoided junk food for <b>${ov.last30.noneDays} of the last 30 logged-eligible days</b> (${ov.last30.loggedDays} logged). ${ov.direction === "improving" ? "Recent days are beating your yearly average." : ov.direction === "worsening" ? "Recent days are slipping vs your yearly average." : "Unlogged dates stay unknown — they never count as clean or junk."}</p>
-      </div>
-      <div class="card food-habit-card food-today"><h3 style="margin:0 0 8px">How was your food today?</h3>${foodHabitCardHTML(today, false)}</div>
+        <div class="seg food-seg" role="group" aria-label="Did you eat junk food today?">
+          ${segBtn("none", "Didn't", "clean day", "🥗")}
+          ${segBtn("some", "Some", "just a little", "🍜")}
+          ${segBtn("full", "Yes", "full day", "🍔")}
+        </div>
+        ${ov.todayStatus !== null ? `<button type="button" class="btn btn-sm btn-ghost food-clear" data-action="food-log" data-date="${today}" data-status="clear">Clear today's log</button>` : ""}
+      </section>
+      ${emptyIntro}
+      <section aria-label="Your progress">
+        <div class="dash-stats food-overview-grid">
+          <div class="card stat"><div class="stat-top"><span class="stat-label">🔥 Current streak</span></div><div class="food-big">${ov.currentStreak} day${ov.currentStreak === 1 ? "" : "s"}</div><small>without junk food</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">🏆 Longest streak</span></div><div class="food-big">${ov.longestStreak} day${ov.longestStreak === 1 ? "" : "s"}</div><small>best run${ov.currentJunkRun ? ` · junk run now: ${ov.currentJunkRun}d` : ""}</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">This month</span></div><div class="food-big">${monthRate}</div><small>junk-free (${mo.noneDays}/${mo.loggedDays || 0} logged)</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">Last 30 days</span></div><div class="food-big">${ov.last30.noneDays}/${ov.last30.elapsedDays}</div><small>junk-free days (${ov.last30.loggedDays} logged)</small></div>
+        </div>
+      </section>
+      ${ov.hasData ? `
+      <section class="card" aria-labelledby="foodRecentTitle">
+        <div class="card-title"><div><h3 id="foodRecentTitle">Recent history</h3><p class="desc">Last 14 days — shapes differ, not just colors.</p></div></div>
+        <div class="food-strip" role="list">${strip}</div>
+      </section>
       <div class="grid-2">
-        <div class="card"><div class="card-title"><h3>Your food habits</h3><span class="sub">recent vs long-term</span></div>
+        <section class="card" aria-labelledby="foodTrendsTitle">
+          <div class="card-title"><div><h3 id="foodTrendsTitle">Trends</h3><p class="desc">Recent vs long-term — from logged days only.</p></div></div>
           <div class="type-bar-row"><div class="tbr-head"><span>📅 This week</span><span class="tbr-meta"><b>${weekLabel}</b></span></div></div>
           <div class="type-bar-row"><div class="tbr-head"><span>🗓️ This month</span><span class="tbr-meta"><b>${monthLabel}</b></span></div></div>
           <div class="type-bar-row"><div class="tbr-head"><span>📊 ${year}</span><span class="tbr-meta"><b>${yearLabel}</b></span></div></div>
-          <p class="food-habit-note">Best month: <b>${ov.bestMonth ? ov.bestMonth.label + " (" + Math.round(ov.bestMonth.avoidanceRate * 100) + "%)" : "—"}</b>${ov.worstMonth && ov.bestMonth && ov.worstMonth.month !== ov.bestMonth.month ? ` · Toughest: <b>${ov.worstMonth.label} (${Math.round(ov.worstMonth.avoidanceRate * 100)}%)</b>` : ""}. Current junk-food run: <b>${ov.currentJunkRun} day${ov.currentJunkRun === 1 ? "" : "s"}</b>.</p>
-        </div>
-        <div class="card"><div class="card-title"><h3>Insights</h3><span class="sub">generated from real data</span></div>${insightHTML}</div>
+          <p class="food-habit-note">Best month: <b>${ov.bestMonth ? ov.bestMonth.label + " (" + Math.round(ov.bestMonth.avoidanceRate * 100) + "%)" : "—"}</b>${ov.worstMonth && ov.bestMonth && ov.worstMonth.month !== ov.bestMonth.month ? ` · Toughest: <b>${ov.worstMonth.label} (${Math.round(ov.worstMonth.avoidanceRate * 100)}%)</b>` : ""}.${ov.enoughForTrends ? "" : " Keep tracking to unlock more comparisons."}</p>
+        </section>
+        <section class="card" aria-labelledby="foodInsightsTitle">
+          <div class="card-title"><div><h3 id="foodInsightsTitle">Insights</h3><p class="desc">Generated from real data — never invented.</p></div></div>${insightHTML}
+        </section>
       </div>
-      <div class="card" style="margin-top:16px"><div class="card-title"><div><h3>History · ${year}</h3><p class="desc">● none · ◐ some · ● junk · ○ unlogged — shapes differ, not just colors.</p></div></div><div class="food-hist-grid">${histMonths}</div></div>`;
+      <section class="card" style="margin-top:16px" aria-labelledby="foodHistoryTitle">
+        <div class="card-title"><div><h3 id="foodHistoryTitle">History · ${year}</h3><p class="desc">● none · ◐ some · ● junk · ○ unlogged</p></div></div>
+        <div class="food-hist-grid">${histMonths}</div>
+      </section>` : `
+      <section class="card" aria-labelledby="foodUnlockTitle">
+        <div class="card-title"><div><h3 id="foodUnlockTitle">What you'll unlock</h3><p class="desc">Streaks, trends, insights and history appear here.</p></div></div>
+        <p class="food-habit-note">Log a few days to see your current streak, recent history, and first patterns. One day is enough to start — trends arrive after a week or so.</p>
+      </section>`}
+    </div>`;
   }
 
   function renderChallenges() {

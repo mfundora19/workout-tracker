@@ -1573,7 +1573,7 @@ function dump() {
     if (!document.getElementById("foodBody")) { const d0 = document.createElement("div"); d0.id = "foodBody"; document.body.appendChild(d0); }
     Focus.UI.renderFood();
     const anaInsights = [...document.querySelectorAll("#foodBody .insights-list li")].map((li) => li.textContent);
-    ok("food section generates food-habit insights", anaInsights.some((t) => t.includes("Longest run without junk food")) && anaInsights.some((t) => t.includes("Averaging")), anaInsights.join(" | "));
+    ok("food section generates food-habit insights", anaInsights.some((t) => t.includes("Longest run without junk food")) && anaInsights.some((t) => t.includes("Best month")), anaInsights.join(" | "));
     Focus.UI.renderAnalytics();
     const anaCounts = document.querySelector(".food-habit-counts");
     ok("analytics counts all three states", !!anaCounts && anaCounts.textContent.includes("Full: 1") && anaCounts.textContent.includes("Some: 0") && anaCounts.textContent.includes("None: 3"), anaCounts ? anaCounts.textContent : "no counts");
@@ -1583,10 +1583,10 @@ function dump() {
     if (!document.getElementById("foodBody")) { const d = document.createElement("div"); d.id = "foodBody"; document.body.appendChild(d); }
     Focus.UI.renderFood();
     const foodHTML = document.getElementById("foodBody").textContent;
-    ok("food section renders overview + today + history", foodHTML.includes("Your food journey") && foodHTML.includes("How was your food today") && foodHTML.includes("History"), foodHTML.slice(0, 120));
+    ok("food section renders today hero + progress + history", foodHTML.includes("Didn't") && foodHTML.includes("Current streak") && foodHTML.includes("Recent history") && foodHTML.includes("History"), foodHTML.slice(0, 160));
     Focus.Store.settings.noJunkFoodLog = {};
     Focus.UI.renderFood();
-    ok("food empty state invites first log", document.getElementById("foodBody").textContent.includes("Start tracking your food habits"));
+    ok("food empty state invites first log", document.getElementById("foodBody").textContent.includes("Start tracking your food habits") && document.getElementById("foodBody").textContent.includes("Didn't") && document.getElementById("foodBody").textContent.includes("What you'll unlock"));
     Focus.Store.settings.noJunkFoodLog = savedFoodLog;
 
     // --- settings sections: six tabs, each with its content ---
