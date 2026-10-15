@@ -13,11 +13,12 @@
 <script src="../js/version.js"></script>
 <script src="../js/store.js?v=12"></script>
 <script src="../js/stats.js?v=11"></script>
+<script src="../js/foodEngine.js?v=2"></script>
 <script src="../js/progressEngine.js?v=3"></script>
 <script src="../js/charts.js?v=12"></script>
 <script src="../js/excel.js"></script>
 <script src="../js/pdf.js"></script>
-<script src="../js/ui.js?v=21"></script>
+<script src="../js/ui.js?v=22"></script>
 <script>
 // NOTE: app.js is intentionally excluded (it boots the UI); core logic is tested here.
 const out = document.getElementById("out");
@@ -115,6 +116,17 @@ function dump() {
     ok("history rest days span first-to-last workout and dedupe same-day sessions", historyStats.elapsedDays === 3 && historyStats.workoutDays === 2 && historyStats.restDays === 1, JSON.stringify(historyStats));
     ok("empty workout history reports zero days without inventing resting days", S.workoutHistoryStats([]).workoutDays === 0 && S.workoutHistoryStats([]).restDays === 0);
     ok("invalid ISO dates rejected", !S.validISODate("2024-02-30") && S.validISODate("2024-02-29"));
+    // --- centralized Food engine: single source of truth (NONE/SOME/FULL) ---
+    const FD = window.Focus.Food;
+    ok("food engine loads with canonical states", !!FD && FD.NONE === "none" && FD.SOME === "some" && FD.FULL === "full");
+    ok("food engine maps legacy values", FD.fromLegacy(true) === "none" && FD.fromLegacy("some") === "some" && FD.fromLegacy(false) === "full" && FD.getStatus({}, "2026-01-01") === null);
+    const fr = FD.rangeStats({ "2026-01-01": true, "2026-01-02": "some", "2026-01-03": false }, "2026-01-01", "2026-01-03", "2026-01-03");
+    ok("food engine range counts three states", fr.noneDays === 1 && fr.someDays === 1 && fr.fullDays === 1 && fr.loggedDays === 3 && fr.avoidanceRate === 1 / 3, JSON.stringify(fr));
+    const fs = FD.streaks({ "2026-01-01": true, "2026-01-02": true, "2026-01-03": "some" }, "2026-01-04");
+    ok("food engine SOME breaks junk-free streak", fs.currentNone === 0 && fs.longestNone === 2 && fs.longestJunk === 1, JSON.stringify(fs));
+    ok("food engine emits no insights without data", FD.insights({}, "2026-01-05").length === 0);
+    ok("food engine avoids fake trends on one day", FD.insights({ "2026-01-01": true }, "2026-01-02").every((i) => !/improving|worsening/i.test(i.text)));
+    ok("food goal met only on NONE", FD.isGoalMet({ "2026-01-01": true }, "2026-01-01") === true && FD.isGoalMet({ "2026-01-01": "some" }, "2026-01-01") === false);
 
     // --- compareYears ---
     const cmp = S.compareYears(Focus.Store.workouts, 2026, 2025);
@@ -1564,6 +1576,15 @@ function dump() {
     ok("analytics counts all three states", !!anaCounts && anaCounts.textContent.includes("Full: 1") && anaCounts.textContent.includes("Some: 0") && anaCounts.textContent.includes("None: 3"), anaCounts ? anaCounts.textContent : "no counts");
     Focus.Store.settings.noJunkFoodLog = savedFoodLog;
     Focus.UI.renderAnalytics();
+    // --- dedicated Food section renders overview, today status, insights, history ---
+    if (!document.getElementById("foodBody")) { const d = document.createElement("div"); d.id = "foodBody"; document.body.appendChild(d); }
+    Focus.UI.renderFood();
+    const foodHTML = document.getElementById("foodBody").textContent;
+    ok("food section renders overview + today + history", foodHTML.includes("Your food journey") && foodHTML.includes("How was your food today") && foodHTML.includes("History"), foodHTML.slice(0, 120));
+    Focus.Store.settings.noJunkFoodLog = {};
+    Focus.UI.renderFood();
+    ok("food empty state invites first log", document.getElementById("foodBody").textContent.includes("Start tracking your food habits"));
+    Focus.Store.settings.noJunkFoodLog = savedFoodLog;
 
     // --- settings sections: six tabs, each with its content ---
     // (Tab clicks are handled by app.js delegation, which this harness

@@ -2635,14 +2635,15 @@
       }).join("");
       return `<div class="food-hist-month"><b>${m.label}</b><div class="food-hist-dots">${dots}</div><small>${m.loggedDays ? `${m.noneDays}✓ · ${m.someDays}◐ · ${m.fullDays}✗` : "no logs"}</small></div>`;
     }).join("");
+    const trendPill = ov.direction === "improving" ? "up" : ov.direction === "worsening" ? "down" : "flat";
     body.innerHTML = `
       <div class="card food-overview">
-        <div class="card-title"><div><h3>Your food journey</h3><p class="desc">How you did · how you're doing · what's next — from your logged days only.</p></div><span class="pill ${trendCls}">${ov.trend}</span></div>
+        <div class="card-title"><div><h3>Your food journey</h3><p class="desc">How you did · how you're doing · what's next — from your logged days only.</p></div><span class="delta ${trendPill}">${ov.trend}</span></div>
         <div class="dash-stats food-overview-grid">
-          <div class="stat-card"><b>${ov.currentStreak} days</b><span>Current streak · no junk food</span></div>
-          <div class="stat-card"><b>${ov.longestStreak} days</b><span>Longest streak</span></div>
-          <div class="stat-card"><b>${monthRate}</b><span>This month · junk-free (${mo.noneDays}/${mo.loggedDays || 0} logged)</span></div>
-          <div class="stat-card"><b>${todayMeta.emoji} ${todayMeta.label}</b><span>Today's status</span></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">Current streak</span></div><div class="food-big">${ov.currentStreak} days</div><small>no junk food</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">Longest streak</span></div><div class="food-big">${ov.longestStreak} days</div><small>best run</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">This month</span></div><div class="food-big">${monthRate}</div><small>junk-free (${mo.noneDays}/${mo.loggedDays || 0} logged)</small></div>
+          <div class="card stat"><div class="stat-top"><span class="stat-label">Today</span></div><div class="food-big">${todayMeta.emoji} ${todayMeta.label}</div><small>today's status</small></div>
         </div>
         <p class="food-habit-note">You've avoided junk food for <b>${ov.last30.noneDays} of the last 30 logged-eligible days</b> (${ov.last30.loggedDays} logged). ${ov.direction === "improving" ? "Recent days are beating your yearly average." : ov.direction === "worsening" ? "Recent days are slipping vs your yearly average." : "Unlogged dates stay unknown — they never count as clean or junk."}</p>
       </div>
