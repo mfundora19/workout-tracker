@@ -1,9 +1,9 @@
 # Focus — Workout & Fitness Tracker
 
 A **private, 100% offline** web app for tracking workouts, calories, body
-measurements and yearly fitness statistics — a modern replacement for the
-`Workout Calendar.xlsx` spreadsheet, with Excel export/import for Google
-Sheets archiving.
+measurements, junk-food habits, monthly challenges and yearly fitness
+statistics — a modern replacement for the `Workout Calendar.xlsx`
+spreadsheet, with Excel export/import for Google Sheets archiving.
 
 **No installation. No accounts. No cloud. No internet required.** Just open
 the HTML file and start.
@@ -15,6 +15,7 @@ the HTML file and start.
 | ![Dashboard](app/screenshots/dashboard-dark.png) | ![Calendar](app/screenshots/calendar-dark.png) |
 | ![Analytics](app/screenshots/analytics-dark.png) | ![Progress](app/screenshots/progress-dark.png) |
 | ![Tools](app/screenshots/tools-dark.png) | ![Data](app/screenshots/data-dark.png) |
+| ![Food](app/screenshots/food-dark.png) | ![Challenges](app/screenshots/challenges-dark.png) |
 
 *Screenshots show the app in dark mode with the built-in demo data (your seed
 history of 92 workouts across Jan–Aug 2026).*
@@ -23,12 +24,14 @@ history of 92 workouts across Jan–Aug 2026).*
 
 - 📊 **Dashboard** — year totals, streaks, year-vs-year and goals KPI cards, then **This Week / This Month** cards that benchmark **9 metrics** against the previous period (hover any ▲/▼ pill to reveal the previous period's value), then the Workouts-per-month and cumulative-calories charts and recent activity
 - 📅 **Calendar** — GitHub-style heatmap with intensity levels, a month view with a day panel (tap a day to drill in, tap elsewhere to return to the month summary), and subtle marking of your best day and the current month
+- 🏆 **Challenges** — monthly goals and one-off **special editions** (e.g. World Mental Health Day), each earning a month-colored badge (★ for specials). Completed months show a shield on the Calendar, badge counts surface on the Dashboard and a progress summary lives in Analytics. Fully opt-out: turn it off in Settings and every trace hides while your data stays intact
 - 📏 **Progress** — weight, waist, neck, height… any measurement, any frequency. Trend charts, a **Body composition** card (current BMI + estimated body fat %, computed from your records — no re-entry) and a summary with colored trend highlights
-- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, monthly full- and partial-junk-food logs with logged-day avoidance rates, training/rest-day insights, daily goal hit rates, and a year-over-year comparison (current vs previous year by default); the calendar is the sole home for the consistency heatmap
-- 💾 **Data & Backup** — a friendly **Excel workbook**, a local **PDF annual report**, a full-fidelity **JSON backup** and CSV exports, with a safe import preview that adds & updates but never deletes — plus a **biweekly backup reminder** so your JSON backups never go stale
+- 🍜 **Food** — a first-class section for junk-food tracking. A prominent **Today** hero logs **Didn't eat junk food**, **Some** or **Yes** in one tap, followed by progress tiles (current/longest streak, month %, last 30 days), a 14-day strip, week/month/year trends, data-backed insights and a full-year history. One centralized engine (`app/js/foodEngine.js`) powers it all — Dashboard, Calendar and Analytics consume it, so food logic is never duplicated
+- 📈 **Analytics** — monthly workouts / calories / duration, cumulative lines, workout-type distribution, a high-level monthly junk-food chart (full / some / none, with a link into Food for streaks, trends and insights), daily goal hit rates, and a year-over-year comparison (current vs previous year by default); the calendar is the sole home for the consistency heatmap
+- 💾 **Data & Backup** — a full-fidelity **JSON backup** front and center (the one that restores everything), plus a friendly **Excel workbook**, a local **PDF annual report** and CSV exports, with a safe import preview that adds & updates but never deletes — plus an **automatic backup reminder** so your JSON backups never go stale
 - 🧰 **Tools** — **BMI + body-fat calculator** (U.S. Navy method, male/female formulas) with a combined interpretation and a ⓘ explainer, plus a weight converter
-- 🎯 **Goals** — daily **calorie (🔥)** and **duration (⏱️)** goals complete independently, plus a weekly workout target and a configurable **Avoid junk food (🥗)** daily habit goal. Log **No junk food**, **Some junk food**, or **Junk-food day** from the Dashboard or any Calendar day; unknown dates remain unlogged, and monthly Analytics distinguishes partial from full junk-food days.
-- ⚙️ **Settings** — dark/light theme, **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), configurable **week start** (Monday by default, or Sunday), weight unit (kg/lb), body profile (sex, **height**, age — set once), goals, privacy and a **backup reminder** toggle with a configurable interval (default every 10 days)
+- 🎯 **Goals** — daily **calorie (🔥)** and **duration (⏱️)** goals complete independently, plus a weekly workout target and a configurable **Avoid junk food (🥗)** daily habit goal. Log **No junk food**, **Some junk food**, or **Junk-food day** from the Food section, the Dashboard or any Calendar day; unknown dates remain unlogged. The Food engine is the single source of truth, so the goal and the Food section can never disagree.
+- ⚙️ **Settings** — six tabs (Profile, Preferences, Goals, Notifications, Data & Privacy, About): theme (dark / light / follow system), **accent color** (violet, orange, green, red, blue), an **animations** toggle (ambient background glows, card highlights, chart draw-ins; on by default and respects your system's reduced-motion preference), configurable **week start** (Monday by default, or Sunday), weight unit (kg/lb), body profile (sex, **height**, age — set once), all goals including target weight, workout + **backup reminders** (JSON backup countdown, default every 10 days), Challenges on/off, data management and the app version
 
 ## Getting started
 
@@ -54,6 +57,7 @@ anywhere. Storage is per-browser, so to move data between browsers or computers:
 2. Move the file, then **Data → Import JSON backup** on the other side.
    Imports are deduplicated — importing twice never creates duplicates. Food-habit dates travel in the `settings.noJunkFoodLog` map; older backups without that optional key remain compatible, and imported dates only fill missing local entries.
 
+- **Export JSON backup** is the most important export: it is the only one that restores *everything* (workouts, measurements, challenges, food log, settings). Make it regularly; it is highlighted first in **Data → Export** for that reason.
 - **Export Excel** produces a spreadsheet-friendly copy with clean, human-readable sheets (`Overview`, `Workouts`, `Measurements`, `Monthly Summary`, `Yearly Summary`, `Analytics`) that read perfectly in Google Sheets. A hidden `_AppData` sheet carries the internal record IDs and timestamps, so re-import is exact.
 - **Google Sheets archiving**: export → upload → archive; later download as `.xlsx` and import back. Imports show a preview (will add / will update / unchanged / invalid) and never delete local records — they match on stable ID, then identical content, then a human-edit key, and only add what's genuinely new.
 - **Export PDF Report** builds a multi-page **Progress & Analytics Report** locally — see below.
@@ -105,6 +109,21 @@ bundled Unicode font keeps symbols legible.
 - **Estimated body fat** uses the **U.S. Navy / Hodgdon circumference method** (men: waist & neck; women: waist, hips & neck — all vs height). It appears only when every required measurement is present; until then the UI tells you exactly which one to add. It's an estimate (±3–4%), never a diagnosis.
 - The two are read together: body fat is the primary signal and BMI modulates the wording, so a high BMI with low body fat reads **"Very Athletic / Muscular"** rather than overweight.
 - The **Tools** calculator prefills from your latest records, and the **Progress** view's *Body composition* card computes the same numbers from stored data — you never enter the same value twice.
+
+## How Food tracking works
+
+- Each day holds exactly one of three states: **No junk food**, **Some junk food** or **Junk-food day** — or stays **unlogged** (unknown, never counted for or against you).
+- Log from the **Food** section's Today hero, the Dashboard card or any Calendar day; correcting or clearing updates every view instantly — streaks, trends, insights, Dashboard, Calendar and Analytics.
+- **Streak rule**: the goal is "Don't eat junk food", so both *Some* and *Full* break a junk-free streak. Streaks run only through explicitly logged clean days; an unlogged date breaks them (unknown is not success) — except that a still-open today never breaks the current streak.
+- The engine derives counts, percentages, current/longest streaks (clean and junk), weekly/monthly/yearly breakdowns, best/worst months, recent-vs-yearly trends, recovery/setback detection and natural-language insights — and refuses to invent trends from thin data (with little history it says "keep tracking" instead).
+- The **Don't eat junk food** goal is met only on explicitly logged clean days.
+
+## How Challenges work
+
+- Two kinds: **monthly challenges** (one goal per month) and named **special editions** for one-off days. Completing one earns a month-colored badge (★ for specials).
+- Completed months show a shield on the Calendar; badge counts appear on the Dashboard and a progress summary in Analytics.
+- Challenges are **opt-out**: Settings can hide the entire feature — nav entry, badges, summaries — without deleting anything logged.
+- Challenge records travel in JSON backups (`monthlyChallenges`) and merge additively on import, like everything else.
 
 ## Yearly comparisons
 
@@ -169,7 +188,7 @@ calories by overwriting a day cell in a yearly grid, so the import assumed:
 - [x] Add, edit and delete a measurement
 - [x] Switch years, view calendar, drill into a month and a day
 - [x] Log/correct/clear a daily no-junk-food outcome from Dashboard or Calendar; verify unknown days stay out of analytics denominators
-- [x] Verify Analytics junk-food month chart and logged-day rate, Calendar month food/recovery summary, and Data workout/rest-day counts
+- [x] Verify Analytics junk-food month chart and logged-day rate, Calendar month food summary and training highlight, Food streaks/trends/insights, and Data workout/rest-day counts
 - [x] Day panel shows multiple workouts as horizontal cards
 - [x] Compare any two years in Analytics
 - [x] Export Excel — opens in Excel & Google Sheets; re-import → "0 new"
@@ -198,6 +217,7 @@ WorkoutTracker/
 │   │   ├── app.js          ← bootstrap & wiring
 │   │   ├── charts.js       ← SVG charts (zero dependencies)
 │   │   ├── excel.js        ← .xlsx/.csv import & export (styled workbook)
+│   │   ├── foodEngine.js   ← centralized junk-food domain: statuses, streaks, trends, insights
 │   │   ├── pdf.js          ← local PDF annual report builder
 │   │   ├── progressEngine.js ← pure body-measurement analysis (recent-weighted trends, Jan-31 projections)
 │   │   ├── seed-data.js    ← your historical data, embedded
